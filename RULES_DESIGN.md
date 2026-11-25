@@ -20,6 +20,15 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 | Corner / goal clearance by last touch on goal line                  | Implemented (goal clearance taken by the keeper from the area, as a ground pass)                                                |
 | Clock                                                               | Two halves, countdown; effective time (default) or running clock; half-time ends switch; second-half kick-off by the other team |
 
+### Goalkeeper rules
+
+- Four seconds: the keeper may control the ball (hands or feet) in the own half for 4 s; for the human
+  keeper the AI then plays it (no indirect free kick yet).
+- Second possession: after releasing the ball in the own half the keeper may not play it again there
+  until an opponent has touched it (involuntary rebounds off the body are allowed). Teammates and
+  assisted passing avoid passing back to him meanwhile.
+- Saves: catch only inside the own penalty area; otherwise / for hard shots parry or block wide.
+
 ### Goalkeeper hands
 
 - Hands only inside the own penalty area and only for a ball last touched by an opponent (shots,
@@ -34,6 +43,10 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
   and no player can touch it.
 
 ### Kick-ins, corners and kick-offs
+
+- The taker stands behind the ball along the aim (outside the court at kick-ins and corners) with
+  the ball on the line in front of him; aiming walks him round the ball. Kick-ins and corners can only
+  be aimed into the court.
 
 - Kick-off: every player must be in their own half and the defending team outside the centre
   circle before the kick-off can be taken; crossing the halfway line is blocked while it is pending.

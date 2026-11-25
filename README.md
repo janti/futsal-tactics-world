@@ -41,18 +41,18 @@ First-time e2e setup: `npx playwright install chromium`.
 
 ## Controls (keyboard)
 
-| Key           | Action                                           |
-| ------------- | ------------------------------------------------ |
-| WASD / arrows | Move (always relative to the screen)             |
-| Z             | Pass (with the ball) / standing tackle (without) |
-| X             | Shoot — tap for a quick shot, hold to power up   |
-| C             | Through pass                                     |
-| V             | Switch player                                    |
-| Shift         | Sprint                                           |
-| Space         | Sole control (with ball) / jockey (without)      |
-| F5 or 5       | Cycle camera preset                              |
-| Esc or P      | Pause                                            |
-| H             | Show controls                                    |
+| Key           | Action                                                                                                     |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| WASD / arrows | Move (always relative to the screen)                                                                       |
+| Z             | Pass (with the ball) / standing tackle (without)                                                           |
+| X             | Shoot — tap: fast low placed shot into the corner; hold: harder and higher (full charge goes over the bar) |
+| C             | Through pass                                                                                               |
+| V             | Switch player                                                                                              |
+| Shift         | Sprint                                                                                                     |
+| Space         | Sole control (with ball) / jockey (without)                                                                |
+| F5 or 5       | Cycle camera preset                                                                                        |
+| Esc or P      | Pause                                                                                                      |
+| H             | Show controls                                                                                              |
 
 Alternative keys: J/K/L/I for pass/shoot/through/switch. A standard gamepad works for movement and
 actions (left stick, A pass, B shoot, X through, Y switch, RT sprint, LT sole).

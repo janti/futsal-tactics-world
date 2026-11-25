@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+- Restarts are aimed: at kick-offs, kick-ins and corners the taker always stands behind the ball
+  along the aim direction, so the ball stays in front of him. Aiming with the direction keys walks him
+  round the ball (it stays on the line or the centre spot) and he faces the aim. Kick-ins and corners
+  can only be aimed into the court; the kick-off can go any way. AI takers line up towards their
+  receiver and play the ball that way.
+
+- Kick-ins and corners: the taker stands behind the ball, just outside the court, with the ball in
+  front of him on the line, and faces into the court (diagonally at corners).
+- Goals are solid for players: posts, side nets and the back net stop players and keepers from
+  either side; the open goal mouth can still be entered from the court.
+
+- Shooting reworked: a quick tap of the shoot button is a fast, low, placed shot into the near or far
+  corner that the keeper cannot hold (at best he parries it). Holding the button adds speed and
+  height; the heavy futsal ball rises slowly at first and a full charge (0.75 s) lifts it over the
+  bar. The keeper leaves shots that are clearly going over or wide.
+- Keeper throws: a short press bowls the ball along the floor, a longer press throws it overarm with a
+  clearly higher arc than a shot. With the ball at his feet the keeper shoots and passes like an
+  outfield player.
+
+- The keeper comes to meet a teammate's pass (running to the earliest point on the ball's path he
+  can reach, sprinting if an opponent could get there first, never past halfway) instead of freezing
+  on his line.
+
+- Long-range shots and screening ("maski"): shots from 10 m or more, or from a tight angle on the wing,
+  are judged at the moment of the shot. With a clear view the keeper saves almost all of them and
+  catches most (measured: 0/30 goals from 12 m and 11.5 m, 1/30 from the wing). A player standing in
+  the keeper's line of sight hides the shot: the keeper reacts later and the save chance drops
+  (measured: about 11/30 goals from the same spots). Close-range shots are unchanged.
+
+- Goalkeeper saves: the keeper catches manageable shots in his area (then holds the ball in his
+  hands) or steers the ball away: parries and body blocks now send it wide to the nearer side and
+  away from goal (often out for a corner) instead of back into the danger zone. No catching outside
+  the penalty area.
+- After a catch the AI keeper uses the same controlled throw as for goal clearances (bowled when
+  short, overarm when long, aimed at where the receiver will be).
+- Back pass: the keeper plays it with his feet like an outfield player (the human controls him and
+  passes normally), with the keeper rules: no hands from a teammate's pass, four seconds on the ball
+  in the own half (hands or feet), and no second touch in the own half after releasing the ball until
+  an opponent has touched it (teammates and assisted passing do not pass back to him meanwhile).
+
 - Goal nets now visibly give: an impact kicks a damped spring (harder shot, bigger bulge, up to
   0.5 m over about 1 m), the net swings back, and the ball is carried out with the net. Previously
   the bulge was only about 1 cm because the ball stops just in front of the net.

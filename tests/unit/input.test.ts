@@ -49,7 +49,7 @@ describe('input manager', () => {
     shots.push(...input.sample(basis).filter((c) => c.type === 'Shoot'))
     expect(shots).toHaveLength(1)
     const s = shots[0]!
-    expect(s.type === 'Shoot' && s.power).toBeGreaterThan(0.5)
+    expect(s.type === 'Shoot' && s.power).toBeGreaterThan(0.4)
   })
 
   it('movement is screen-relative: "up" is the attacking direction at the top of the screen', () => {

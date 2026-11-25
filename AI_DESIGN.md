@@ -25,6 +25,10 @@ the full system will be built on:
      heavy pressure).
      Measured AI vs AI: ~85 % pass completion, ~60 % circulation passes, regular shots
      (`tests/tactical/directPlay.test.ts`).
+- **Goalkeeper vs long shots**: shots from 10 m+ or tight angles are almost always saved (mostly
+  caught) unless the keeper's line of sight is screened; screening (any player within 0.85 m of the
+  ball–keeper line, weighted by closeness to the keeper) delays his reaction by up to 0.28 s and lowers
+  the save chance towards 45 %.
 - **Goalkeeper**: angle positioning on the ball–goal line (depth grows with distance), reacts to
   shots by moving to the predicted crossing point, claims loose balls in the area when first,
   distributes to the most open teammate.

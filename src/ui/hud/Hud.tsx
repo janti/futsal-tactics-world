@@ -69,7 +69,7 @@ export function Hud() {
 
       {hud.keeperCountdown !== null && (
         <div className="restart-banner" data-testid="keeper-throw-banner">
-          {t('hud.keeperThrow')}
+          {t(hud.keeperHands ? 'hud.keeperThrow' : 'hud.keeperFeet')}
           <span className="restart-countdown"> · {Math.ceil(hud.keeperCountdown)} s</span>
         </div>
       )}

@@ -117,6 +117,26 @@ export const HANDS = {
   holdLimit: 4,
 } as const
 
+/**
+ * Long-range / tight-angle shots and screening ("maski"). With a clear view the keeper deals with
+ * almost every shot from 10 m or more (or from a tight angle); a player in his line of sight hides the
+ * shot, delays his reaction and makes such shots dangerous.
+ */
+export const SCREEN = {
+  /** Shots from at least this far from the goal centre count as long range. */
+  longRange: 10,
+  /** Shots where the goal mouth subtends less than this angle (radians) count as tight-angle. */
+  tightAngle: 0.24,
+  /** A player within this distance of the keeper's line of sight screens it. */
+  lineWidth: 0.85,
+  /** Save probability for an unscreened long-range shot the keeper can reach. */
+  clearSave: 0.97,
+  /** Save probability for a fully screened one. */
+  screenedSave: 0.45,
+  /** Extra keeper reaction delay (seconds) for a fully screened shot. */
+  reactionDelay: 0.28,
+} as const
+
 /** Goalkeeper throw controlled by the player. */
 export const THROW = {
   minSpeed: 7,
@@ -124,8 +144,11 @@ export const THROW = {
   maxSpeed: [17, 22] as const,
   maxChargeTime: 0.8,
   /** Above this power the throw is overarm (in the air); below it is bowled along the floor. */
-  overarmPower: 0.55,
-  maxVz: 3.6,
+  overarmPower: 0.35,
+  /** Vertical launch speed range for overarm throws: a longer press gives a higher arc. */
+  minVz: 1.6,
+  maxVz: 6.8,
+  arcCurve: 1.3,
   releaseHeight: 1.3,
   /** Angular error (radians) from the throwing attribute (worst..best). */
   error: [0.09, 0.015] as const,
@@ -161,10 +184,21 @@ export const PASS = {
 } as const
 
 export const SHOT = {
-  minSpeed: 14,
   maxSpeed: 29,
-  maxChargeTime: 0.6,
+  /** Holding the button longer than this fires a full-power shot automatically. */
+  maxChargeTime: 0.75,
   aimInsidePost: 0.32,
+  /** A tap (power up to this) is a quick, low, placed shot into the corner. */
+  placedMaxPower: 0.32,
+  /** Placed shots aim closer to the post and travel at this speed range (skill worst..best). */
+  placedInsidePost: 0.22,
+  placedSpeed: [19, 23] as const,
+  /** Underside height of a placed shot at the goal (skims just above the floor). */
+  placedHeight: 0.08,
+  /** Height at the goal for a full charge: over the 2 m crossbar. */
+  fullChargeHeight: 2.85,
+  /** Heavy futsal ball: height grows slowly with charge at first (exponent > 1). */
+  heightCurve: 1.7,
 } as const
 
 export const RESTART = {

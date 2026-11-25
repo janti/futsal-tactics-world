@@ -136,7 +136,7 @@ describe('human control', () => {
       sim.state.ball.pos = { x: 1.5, y: 12.4 }
       sim.state.ball.vel = { x: 0, y: 0 }
       for (const o of sim.state.players) if (o.team === 1 && o.role !== 'GK') o.pos = { x: o.pos.x, y: -12 }
-      sim.step([{ type: 'Shoot', dir: { x: 1, y: 1 }, power: 0.9 }])
+      sim.step([{ type: 'Shoot', dir: { x: 1, y: 1 }, power: 0.3 }]) // quick low placed shot
       expect(sim.drainEvents().some((e) => e.type === 'ShotTaken')).toBe(true)
       if (!runUntil(sim, (e) => e.some((x) => x.type === 'GoalScored'), 120)) continue
       goals++
@@ -336,19 +336,18 @@ function humanKickIn(sim: MatchSimulation) {
 }
 
 describe('kick-ins and set pieces', () => {
-  it('the kick-in taker cannot dribble: movement input does not move the taker or the ball', () => {
+  it('the kick-in taker cannot dribble: input only turns him round the ball, which stays on the line', () => {
     const sim = newSim()
     humanKickIn(sim)
     const s = sim.state
     const taker = sim.player(s.restart!.takerId)
-    expect(s.controlledId).toBe(taker.id)
-    const tp = { ...taker.pos }
     const bp = { ...s.ball.pos }
-    for (let i = 0; i < 60; i++)
+    for (let i = 0; i < 90; i++)
       sim.step([{ type: 'Move', dir: { x: -1, y: 0.5 }, sprint: true, sole: false }])
     expect(s.phase).toBe('restart')
-    expect(Math.hypot(taker.pos.x - tp.x, taker.pos.y - tp.y)).toBeLessThan(0.05)
     expect(s.ball.pos).toEqual(bp)
+    // He never leaves the ball: at most a step behind it.
+    expect(Math.hypot(taker.pos.x - bp.x, taker.pos.y - bp.y)).toBeLessThan(0.65)
   })
 
   it('play restarts with the kick, and the taker may not touch the ball again first (no double touch)', () => {

@@ -24,6 +24,10 @@ function ball(partial: Partial<BallState> = {}): BallState {
     kickTime: 0,
     inHands: false,
     handsTimer: 0,
+    keeperRetouchId: null,
+    shotScreen: 0,
+    shotLongRange: false,
+    shotPlaced: false,
     ...partial,
   }
 }

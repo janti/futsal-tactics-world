@@ -1,7 +1,7 @@
 import { angleDiff, attr, clamp, turnTowards } from '../core/math/scalar'
 import { angleOf, clampLen, dot, len, sub, type Vec2 } from '../core/math/vec2'
 import type { PlayerState } from '../simulation/MatchState'
-import { COURT, PLAYER } from '../simulation/SimulationConfig'
+import { COURT, PLAYER, POST_X, POST_Y } from '../simulation/SimulationConfig'
 
 /** Maximum speed the player is currently allowed, from attributes, sprint, ball and fatigue. */
 export function maxSpeedFor(p: PlayerState, hasBall: boolean): number {
@@ -127,4 +127,56 @@ export function estimateTimeToReach(p: PlayerState, target: Vec2): number {
     return reaction + (-vAlong + Math.sqrt(Math.max(0, disc))) / acc
   }
   return reaction + tAcc + (d - dAcc) / vmax
+}
+
+/**
+ * Goals are solid for players: the posts, the side nets and the back net. A player can walk into the
+ * goal through the open mouth but cannot run through the frame or the netting from either side.
+ * Each net is a line segment on the floor plan; overlapping players are pushed out to the side they
+ * came from and their velocity into the net is removed.
+ */
+export function resolveGoalCollisions(players: PlayerState[]): void {
+  for (const end of [1, -1] as const) {
+    const y0 = end * POST_Y
+    const y1 = end * (POST_Y + COURT.goalDepth)
+    const segments: [number, number, number, number][] = [
+      [-POST_X, y0, -POST_X, y1], // side net (left)
+      [POST_X, y0, POST_X, y1], // side net (right)
+      [-POST_X, y1, POST_X, y1], // back net
+    ]
+    for (const p of players) {
+      const r = playerRadius(p) * 0.85
+      // Quick rejection: far from this goal.
+      if (Math.abs(p.pos.y - (y0 + y1) / 2) > COURT.goalDepth + 1 || Math.abs(p.pos.x) > POST_X + 1) continue
+      for (const [ax, ay, bx, by] of segments) {
+        const sx = bx - ax
+        const sy = by - ay
+        const l2 = sx * sx + sy * sy
+        const t = Math.max(0, Math.min(1, ((p.pos.x - ax) * sx + (p.pos.y - ay) * sy) / l2))
+        const cx = ax + sx * t
+        const cy = ay + sy * t
+        const dx = p.pos.x - cx
+        const dy = p.pos.y - cy
+        const d = Math.hypot(dx, dy)
+        if (d >= r) continue
+        // Push out along the separation; if exactly on the line, use the segment normal towards the court.
+        let nx: number
+        let ny: number
+        if (d > 1e-6) {
+          nx = dx / d
+          ny = dy / d
+        } else {
+          nx = -sy / Math.sqrt(l2)
+          ny = sx / Math.sqrt(l2)
+          if (nx * -p.vel.x + ny * -p.vel.y < 0) {
+            nx = -nx
+            ny = -ny
+          }
+        }
+        p.pos = { x: cx + nx * r, y: cy + ny * r }
+        const vn = p.vel.x * nx + p.vel.y * ny
+        if (vn < 0) p.vel = { x: p.vel.x - vn * nx, y: p.vel.y - vn * ny }
+      }
+    }
+  }
 }

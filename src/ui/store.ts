@@ -31,8 +31,10 @@ export interface HudState {
   shotCharge: number
   /** Seconds left to take a ready kick-in or corner (four-second rule), else null. */
   restartCountdown: number | null
-  /** Seconds the human keeper may still hold the ball before throwing, else null. */
+  /** Seconds the human keeper may still keep the ball (four-second rule), else null. */
   keeperCountdown: number | null
+  /** Keeper has the ball in the hands (throw) rather than at the feet. */
+  keeperHands: boolean
 }
 
 export interface QuickMatchSetup {
@@ -223,6 +225,7 @@ export const useUi = create<UiState>((set) => ({
     shotCharge: 0,
     restartCountdown: null,
     keeperCountdown: null,
+    keeperHands: false,
   },
   flash: null,
   setLang: (lang) => {

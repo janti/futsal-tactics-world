@@ -104,6 +104,7 @@ test('quick match: move, pass, shoot, camera, no console errors', async ({ page 
               s.ball.ownerId !== null &&
               s.ball.ownerId === s.controlledId &&
               s.players[s.controlledId]!.role !== 'GK', // keeper in hands throws instead
+            keeperOnBall: c !== null && c.role === 'GK' && s.ball.ownerId === c.id,
             cx: c?.pos.x ?? 0,
             cy: c?.pos.y ?? 0,
             bx: s.ball.pos.x,
@@ -111,6 +112,14 @@ test('quick match: move, pass, shoot, camera, no console errors', async ({ page 
           }
         })
         if (info.have) return
+        if (info.keeperOnBall) {
+          // Our keeper has the ball: throw / pass it up the court (towards the top of the screen).
+          for (const k of [...held]) await setKey(k, false)
+          await page.keyboard.down('ArrowUp')
+          await press('KeyZ', 300)
+          await page.keyboard.up('ArrowUp')
+          continue
+        }
         const dx = info.bx - info.cx
         const dy = info.by - info.cy
         await setKey('ArrowRight', -dx > 0.3)

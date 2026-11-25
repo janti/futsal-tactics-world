@@ -19,6 +19,7 @@ import { planPass } from '../physics/PassingPhysics'
 import {
   estimateTimeToReach,
   playerRadius,
+  resolveGoalCollisions,
   resolvePlayerCollisions,
   updatePlayerMovement,
 } from '../physics/PlayerPhysics'
@@ -37,11 +38,13 @@ import {
   PLAYER,
   POST_X,
   RESTART,
+  SCREEN,
   SWITCHING,
   THROW,
 } from './SimulationConfig'
 import { DEFAULT_CONTROL_OPTIONS, type ControlOptions } from './ControlOptions'
 import { DEFAULT_RULES, emptyStats, type MatchRules } from './MatchRules'
+import { clampRestartAim, restartInward, restartTakerSpot } from './RestartGeometry'
 
 export interface MatchSetup {
   seed: number
@@ -132,6 +135,7 @@ export class MatchSimulation implements AIActions {
     const holderPrev = holder ? { ...holder.pos } : null
     for (const p of s.players) updatePlayerMovement(p, s.ball.ownerId === p.id, DT)
     resolvePlayerCollisions(s.players)
+    resolveGoalCollisions(s.players)
     if (prev) this.enforceKickoffPositions(prev)
     // The ball may be carried in the hands only inside the own penalty area.
     if (holder && holderPrev && !this.inOwnPenaltyArea(holder, holder.pos)) {
@@ -254,8 +258,13 @@ export class MatchSimulation implements AIActions {
     const s = this.state
     if (s.ball.ownerId !== p.id) return
     const plan = planShot(s, p, dir, power, this.rng)
+    // Long range / tight angle and screening are judged at the moment of the shot.
+    const keeper = s.players.find((q) => q.team !== p.team && q.role === 'GK')
+    s.ball.shotLongRange = isLongRangeShot(p.pos, s.teams[p.team].attackDir)
+    s.ball.shotScreen = keeper ? screenFactor(s, p, keeper) : 0
     this.kick(p, plan.velocity, plan.vz, plan.spin, 'shot')
     s.ball.isShot = true
+    s.ball.shotPlaced = plan.placed
     s.ball.intendedReceiverId = null
     this.emit({ type: 'ShotTaken', tick: s.tick, playerId: p.id, team: p.team, speed: plan.speed })
   }
@@ -275,8 +284,11 @@ export class MatchSimulation implements AIActions {
     const angle = Math.atan2(aim.y, aim.x) + err
     const speed =
       THROW.minSpeed + (attr(a.throwing, THROW.maxSpeed[0], THROW.maxSpeed[1]) - THROW.minSpeed) * pw
+    // Short press: bowled along the floor. Longer press: overarm, with a clearly higher arc than a
+    // shot (it is thrown, not kicked).
     const overarm = pw > THROW.overarmPower
-    const vz = overarm ? THROW.maxVz * ((pw - THROW.overarmPower) / (1 - THROW.overarmPower)) * 0.7 + 1.2 : 0
+    const arc = overarm ? Math.pow((pw - THROW.overarmPower) / (1 - THROW.overarmPower), THROW.arcCurve) : 0
+    const vz = overarm ? THROW.minVz + (THROW.maxVz - THROW.minVz) * arc : 0
     const vel = fromAngle(angle, speed)
     const receiver = this.receiverOnLine(p, vel)
     this.kick(p, vel, vz, 0, 'pass')
@@ -349,10 +361,13 @@ export class MatchSimulation implements AIActions {
     b.vel = { x: vel.x, y: vel.y }
     b.vz = vz
     b.spin = spin
+    this.updateKeeperRetouch(p)
+    if (p.role === 'GK' && this.inOwnHalf(p)) b.keeperRetouchId = p.id
     b.lastTouchId = p.id
     b.lastTouchTeam = p.team
     b.kickPos = { ...b.pos }
     b.kickTime = this.state.time
+    b.shotPlaced = false
     p.touchCooldown = PLAYER.kickCooldown
     p.action = fromHands ? 'throw' : action
     p.actionTime = 0
@@ -377,8 +392,19 @@ export class MatchSimulation implements AIActions {
     const r = this.state.restart
     if (this.state.phase !== 'restart' || !r?.ready) return
     const taker = this.player(r.takerId)
-    if (len(taker.moveIntent) > 0.15) taker.faceTarget = addScaled(taker.pos, taker.moveIntent, 2)
-    taker.moveIntent = { x: 0, y: 0 }
+    // The human aims with the direction keys (the AI sets r.aimDir itself). The aim is kept legal:
+    // kick-ins and corners must go into the court.
+    if (taker.id === this.state.controlledId && len(taker.moveIntent) > 0.15) {
+      r.aimDir = clampRestartAim(this.state, r, taker.moveIntent)
+    }
+    // The taker walks around the ball to stand behind it along the aim; the ball stays on the line.
+    const target = restartTakerSpot(this.state, r)
+    const to = sub(target, taker.pos)
+    const d = len(to)
+    // A calm step round the ball (walking pace), not a dribble.
+    taker.moveIntent =
+      d > 0.04 ? addScaled({ x: 0, y: 0 }, normalize(to), Math.min(0.42, d / 0.35)) : { x: 0, y: 0 }
+    taker.faceTarget = addScaled(r.spot, r.aimDir, 3)
     taker.sprint = false
     taker.sole = false
   }
@@ -422,10 +448,11 @@ export class MatchSimulation implements AIActions {
     }
     const owner = this.player(b.ownerId)
 
-    if (b.inHands) {
+    // Four-second rule: the keeper may control the ball (hands or feet) in the own half for 4 s.
+    if (owner.role === 'GK' && this.inOwnHalf(owner) && s.phase === 'play') {
       b.handsTimer += DT
-      if (owner.id === s.controlledId && s.phase === 'play' && b.handsTimer >= HANDS.holdLimit) {
-        // Held too long by the human keeper: the AI takes over and distributes at once.
+      if (owner.id === s.controlledId && b.handsTimer >= HANDS.holdLimit) {
+        // Held too long by the human keeper: the AI takes over and plays the ball at once.
         this.emit({ type: 'KeeperHoldTimeout', tick: s.tick, playerId: owner.id })
         const nearest = s.players
           .filter((q) => q.team === owner.team && q.role !== 'GK')
@@ -433,6 +460,8 @@ export class MatchSimulation implements AIActions {
         this.setControlled(nearest.id)
         owner.aiHoldTimer = 10
       }
+    }
+    if (b.inHands) {
       // Held in the hands: no challenges possible; the ball moves with the keeper.
       const front = addScaled(owner.pos, fromAngle(owner.facing), HANDS.forward)
       b.pos = front
@@ -524,6 +553,7 @@ export class MatchSimulation implements AIActions {
       b.z = HANDS.height
       b.vz = 0
     }
+    this.updateKeeperRetouch(p)
     b.ownerId = p.id
     b.mode = 'controlled'
     if (b.blockedTouchId !== p.id) b.blockedTouchId = null
@@ -631,7 +661,8 @@ export class MatchSimulation implements AIActions {
         if (p.role === 'GK' && p.action === 'save' && d < playerRadius(p) + BALL.radius && b.z < 1.9) {
           const n = d > 1e-6 ? { x: dx / d, y: dy / d } : { x: 0, y: -s.teams[p.team].attackDir }
           if (b.vel.x * n.x + b.vel.y * n.y < 0) {
-            this.deflect(p, b, n.x, n.y)
+            // A block, not a clean save: the ball is still pushed away from goal, more weakly.
+            this.parryAway(p, b, len(b.vel), 0.6)
             this.emit({ type: 'Save', tick: s.tick, playerId: p.id, caught: false })
             return true
           }
@@ -640,11 +671,14 @@ export class MatchSimulation implements AIActions {
       }
 
       if (p.role === 'GK' && b.lastTouchTeam !== p.team && this.goalkeeperSave(p, b, d)) return true
+      // Second-possession rule: a keeper who released the ball in the own half may not play it again
+      // there before an opponent has touched it (only an involuntary rebound off the body).
+      const retouchBanned = p.id === b.keeperRetouchId && this.inOwnHalf(p)
 
       const bodyR = playerRadius(p) + BALL.radius
       const rel = Math.hypot(b.vel.x - p.vel.x, b.vel.y - p.vel.y)
       const pickupR = p.role === 'GK' ? 0.62 : CONTROL.pickupRadius
-      if (d < pickupR && b.z < PLAYER.ballContactHeight) {
+      if (!retouchBanned && d < pickupR && b.z < PLAYER.ballContactHeight) {
         const a = p.profile.attributes
         if (rel <= CONTROL.cleanControlSpeed) {
           this.giveBall(p)
@@ -686,6 +720,7 @@ export class MatchSimulation implements AIActions {
       y: p.pos.y + ny * (playerRadius(p) + BALL.radius + 0.01),
     }
     const intercepted = b.lastTouchTeam !== p.team
+    this.updateKeeperRetouch(p)
     b.blockedTouchId = null
     b.lastTouchId = p.id
     b.lastTouchTeam = p.team
@@ -702,6 +737,8 @@ export class MatchSimulation implements AIActions {
     const diving = gk.aiState === 'save'
     const reach = diving ? PLAYER.goalkeeperDiveReach : PLAYER.goalkeeperReach
     if (speed < 3 || d > reach || b.z > PLAYER.goalkeeperReachHeight) return false
+    // A shot going clearly over the bar or wide of the posts is left alone.
+    if (b.isShot && this.missesGoal(gk, b)) return false
     // Wait for the moment of closest approach: no early lunge while the ball is still coming closer.
     const rvx = b.vel.x - gk.vel.x
     const rvy = b.vel.y - gk.vel.y
@@ -719,7 +756,7 @@ export class MatchSimulation implements AIActions {
     // Reaction time: the longer the ball has travelled since the kick, the better the keeper has seen it.
     const flight = dist(b.kickPos, b.pos)
     const reactionBonus = clamp((flight - 10) / 14, 0, 1) * attr(a.gkPositioning, 0.3, 0.45)
-    const p = clamp(
+    let p = clamp(
       attr(a.reflexes, 0.6, 0.95) +
         reactionBonus -
         Math.max(0, speed - 12) * 0.028 -
@@ -728,14 +765,36 @@ export class MatchSimulation implements AIActions {
       0.05,
       0.985,
     )
+    // Long-range or tight-angle shot: a keeper with a clear view saves almost everything he reaches;
+    // screening ("maski") hides the ball and makes it dangerous.
+    const longShot = b.isShot && b.shotLongRange
+    if (longShot) {
+      const screen = b.shotScreen
+      const clear = SCREEN.clearSave + attr(a.reflexes, -0.03, 0.015)
+      p = clamp(
+        clear + (SCREEN.screenedSave - clear) * screen - reachFrac * reachFrac * 0.25 * screen,
+        0.05,
+        0.995,
+      )
+    }
     gk.touchCooldown = 0.35 // one attempt
     gk.action = 'save'
     gk.actionTime = 0
     if (!this.rng.chance(p)) return false
+    // Catch when the ball is manageable and the keeper may use the hands (own penalty area);
+    // otherwise parry it wide, away from goal.
+    // A placed low shot into the corner (a tap): reaching it is harder and it cannot be held.
+    if (b.isShot && b.shotPlaced) p = clamp(p - 0.12 * reachFrac, 0.05, 0.995)
+    const clearLongShot = longShot && b.shotScreen < 0.25
     const catchable =
-      speed < attr(a.handling, 13, 19) + (flight > 15 ? 3 : 0) &&
-      b.z < 1.7 &&
-      d < PLAYER.goalkeeperReach * 0.8
+      !(b.isShot && b.shotPlaced) &&
+      this.inOwnPenaltyArea(gk, b.pos) &&
+      (clearLongShot
+        ? // Seen all the way: caught unless it is at full stretch or very high.
+          b.z < 1.9 && d < PLAYER.goalkeeperReach
+        : speed < attr(a.handling, 13, 19) + (flight > 15 ? 3 : 0) &&
+          b.z < 1.7 &&
+          d < PLAYER.goalkeeperReach * 0.8)
     this.emit({ type: 'Save', tick: this.state.tick, playerId: gk.id, caught: catchable })
     if (catchable) {
       gk.touchCooldown = 0
@@ -744,18 +803,55 @@ export class MatchSimulation implements AIActions {
       b.vel = { x: 0, y: 0 }
       this.giveBall(gk)
     } else {
-      // Parry away from goal and to the side.
-      const dir = this.state.teams[gk.team].attackDir
-      const side = Math.sign(b.pos.x - gk.pos.x) || (this.rng.chance(0.5) ? 1 : -1)
-      b.vel = { x: side * speed * this.rng.range(0.15, 0.3), y: dir * speed * this.rng.range(0.15, 0.3) }
-      b.vz = this.rng.range(0.5, 2.5)
-      b.blockedTouchId = null
-      b.lastTouchId = gk.id
-      b.lastTouchTeam = gk.team
-      b.isShot = false
-      b.intendedReceiverId = null
+      this.parryAway(gk, b, speed, 1)
     }
     return true
+  }
+
+  /**
+   * Parry / block: steer the ball wide, away from the goal and towards the nearer side, where it
+   * usually goes out for a corner or to a wide area instead of back into the danger zone.
+   */
+  private parryAway(gk: PlayerState, b: BallState, speed: number, strength: number): void {
+    const dir = this.state.teams[gk.team].attackDir
+    const side =
+      Math.abs(b.pos.x) > 0.3 ? Math.sign(b.pos.x) : Math.sign(b.vel.x) || (this.rng.chance(0.5) ? 1 : -1)
+    const lateral = speed * this.rng.range(0.3, 0.45) * strength
+    const forward = speed * this.rng.range(0.06, 0.2) * strength
+    b.vel = { x: side * lateral, y: dir * forward }
+    b.vz = this.rng.range(0.8, 2.5) * strength
+    // Out of the keeper's body so the ball does not stick to him.
+    const n = normalize(b.vel)
+    const sep = playerRadius(gk) + BALL.radius + 0.02
+    b.pos = { x: gk.pos.x + n.x * sep, y: gk.pos.y + n.y * sep }
+    b.blockedTouchId = null
+    b.lastTouchId = gk.id
+    b.lastTouchTeam = gk.team
+    b.isShot = false
+    b.intendedReceiverId = null
+    gk.touchCooldown = Math.max(gk.touchCooldown, 0.3)
+  }
+
+  /** Ballistic estimate: will this ball pass over the crossbar or wide of the keeper's goal? */
+  private missesGoal(gk: PlayerState, b: BallState): boolean {
+    const goalY = -this.state.teams[gk.team].attackDir * COURT.halfLength
+    const vy = b.vel.y
+    if (Math.abs(vy) < 0.5 || Math.sign(goalY - b.pos.y) !== Math.sign(vy)) return false
+    const t = (goalY - b.pos.y) / vy
+    const zAt = b.z + b.vz * t - 0.5 * BALL.gravity * t * t
+    const xAt = b.pos.x + b.vel.x * t
+    return zAt > COURT.goalHeight + 0.05 || Math.abs(xAt) > COURT.goalHalfWidth + 0.25
+  }
+
+  /** In the player's own half (the keeper rules refer to it). */
+  private inOwnHalf(p: PlayerState): boolean {
+    return this.state.teams[p.team].attackDir * p.pos.y <= 0
+  }
+
+  /** An opponent of the blocked keeper touching the ball lifts the second-possession ban. */
+  private updateKeeperRetouch(p: PlayerState): void {
+    const b = this.state.ball
+    if (b.keeperRetouchId !== null && this.player(b.keeperRetouchId).team !== p.team) b.keeperRetouchId = null
   }
 
   // ---------------------------------------------------------------- phases and restarts
@@ -797,6 +893,7 @@ export class MatchSimulation implements AIActions {
       ready: false,
       readyTimer: 0,
       ballPlaced: !ballInFlight,
+      aimDir: restartInward(s, { type, spot, team }),
     }
     for (const p of s.players) p.buffered = null
     if (team === s.humanTeam) this.setControlled(taker.id)
@@ -898,8 +995,9 @@ export class MatchSimulation implements AIActions {
     }
     const taker = this.player(r.takerId)
     // Human taker with no input walks to the ball automatically.
-    if (taker.id === s.controlledId && len(taker.moveIntent) < 0.1 && dist(taker.pos, r.spot) > 0.3) {
-      const to = sub(r.spot, taker.pos)
+    const takerSpot = restartTakerSpot(s, r)
+    if (taker.id === s.controlledId && len(taker.moveIntent) < 0.1 && dist(taker.pos, takerSpot) > 0.15) {
+      const to = sub(takerSpot, taker.pos)
       const n = normalize(to)
       const m = clamp(len(to) / 1.2, 0.3, 1)
       taker.moveIntent = { x: n.x * m, y: n.y * m }
@@ -907,7 +1005,7 @@ export class MatchSimulation implements AIActions {
     if (r.type === 'kickoff') this.returnToKickoffPositions()
     const minDelay = r.type === 'kickoff' ? 1.4 : RESTART.minRestartDelay
     const positionsOk = r.type !== 'kickoff' || this.kickoffPositionsLegal()
-    if (r.ballPlaced && r.timer >= minDelay && positionsOk && dist(taker.pos, r.spot) < 0.45) {
+    if (r.ballPlaced && r.timer >= minDelay && positionsOk && dist(taker.pos, takerSpot) < 0.3) {
       s.ball.mode = 'free'
       taker.touchCooldown = 0
       if (r.type === 'goalClearance') {
@@ -983,6 +1081,7 @@ export class MatchSimulation implements AIActions {
     b.vel = { x: 0, y: 0 }
     b.spin = 0
     b.inHands = false
+    b.keeperRetouchId = null
   }
 
   /** Is this player legally placed for the pending kick-off? */
@@ -1239,6 +1338,10 @@ export function createInitialState(setup: MatchSetup): MatchState {
       kickTime: 0,
       inHands: false,
       handsTimer: 0,
+      keeperRetouchId: null,
+      shotScreen: 0,
+      shotLongRange: false,
+      shotPlaced: false,
     },
     humanTeam: setup.humanTeam,
     controlledId:
@@ -1251,4 +1354,44 @@ export function createInitialState(setup: MatchSetup): MatchState {
     possessionTeam: null,
     rngState: 0,
   }
+}
+
+// ------------------------------------------------------------------ shot context
+
+/** Shot from 10 m or more, or from a tight angle (the goal mouth looks narrow from the shooter). */
+export function isLongRangeShot(pos: Vec2, attackDir: 1 | -1): boolean {
+  const goalY = attackDir * COURT.halfLength
+  if (Math.hypot(pos.x, goalY - pos.y) >= SCREEN.longRange) return true
+  const a1 = Math.atan2(goalY - pos.y, POST_X - pos.x)
+  const a2 = Math.atan2(goalY - pos.y, -POST_X - pos.x)
+  let angle = Math.abs(a1 - a2)
+  if (angle > Math.PI) angle = 2 * Math.PI - angle
+  return angle < SCREEN.tightAngle
+}
+
+/**
+ * How much the keeper's view of the shooter is blocked (0..1): players (either team) standing close to
+ * the line between the ball and the keeper, weighted more when they are near the keeper.
+ */
+export function screenFactor(state: MatchState, shooter: PlayerState, keeper: PlayerState): number {
+  const ax = shooter.pos.x
+  const ay = shooter.pos.y
+  const vx = keeper.pos.x - ax
+  const vy = keeper.pos.y - ay
+  const l2 = vx * vx + vy * vy
+  if (l2 < 1e-6) return 0
+  let best = 0
+  for (const q of state.players) {
+    if (q.id === shooter.id || q.id === keeper.id) continue
+    const t = ((q.pos.x - ax) * vx + (q.pos.y - ay) * vy) / l2
+    if (t < 0.12 || t > 0.97) continue
+    const px = ax + vx * t
+    const py = ay + vy * t
+    const perp = Math.hypot(q.pos.x - px, q.pos.y - py)
+    if (perp >= SCREEN.lineWidth) continue
+    const toKeeper = Math.hypot(keeper.pos.x - q.pos.x, keeper.pos.y - q.pos.y)
+    const near = toKeeper < 3 ? 1 : toKeeper < 9 ? 1 - ((toKeeper - 3) / 6) * 0.6 : 0.4
+    best = Math.max(best, (1 - perp / SCREEN.lineWidth) * near)
+  }
+  return clamp(best, 0, 1)
 }

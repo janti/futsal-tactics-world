@@ -11,14 +11,18 @@ import { attr, clamp } from '../core/math/scalar'
 import type { SeededRandom } from '../core/random/SeededRandom'
 import { addScaled, closestOnSegment, dist, len, normalize, sub, type Vec2 } from '../core/math/vec2'
 import { estimateTimeToReach } from '../physics/PlayerPhysics'
-import { laneOpenness, pressureOn } from '../physics/PassingPhysics'
+import { laneOpenness, predictPassTarget, pressureOn } from '../physics/PassingPhysics'
+import { rollingLaunchSpeed } from '../physics/BallPhysics'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
-import { COURT, PLAYER, RESTART } from '../simulation/SimulationConfig'
+import { COURT, PASS, PLAYER, RESTART, SCREEN, THROW } from '../simulation/SimulationConfig'
 import { baseAnchor, dynamicAnchor } from './positioning/Formation'
+import { clampRestartAim, restartTakerSpot } from '../simulation/RestartGeometry'
 
 export interface AIActions {
   pass(p: PlayerState, dir: Vec2, through: boolean, receiver: PlayerState | null): void
   shoot(p: PlayerState, dir: Vec2, power: number): void
+  /** Goalkeeper throw from the hands (same throw a human keeper makes). */
+  throwBall(p: PlayerState, dir: Vec2, power: number): void
 }
 
 const DECISION_INTERVAL = 0.1
@@ -93,12 +97,18 @@ function restartBehaviour(
       p.moveIntent = { x: 0, y: 0 }
       p.aiHoldTimer += dt
       const best = bestPassOption(state, p, rng)
-      if (best) p.faceTarget = best.player.pos
+      if (best) {
+        // Aim at the receiver: the taker steps round the ball to stand behind it on that line.
+        r.aimDir = clampRestartAim(state, r, sub(best.player.pos, r.spot))
+        p.faceTarget = best.player.pos
+      }
       const wait = r.type === 'kickoff' ? 0.5 : 0.9
-      if (best && p.aiHoldTimer >= wait) actions.pass(p, sub(best.player.pos, p.pos), false, best.player)
+      if (best && p.aiHoldTimer >= wait) actions.pass(p, r.aimDir, false, best.player)
       return
     }
-    walkTo(p, r.spot, dist(p.pos, r.spot) > 4)
+    // Walk to the taker's spot behind the ball (the ball ends up in front of him on the line).
+    const spot = restartTakerSpot(state, r)
+    walkTo(p, spot, dist(p.pos, spot) > 4)
     p.faceTarget = r.type === 'kickoff' ? null : { x: 0, y: 0 }
     return
   }
@@ -328,12 +338,14 @@ function carrierBehaviour(
   if (angleOk && toGoal < shootRange && (lane > 0.3 || toGoal < 8)) {
     const chance = clamp(0.35 + (shootRange - toGoal) / shootRange + attr(a.decisions, 0, 0.2), 0, 0.95)
     if (rng.chance(chance)) {
-      actions.shoot(p, sub(goal, p.pos), clamp(toGoal / 13, 0.35, 1))
+      // Close in: a quick low placed shot into the corner; further out: a firmer, slightly higher shot.
+      const power = toGoal < 7.5 ? 0.3 : clamp(0.42 + (toGoal - 7.5) / 25, 0.42, 0.68)
+      actions.shoot(p, sub(goal, p.pos), power)
       return
     }
   } else if (angleOk && toGoal < 19 && lane > 0.8 && rng.chance(attr(a.shotPower, 0.04, 0.12))) {
     // Occasional long-range attempt through an open lane.
-    actions.shoot(p, sub(goal, p.pos), 0.95)
+    actions.shoot(p, sub(goal, p.pos), 0.7)
     return
   }
 
@@ -430,7 +442,7 @@ function safePassOption(
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== p.team || t.id === p.id) continue
-    if (t.role === 'GK' && pressure < 0.7) continue
+    if (t.role === 'GK' && (pressure < 0.7 || t.id === state.ball.keeperRetouchId)) continue
     const d = dist(t.pos, p.pos)
     if (d < 2.5 || d > 16) continue
     const lane = laneOpenness(state, p.team, p.pos, t.pos)
@@ -465,6 +477,7 @@ function bestPassOption(
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== p.team || t.id === p.id) continue
+    if (t.id === state.ball.keeperRetouchId) continue
     const d = dist(t.pos, p.pos)
     if (d < 2 || d > 22) continue
     const open = clamp(laneOpenness(state, p.team, p.pos, t.pos), -1, 3)
@@ -515,8 +528,35 @@ function goalkeeperBehaviour(
           best = t
         }
       }
-      if (best) actions.pass(p, sub(best.pos, p.pos), false, best)
+      if (best && ball.inHands) {
+        // From the hands: the same controlled throw a human keeper makes (aim at where the receiver
+        // will be; bowl short throws, throw long ones overarm).
+        const target = predictPassTarget(p, best, false, state.teams[p.team].attackDir)
+        const d = dist(target, p.pos)
+        const wanted = clamp(rollingLaunchSpeed(d, PASS.arrivalSpeed), THROW.minSpeed, THROW.maxSpeed[1])
+        const maxSpeed = attr(p.profile.attributes.throwing, THROW.maxSpeed[0], THROW.maxSpeed[1])
+        const power = clamp((wanted - THROW.minSpeed) / (maxSpeed - THROW.minSpeed), 0.15, 1)
+        actions.throwBall(p, sub(target, p.pos), power)
+      } else if (best) {
+        // Ball at the feet (back pass): played like an outfield player.
+        actions.pass(p, sub(best.pos, p.pos), false, best)
+      }
     }
+    return
+  }
+
+  // A teammate's pass to the keeper: come to meet it like an outfield player instead of waiting on
+  // the line. Sprint when an opponent could get there first, otherwise move up at running pace.
+  if (ball.mode === 'free' && ball.intendedReceiverId === p.id && ball.keeperRetouchId !== p.id) {
+    p.aiState = 'receive'
+    let meet = interceptPoint(state, p)
+    // Never further than the halfway line.
+    if (dir * meet.y > -0.5) meet = { x: meet.x, y: -dir * 0.5 }
+    const myT = estimateTimeToReach(p, meet)
+    let oppT = Infinity
+    for (const o of state.players) if (o.team !== p.team) oppT = Math.min(oppT, estimateTimeToReach(o, meet))
+    walkTo(p, meet, oppT < myT + 0.8 || dist(meet, p.pos) > 4)
+    p.faceTarget = ball.pos
     return
   }
 
@@ -527,7 +567,9 @@ function goalkeeperBehaviour(
     PLAYER.goalkeeperReaction[0],
     PLAYER.goalkeeperReaction[1],
   )
-  const reacted = state.time - ball.kickTime >= reaction
+  // A screened shot is seen late.
+  const screenDelay = ball.isShot ? ball.shotScreen * SCREEN.reactionDelay : 0
+  const reacted = state.time - ball.kickTime >= reaction + screenDelay
   const threat =
     ball.mode === 'free' && ball.lastTouchTeam !== p.team && reacted
       ? predictGoalThreat(ball, goalLineY, p)
@@ -538,8 +580,13 @@ function goalkeeperBehaviour(
     return
   }
 
-  // Claim loose balls in the penalty area when the keeper gets there first.
-  if (ball.mode === 'free' && dist(ball.pos, goal) < COURT.penaltyAreaRadius + 0.5) {
+  // Claim loose balls in the penalty area when the keeper gets there first (unless the
+  // second-possession rule forbids him to play it again).
+  if (
+    ball.mode === 'free' &&
+    ball.keeperRetouchId !== p.id &&
+    dist(ball.pos, goal) < COURT.penaltyAreaRadius + 0.5
+  ) {
     const myT = estimateTimeToReach(p, ball.pos)
     let oppT = Infinity
     for (const o of state.players)

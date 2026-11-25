@@ -46,6 +46,7 @@ export function chooseReceiver(state: MatchState, passer: PlayerState, dir: Vec2
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== passer.team || t.id === passer.id) continue
+    if (t.id === state.ball.keeperRetouchId) continue
     const to = sub(t.pos, passer.pos)
     const d = len(to)
     if (d < 1.5 || d > 30) continue

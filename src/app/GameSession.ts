@@ -150,6 +150,14 @@ export class GameSession {
     this.debug.drawCalls = this.renderer.drawCalls
   }
 
+  /** The human-controlled keeper has the ball (hands or feet) in the own half: four-second rule. */
+  private humanKeeperOnBall(): boolean {
+    const s = this.sim.state
+    if (s.controlledId === null || s.ball.ownerId !== s.controlledId) return false
+    const p = this.sim.player(s.controlledId)
+    return p.role === 'GK' && s.teams[p.team].attackDir * p.pos.y <= 0
+  }
+
   /** The human-controlled keeper holds the ball in the hands (throw mode). */
   private humanKeeperHolding(): boolean {
     const s = this.sim.state
@@ -226,9 +234,10 @@ export class GameSession {
       controlledNumber: c ? c.profile.shirtNumber : null,
       controlledRole: c ? c.role : null,
       shotCharge: this.input.shotCharge,
-      keeperCountdown: this.humanKeeperHolding()
+      keeperCountdown: this.humanKeeperOnBall()
         ? Math.max(0, HANDS.holdLimit - this.sim.state.ball.handsTimer)
         : null,
+      keeperHands: this.humanKeeperHolding(),
       restartCountdown:
         s.restart?.ready && (s.restart.type === 'kickIn' || s.restart.type === 'corner')
           ? Math.max(0, RESTART.kickTimeLimit - s.restart.readyTimer)

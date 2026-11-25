@@ -135,8 +135,21 @@ export interface BallState {
    * with the feet instead, like an outfield player.
    */
   inHands: boolean
-  /** Seconds the ball has been held in the hands. */
+  /** Seconds the keeper has had the ball (hands or feet) in the own half: four-second rule. */
   handsTimer: number
+  /**
+   * Keeper who released the ball in the own half and may not touch it again there until an opponent
+   * has touched it (futsal second-possession rule), or null.
+   */
+  keeperRetouchId: number | null
+  /**
+   * For the current shot: how much the keeper's view was screened at the moment of the shot
+   * (0 = clear view, 1 = fully screened), and whether it was a long-range or tight-angle shot.
+   */
+  shotScreen: number
+  shotLongRange: boolean
+  /** The current shot is a quick low placed shot (a tap): the keeper cannot hold it. */
+  shotPlaced: boolean
   /**
    * Set-piece taker who may not touch the ball again until another player has touched it
    * (no double touch after a kick-in, corner or kick-off).
@@ -159,6 +172,11 @@ export interface RestartInfo {
   ready: boolean
   /** Seconds since the restart became ready (four-second rule for kick-ins and corners). */
   readyTimer: number
+  /**
+   * Direction the taker is aiming the restart (unit vector). The taker stands behind the ball along
+   * this direction, so turning the aim walks him around the ball while the ball stays on the line.
+   */
+  aimDir: Vec2
   /**
    * False while the ball that went out is still flying/rolling off the court (to the boards and
    * back); it is then placed on the restart spot.
