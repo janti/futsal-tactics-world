@@ -29,9 +29,14 @@ the full system will be built on:
   of goal is followed outside the zone; the fixo does not press when he has a man near goal; the
   current presser keeps the role unless another is 0.3 s faster.
 - **Attacking pivot**: rotates every 4.5 s between the middle, the ball-side wing and the far side.
-- **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): shooter
-  behind the ball at 8.5–13 m from goal (firm pass, first-time shot), back-post runner, safety player at
-  halfway.
+- **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): roles fixed
+  once per restart — short man (starts ~7 m off, comes to ~3 m behind the ball after 0.5 s), pivot
+  (back post → front of the area after 0.9 s), deep man (halfway → ~8 m behind the ball after 1.3 s).
+  From 1.8 s the taker plays the most open runner (short man and pivot preferred, first-time shot if in
+  range); after 2.8 s the ball goes regardless.
+- **Support play** (`supportPosition`): candidates in rings (1.6/3.2/5 m) round the shape position
+  plus a run towards the ball; score = open lane + distance from the nearest opponent + passing range
+  (3.5–15 m) − crowding teammates + a little forward bias and stability; sprint when > 2.5 m away.
 - **Pressing**: the presser approaches goal-side of the carrier and slows down when close (jockey).
 - **Breakaway (through on goal)**: when no outfield defender is goal-side of the carrier near his
   line to goal, he runs the ball in (sprinting if chased), never passes, and finishes from about

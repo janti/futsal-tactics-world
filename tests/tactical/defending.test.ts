@@ -8,7 +8,7 @@ import {
   updateDefensiveTransitions,
 } from '../../src/ai/BasicAI'
 import { diamondAnchor } from '../../src/ai/positioning/Formation'
-import { COURT, TICK_RATE } from '../../src/simulation/SimulationConfig'
+import { COURT, RESTART, TICK_RATE } from '../../src/simulation/SimulationConfig'
 import type { Vec2 } from '../../src/core/math/vec2'
 
 const d = (a: Vec2, b: Vec2) => Math.hypot(a.x - b.x, a.y - b.y)
@@ -112,55 +112,80 @@ describe('cover defender', () => {
 })
 
 describe('kick-in and corner routine', () => {
-  it('a short man behind the ball, one at the back post, one safe at halfway; the short man shoots', () => {
-    let routines = 0
-    let shooterPasses = 0
-    let firstTimeShots = 0
+  /** Team 1 (attacking -y) gets a kick-in on the right touch line in its attacking half. */
+  function kickIn(seed: number) {
+    const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: null })
+    const s = sim.state
+    for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
+    for (let i = 0; i < 120 && s.phase !== 'play'; i++) sim.step()
+    ;(sim as unknown as { beginRestart(t: string, team: number, spot: Vec2): void }).beginRestart(
+      'kickIn',
+      1,
+      {
+        x: COURT.halfWidth,
+        y: -12,
+      },
+    )
+    sim.drainEvents()
+    return { sim, s }
+  }
+
+  it('runners come to show: the short man comes close behind the ball, the pivot comes out, the deep man comes up', () => {
+    const { sim, s } = kickIn(1)
+    const before = setPieceRoutine(s, 1)!
+    expect(before.map((r) => r.role)).toEqual(['short', 'pivot', 'deep'])
+    const byRole = (plan: typeof before, role: string) => plan.find((r) => r.role === role)!.spot
+    expect(Math.abs(byRole(before, 'pivot').y - -20)).toBeLessThan(2) // starts at the back post
+    expect(Math.abs(byRole(before, 'deep').y)).toBeLessThan(1.5) // starts at halfway
+    for (let i = 0; i < TICK_RATE * 10 && !(s.restart?.ready && s.restart.readyTimer > 1.6); i++) sim.step()
+    const after = setPieceRoutine(s, 1)!
+    const spot = s.restart!.spot
+    expect(after.map((r) => r.id)).toEqual(before.map((r) => r.id)) // roles stay with the same players
+    expect(d(byRole(after, 'short'), spot)).toBeLessThan(3.6) // a few metres from the ball
+    expect(byRole(after, 'short').y).toBeGreaterThan(spot.y) // behind the ball (further from goal)
+    expect(Math.abs(byRole(after, 'pivot').y - -20)).toBeGreaterThan(4.5) // pivot came out
+    expect(d(byRole(after, 'deep'), spot)).toBeLessThan(d(byRole(before, 'deep'), spot) - 4) // deep man came up
+  })
+
+  it('the taker plays one of the runners, and the short man or pivot strikes it first time', () => {
+    let toRunner = 0
+    let firstTime = 0
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const sim = new MatchSimulation({
-        seed,
-        home: TEAM_LIBRARY[0]!,
-        away: TEAM_LIBRARY[1]!,
-        humanTeam: null,
-      })
-      const s = sim.state
-      for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
-      for (let i = 0; i < 120 && s.phase !== 'play'; i++) sim.step()
-      // Team 1 attacks -y: kick-in on the right touch line in their attacking half.
-      ;(sim as unknown as { beginRestart(t: string, team: number, spot: Vec2): void }).beginRestart(
-        'kickIn',
-        1,
-        {
-          x: COURT.halfWidth,
-          y: -12,
-        },
-      )
-      const plan = setPieceRoutine(s, 1)!
-      expect(plan.size).toBe(3)
-      const [shooterSpot, backPost, safety] = [...plan.values()]
-      expect(Math.abs(shooterSpot!.y - -20)).toBeGreaterThan(8 - 0.01) // behind the ball, shooting range
-      expect(shooterSpot!.y).toBeGreaterThan(-12) // further from goal than the ball
-      expect(backPost!.x).toBeLessThan(0) // far post
-      expect(Math.abs(backPost!.y - -20)).toBeLessThan(2)
-      expect(Math.abs(safety!.y)).toBeLessThan(1.5) // halfway
-      routines++
-      const shooterId = [...plan.keys()][0]!
-      let passedToShooter = false
+      const { sim, s } = kickIn(seed)
+      const ids = setPieceRoutine(s, 1)!.map((r) => r.id)
+      const shooters = setPieceRoutine(s, 1)!
+        .filter((r) => r.role !== 'deep')
+        .map((r) => r.id)
+      let receiver: number | null = null
       for (let i = 0; i < TICK_RATE * 12; i++) {
         sim.step()
         for (const e of sim.drainEvents()) {
-          if (e.type === 'PassStarted' && e.receiverId === shooterId && !passedToShooter) {
-            passedToShooter = true
-            shooterPasses++
+          if (e.type === 'PassStarted' && receiver === null && e.receiverId !== null) {
+            receiver = e.receiverId
+            if (ids.includes(receiver)) toRunner++
           }
-          if (passedToShooter && e.type === 'ShotTaken' && e.playerId === shooterId) firstTimeShots++
+          if (
+            receiver !== null &&
+            e.type === 'ShotTaken' &&
+            e.playerId === receiver &&
+            shooters.includes(receiver)
+          )
+            firstTime++
         }
-        if (passedToShooter && s.ball.ownerId !== null && s.ball.ownerId !== shooterId) break
+        if (receiver !== null && s.ball.ownerId !== null && s.ball.ownerId !== receiver) break
       }
     }
-    expect(routines).toBe(6)
-    expect(shooterPasses).toBeGreaterThan(3)
-    expect(firstTimeShots).toBeGreaterThan(1)
+    expect(toRunner).toBeGreaterThanOrEqual(5)
+    expect(firstTime).toBeGreaterThan(1)
+  })
+
+  it('opponents stand at least 4 m from the ball at kick-ins', () => {
+    const { sim, s } = kickIn(3)
+    for (let i = 0; i < TICK_RATE * 10 && !(s.restart?.ready && s.restart.readyTimer > 1); i++) sim.step()
+    const spot = s.restart!.spot
+    for (const o of s.players)
+      if (o.team === 0) expect(d(o.pos, spot)).toBeGreaterThan(RESTART.opponentDistance - 0.3)
+    expect(RESTART.opponentDistance).toBe(4)
   })
 })
 

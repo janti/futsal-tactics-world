@@ -197,6 +197,8 @@ export interface RestartInfo {
    * back); it is then placed on the restart spot.
    */
   ballPlaced: boolean
+  /** AI set-piece routine: player ids for the short man, the pivot and the deep man (fixed once). */
+  routineIds?: number[]
 }
 
 export type MatchPhase = 'restart' | 'play' | 'goal' | 'halftime' | 'fulltime'

@@ -226,7 +226,7 @@ export const SHOT = {
 
 export const RESTART = {
   /** Opponent distance at kick-ins, corners and free kicks (metres). */
-  opponentDistance: 5,
+  opponentDistance: 4,
   celebrationTime: 2.6,
   minRestartDelay: 0.8,
   /** Kick-ins and corners must be taken within this time once the taker is ready. */

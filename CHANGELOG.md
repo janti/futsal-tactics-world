@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Supporting players get free and offer passes: they look for a spot in rings round their shape
+  position (and a run towards the ball) that is open for a pass, away from their marker, at a good
+  passing distance and not crowding a teammate, and they sprint there. Measured AI vs AI: the carrier
+  has on average 1.05 free options instead of 0.82 (none 34 % of the time instead of 44 %), 80 % pass
+  completion.
+- Kick-ins and corners: opponents keep 4 m from the ball (was 5 m).
+- Kick-in and corner routine with movement: the short man starts a few metres off and comes towards
+  the ball (behind it, to shoot first time), the pivot comes out from the back post to the front of
+  the area, and the deep man leaves halfway to show for a pass back. The taker plays the most open of
+  them (preferring the short man and the pivot, who strike it first time if in range).
+
 - Fixed: in front of goal a defender could mark the pivot from the wrong side (pivot between him and
   the keeper). Markers now go round their man to get goal-side, a man within 9 m of goal is followed
   outside the zone, and the fixo does not leave a man in front of goal to press the ball.

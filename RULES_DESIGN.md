@@ -16,7 +16,7 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 | Goal: ball wholly over the line between the posts and under the bar | Implemented                                                                                                                     |
 | Ball out: wholly over touch line / goal line                        | Implemented, no wall rebounds                                                                                                   |
 | Kick-off after a goal (conceding team)                              | Implemented; opponents stay in their half/outside the circle via AI                                                             |
-| Kick-in to the team that did not touch last                         | Implemented; opponents kept 5 m away by AI                                                                                      |
+| Kick-in to the team that did not touch last                         | Implemented; opponents kept 4 m away by AI (game setting; the official distance is 5 m)                                         |
 | Corner / goal clearance by last touch on goal line                  | Implemented (goal clearance taken by the keeper from the area, as a ground pass)                                                |
 | Clock                                                               | Two halves, countdown; effective time (default) or running clock; half-time ends switch; second-half kick-off by the other team |
 
@@ -60,7 +60,8 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 - **Four-second rule** (kick-ins and corners): if the ready taker does not kick within 4 s, a kick-in
   goes to the opponents from the same spot; a late corner becomes a goal clearance for the defenders.
   The HUD shows the countdown. Kick-offs have no time limit in the prototype.
-- Opponents stay 5 m away until the kick (kick-off: own half / outside the centre circle).
+- Opponents stay 4 m away until the kick (game choice; official Laws: 5 m) (kick-off: own half /
+  outside the centre circle).
 
 ### Match length
 

@@ -117,16 +117,27 @@ function restartBehaviour(
       p.moveIntent = { x: 0, y: 0 }
       p.aiHoldTimer += dt
       let best = bestPassOption(state, p, rng)
-      // Set-piece routine: the easy pass to the shooter coming short behind the ball.
+      // Set-piece routine: once the movement has started, play the most open of the three runners
+      // (the short man first, then the pivot coming out, then the deep man).
       const routine = setPieceRoutine(state, p.team)
       let shooter: PlayerState | null = null
-      if (routine) {
-        const first = [...routine.entries()][0]
-        if (first) {
-          const cand = state.players[first[0]]!
-          if (dist(cand.pos, first[1]) < 1.5 && laneOpenness(state, p.team, r.spot, cand.pos) > 0.6) {
-            shooter = cand
-            best = { player: cand, score: 0 }
+      if (routine && r.readyTimer > 1.1) {
+        let bestS = -Infinity
+        for (const rr of routine) {
+          const q = state.players[rr.id]!
+          const lane = laneOpenness(state, p.team, r.spot, q.pos)
+          if (lane < 0.6) continue
+          let space = Infinity
+          for (const o of state.players)
+            if (o.team !== p.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, q.pos))
+          // Enough room is enough: the short man and the pivot are preferred (they can shoot).
+          if (space < 1.1) continue
+          const pref = rr.role === 'short' ? 1.3 : rr.role === 'pivot' ? 1.0 : 0
+          const sc = Math.min(lane, 2) * 0.5 + Math.min(space, 2.5) * 0.5 + pref
+          if (sc > bestS) {
+            bestS = sc
+            shooter = rr.role === 'deep' ? null : q
+            best = { player: q, score: sc }
           }
         }
       }
@@ -137,16 +148,18 @@ function restartBehaviour(
         r.aimDir = clampRestartAim(state, r, sub(meet, r.spot))
         p.faceTarget = best.player.pos
       }
-      const wait = r.type === 'kickoff' ? 0.5 : shooter ? 1.3 : 0.9
+      const wait = r.type === 'kickoff' ? 0.5 : routine ? 1.8 : 0.9
       // Kick only once he stands behind the ball on the aim line (he walks round it when re-aiming).
       // Never let the four-second limit run out: after 2.6 s the ball goes regardless.
-      const hurry = r.readyTimer > 2.6
+      const hurry = r.readyTimer > 2.8
       const inPlace = dist(p.pos, restartTakerSpot(state, r)) < 0.15
       if (best && ((p.aiHoldTimer >= wait && inPlace) || hurry)) {
-        if (shooter) {
-          // The routine ball is played firmly so it reaches the shooter before a marker can read it.
-          shooter.aiSetPieceTimer = 2.5
-          actions.pass(p, r.aimDir, false, shooter, undefined, PASS.setPieceArrival)
+        if (routine && routine.some((rr) => rr.id === best!.player.id)) {
+          // The routine ball is played firmly so it beats a marker; the short man and the pivot strike
+          // it first time if they are in range.
+          if (shooter) shooter.aiSetPieceTimer = 2.5
+          const arrival = clamp(dist(best.player.pos, r.spot) * 0.9, 6.5, PASS.setPieceArrival)
+          actions.pass(p, r.aimDir, false, best.player, undefined, arrival)
         } else actions.pass(p, r.aimDir, false, best.player)
       }
       return
@@ -164,7 +177,8 @@ function restartBehaviour(
     const mode = r.team === p.team ? 'attack' : 'defend'
     const dir = state.teams[p.team].attackDir
     target = dynamicAnchor(p.role, mode, dir, r.spot)
-    const routineSpot = p.role !== 'GK' ? setPieceRoutine(state, r.team)?.get(p.id) : undefined
+    const routineSpot =
+      p.role !== 'GK' ? setPieceRoutine(state, r.team)?.find((rr) => rr.id === p.id)?.spot : undefined
     if (routineSpot && r.team === p.team) target = routineSpot
     else if (r.team !== p.team && p.role !== 'GK' && (r.type === 'kickIn' || r.type === 'corner'))
       target = markingPosition(state, p, [])
@@ -452,36 +466,51 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   return best ? best.id : null
 }
 
+export type RoutineRole = 'short' | 'pivot' | 'deep'
+
 /**
- * Attacking kick-in (in the attacking half) or corner: the standard routine. One player comes short
- * behind the ball for an easy pass he can shoot first time, one attacks the back post and the fourth
- * stays back on the halfway line as cover. Returns each non-taker's spot.
+ * Attacking kick-in (in the attacking half) or corner: the standard routine with movement so the
+ * taker has options. The short man starts a few metres off and comes towards the ball (behind it, so
+ * he can shoot first time), the pivot starts at the back post and comes out to the front of the area,
+ * and the deep man leaves the halfway line to show for a pass back. Roles are fixed once per restart;
+ * spots move with the time since the taker got ready.
  */
-export function setPieceRoutine(state: MatchState, team: TeamId): Map<number, Vec2> | null {
+export function setPieceRoutine(
+  state: MatchState,
+  team: TeamId,
+): { id: number; spot: Vec2; role: RoutineRole }[] | null {
   const r = state.restart
   if (!r || r.team !== team || (r.type !== 'kickIn' && r.type !== 'corner')) return null
   const dir = state.teams[team].attackDir
   if (r.type === 'kickIn' && r.spot.y * dir < 2) return null
   const goalY = dir * COURT.halfLength
   const side = Math.sign(r.spot.x) || 1
-  const spotDepth = Math.abs(goalY - r.spot.y)
-  const shooterDepth = clamp(spotDepth + 3, 8.5, 13)
-  const spots: Vec2[] = [
-    { x: side * clamp(Math.abs(r.spot.x) * 0.35, 1.5, 4), y: goalY - dir * shooterDepth }, // shooter
-    { x: -side * 1.6, y: goalY - dir * 1.3 }, // back post
-    { x: side * -1.5, y: -dir * 1 }, // safety at halfway
-  ]
-  const others = state.players.filter((p) => p.team === team && p.role !== 'GK' && p.id !== r.takerId)
-  const out = new Map<number, Vec2>()
-  const free = [...others]
-  for (const spot of spots) {
-    if (!free.length) break
-    let bi = 0
-    for (let i = 1; i < free.length; i++) if (dist(free[i]!.pos, spot) < dist(free[bi]!.pos, spot)) bi = i
-    out.set(free[bi]!.id, spot)
-    free.splice(bi, 1)
+  const inward = { x: -side, y: 0 }
+  const back = { x: 0, y: -dir }
+  const inCourt = (v: Vec2) => ({ x: clamp(v.x, -9.2, 9.2), y: clamp(v.y, -18.8, 18.8) })
+  const at = (a: number, b: number) =>
+    inCourt({ x: r.spot.x + inward.x * a + back.x * b, y: r.spot.y + inward.y * a + back.y * b })
+  const start = [at(5.5, 4.5), { x: -side * 1.6, y: goalY - dir * 1.3 }, { x: side * -1.5, y: -dir * 1 }]
+  const roles: RoutineRole[] = ['short', 'pivot', 'deep']
+  if (!r.routineIds) {
+    const free = state.players.filter((p) => p.team === team && p.role !== 'GK' && p.id !== r.takerId)
+    const ids: number[] = []
+    for (const spot of start) {
+      if (!free.length) break
+      let bi = 0
+      for (let k = 1; k < free.length; k++) if (dist(free[k]!.pos, spot) < dist(free[bi]!.pos, spot)) bi = k
+      ids.push(free[bi]!.id)
+      free.splice(bi, 1)
+    }
+    r.routineIds = ids
   }
-  return out
+  const t = r.ready ? r.readyTimer : 0
+  const moved = [
+    t > 0.5 ? at(2.6, 1.8) : start[0]!,
+    t > 0.9 ? { x: side * 1.0, y: goalY - dir * 5.5 } : start[1]!,
+    t > 1.3 ? at(3.5, 7) : start[2]!,
+  ]
+  return r.routineIds.map((id, k) => ({ id, spot: moved[k]!, role: roles[k]! }))
 }
 
 /**
@@ -502,29 +531,38 @@ function pivotAnchor(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 {
 /** Move off the anchor towards a spot with an open passing lane to the ball. */
 function supportPosition(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 {
   const ballPos = state.ball.pos
+  const dir = state.teams[p.team].attackDir
   let best = anchor
   let bestScore = -Infinity
-  const offsets: Vec2[] = [
-    { x: 0, y: 0 },
-    { x: 1.5, y: 0 },
-    { x: -1.5, y: 0 },
-    { x: 0, y: 1.5 },
-    { x: 0, y: -1.5 },
-    { x: 3, y: 0 },
-    { x: -3, y: 0 },
-    { x: 0, y: 3 },
-    { x: 0, y: -3 },
-  ]
-  for (const o of offsets) {
-    const c = { x: clamp(anchor.x + o.x, -9.3, 9.3), y: clamp(anchor.y + o.y, -19, 19) }
+  // Candidates in rings round the shape position (up to 5 m) and a "show" spot towards the ball.
+  const cands: Vec2[] = [anchor]
+  for (const r of [1.6, 3.2, 5])
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4 + (r === 3.2 ? Math.PI / 8 : 0)
+      cands.push({ x: anchor.x + Math.cos(a) * r, y: anchor.y + Math.sin(a) * r })
+    }
+  const toBall = sub(ballPos, p.pos)
+  if (len(toBall) > 6) cands.push(addScaled(p.pos, normalize(toBall), Math.min(4, len(toBall) - 5)))
+  for (const raw of cands) {
+    const c = { x: clamp(raw.x, -9.3, 9.3), y: clamp(raw.y, -18.8, 18.8) }
     const lane = clamp(laneOpenness(state, p.team, ballPos, c), 0, 3)
     const d = dist(c, ballPos)
-    const spacing = d < 3 ? -2 : 0
+    // Passing distance: not on top of the carrier, not too far for a ground pass.
+    const range = d < 3.5 ? -2 : d > 15 ? -(d - 15) * 0.35 : 0
     // Get free from the marker: distance to the nearest opponent counts.
     let free = Infinity
     for (const o of state.players)
       if (o.team !== p.team && o.role !== 'GK') free = Math.min(free, dist(o.pos, c))
-    const score = lane - dist(c, anchor) * 0.25 + spacing + Math.min(free, 3.5) * 0.45
+    // Keep spacing from teammates (no two players offering the same option).
+    let crowd = 0
+    for (const t of state.players)
+      if (t.team === p.team && t.id !== p.id && t.id !== state.ball.ownerId && dist(t.pos, c) < 3)
+        crowd -= 0.8
+    // Slight preference for forward options and for the spot he is already heading to (stability).
+    const forward = ((c.y - ballPos.y) * dir) / 20
+    const keep = dist(c, p.aiTarget) < 1 ? 0.3 : 0
+    const score =
+      lane * 0.9 + Math.min(free, 4) * 0.8 + range + crowd + forward * 0.6 + keep - dist(c, anchor) * 0.15
     if (score > bestScore) {
       bestScore = score
       best = c
@@ -600,12 +638,15 @@ function steer(state: MatchState, p: PlayerState): void {
   const d = dist(p.aiTarget, p.pos)
   // In a counter-attack against us everybody sprints back to his man.
   const recovering = p.aiState === 'cover' && state.defTransition[p.team] && d > 1.5
+  // Getting free: a supporting player sprints into space when his spot is a few metres away.
+  const showing = p.aiState === 'support' && d > 2.5
   const urgent =
     p.aiState === 'chase' ||
     p.aiState === 'intercept' ||
     (p.aiState === 'press' && d > 2.5) ||
     d > 5 ||
-    recovering
+    recovering ||
+    showing
   // A marker whose spot is on the far side of an opponent goes round him (to get goal-side of his
   // man) instead of walking into his back.
   const target =
