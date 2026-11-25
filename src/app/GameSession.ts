@@ -1,0 +1,238 @@
+import { CAMERA_PRESET_ORDER, type CameraPresetId } from '../camera/CameraSettings'
+import { TEAM_LIBRARY } from '../data/teams'
+import { InputManager } from '../input/InputManager'
+import { ThreeRenderer, graphicsFromUrl } from '../rendering/ThreeRenderer'
+import type { MatchEvent } from '../simulation/Events'
+import { MatchSimulation } from '../simulation/MatchSimulation'
+import { copySnapshot, createSnapshot, writeSnapshot, type MatchSnapshot } from '../simulation/MatchSnapshot'
+import { DT, HANDS, MAX_FRAME_TIME, RESTART } from '../simulation/SimulationConfig'
+import type { Command } from '../simulation/Commands'
+import { useUi } from '../ui/store'
+
+function hex(n: number): string {
+  return `#${n.toString(16).padStart(6, '0')}`
+}
+
+/** Debug/test hook (read-only views of the authoritative state). */
+export interface DebugHook {
+  getState: () => MatchSimulation['state']
+  eventCounts: Record<string, number>
+  frameTimeMs: number
+  drawCalls: number
+  /** Dev builds only: the live camera, for visual inspection (e.g. camera.zoom). */
+  camera?: unknown
+}
+
+declare global {
+  interface Window {
+    __FTW__?: DebugHook
+  }
+}
+
+/**
+ * Fixed-timestep game loop: simulation at 60 Hz, rendering at display rate with interpolation
+ * between the last two snapshots. Bounded catch-up after tab inactivity; auto-pause when hidden.
+ */
+export class GameSession {
+  readonly sim: MatchSimulation
+  private readonly renderer: ThreeRenderer
+  private readonly input: InputManager
+  private readonly prev: MatchSnapshot
+  private readonly curr: MatchSnapshot
+  private accumulator = 0
+  private lastTime = -1
+  private raf = 0
+  private hudTimer = 0
+  private disposed = false
+  private readonly debug: DebugHook
+  private unsubscribe: () => void
+  /** Commands from the UI (e.g. settings changes), injected into the next simulation tick. */
+  private pendingCommands: Command[] = []
+
+  constructor(container: HTMLElement, seed: number) {
+    const setup = useUi.getState().quickMatch
+    this.sim = new MatchSimulation({
+      seed,
+      home: TEAM_LIBRARY[setup.homeIndex] ?? TEAM_LIBRARY[0]!,
+      away: TEAM_LIBRARY[setup.awayIndex] ?? TEAM_LIBRARY[1]!,
+      humanTeam: 0,
+      control: useUi.getState().controls,
+      rules: { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
+    })
+    this.renderer = new ThreeRenderer(container, this.sim.state, graphicsFromUrl(window.location.search))
+    this.input = new InputManager(window)
+    this.prev = createSnapshot(this.sim.state)
+    this.curr = createSnapshot(this.sim.state)
+
+    const ui = useUi.getState()
+    this.renderer.setCameraPreset(ui.cameraPreset)
+    this.renderer.keepHumanAttackingUp = ui.keepAttackingUp
+    this.renderer.setPlayerScale(ui.playerScale)
+    const [home, away] = this.sim.state.teams
+    ui.setHud({
+      homeName: home.name,
+      awayName: away.name,
+      homeShort: home.shortName,
+      awayShort: away.shortName,
+      homeColor: hex(home.primaryColor),
+      awayColor: hex(away.primaryColor),
+      score: [0, 0],
+      clock: this.sim.state.clock,
+      half: 1,
+    })
+    this.unsubscribe = useUi.subscribe((s, p) => {
+      if (s.cameraPreset !== p.cameraPreset) this.renderer.setCameraPreset(s.cameraPreset)
+      if (s.keepAttackingUp !== p.keepAttackingUp) this.renderer.keepHumanAttackingUp = s.keepAttackingUp
+      if (s.playerScale !== p.playerScale) this.renderer.setPlayerScale(s.playerScale)
+      if (s.paused !== p.paused) this.input.reset()
+      if (s.controls !== p.controls)
+        this.pendingCommands.push({ type: 'SetControlOptions', options: s.controls })
+    })
+
+    this.debug = { getState: () => this.sim.state, eventCounts: {}, frameTimeMs: 0, drawCalls: 0 }
+    if (import.meta.env.DEV) this.debug.camera = this.renderer.cameraController.camera
+    window.__FTW__ = this.debug
+    document.addEventListener('visibilitychange', this.onVisibility)
+    this.raf = requestAnimationFrame(this.frame)
+  }
+
+  dispose(): void {
+    this.disposed = true
+    cancelAnimationFrame(this.raf)
+    document.removeEventListener('visibilitychange', this.onVisibility)
+    this.unsubscribe()
+    this.input.dispose()
+    this.renderer.dispose()
+    if (window.__FTW__ === this.debug) delete window.__FTW__
+  }
+
+  private onVisibility = (): void => {
+    if (document.hidden && useUi.getState().screen === 'match') useUi.getState().setPaused(true)
+  }
+
+  private frame = (now: number): void => {
+    if (this.disposed) return
+    this.raf = requestAnimationFrame(this.frame)
+    const t0 = performance.now()
+    const dt = this.lastTime < 0 ? DT : Math.min((now - this.lastTime) / 1000, MAX_FRAME_TIME)
+    this.lastTime = now
+
+    this.handleUiPresses()
+    const ui = useUi.getState()
+    if (!ui.paused) {
+      this.accumulator += dt
+      while (this.accumulator >= DT) {
+        this.input.setThrowMode(this.humanKeeperHolding())
+        const commands = this.input.sample(this.renderer.cameraController.getBasis())
+        if (this.pendingCommands.length) commands.push(...this.pendingCommands.splice(0))
+        copySnapshot(this.curr, this.prev)
+        this.sim.step(commands)
+        writeSnapshot(this.sim.state, this.curr)
+        this.handleEvents(this.sim.drainEvents())
+        this.accumulator -= DT
+      }
+    }
+    const alpha = ui.paused ? 1 : this.accumulator / DT
+    this.renderer.render(
+      this.prev,
+      this.curr,
+      alpha,
+      ui.paused ? 0 : dt,
+      this.humanKeeperHolding() ? this.input.shotCharge : null,
+    )
+
+    this.hudTimer += dt
+    if (this.hudTimer >= 0.1) {
+      this.hudTimer = 0
+      this.pushHud()
+    }
+    this.debug.frameTimeMs = performance.now() - t0
+    this.debug.drawCalls = this.renderer.drawCalls
+  }
+
+  /** The human-controlled keeper holds the ball in the hands (throw mode). */
+  private humanKeeperHolding(): boolean {
+    const s = this.sim.state
+    return s.controlledId !== null && s.ball.inHands && s.ball.ownerId === s.controlledId
+  }
+
+  private handleUiPresses(): void {
+    const ui = useUi.getState()
+    for (const a of this.input.takeUiPresses()) {
+      if (a === 'pause') ui.setPaused(!ui.paused)
+      else if (a === 'help') ui.toggleHelp()
+      else if (a === 'camera') {
+        const i = CAMERA_PRESET_ORDER.indexOf(ui.cameraPreset)
+        const next: CameraPresetId = CAMERA_PRESET_ORDER[(i + 1) % CAMERA_PRESET_ORDER.length]!
+        ui.setCameraPreset(next)
+        ui.showFlash({
+          key: 'hud.camera',
+          vars: { name: `camera.${next}` },
+          until: performance.now() + 1500,
+          info: true,
+        })
+      }
+    }
+  }
+
+  private handleEvents(events: MatchEvent[]): void {
+    const ui = useUi.getState()
+    for (const e of events) {
+      this.debug.eventCounts[e.type] = (this.debug.eventCounts[e.type] ?? 0) + 1
+      if (e.type === 'GoalScored') {
+        const scorer = e.scorerId !== null ? this.sim.player(e.scorerId).profile : null
+        ui.showFlash(
+          scorer
+            ? {
+                key: 'hud.goalBy',
+                vars: { name: `${scorer.firstName[0]}. ${scorer.lastName}` },
+                until: performance.now() + 2400,
+              }
+            : { key: 'hud.goal', until: performance.now() + 2400 },
+        )
+        ui.setHud({ score: [e.score[0], e.score[1]] })
+      } else if (e.type === 'HalfTime') {
+        ui.showFlash({ key: 'hud.halfTime', until: performance.now() + 2600 })
+        this.input.reset()
+      } else if (e.type === 'SecondHalfStarted') {
+        ui.showFlash({ key: 'hud.secondHalf', until: performance.now() + 1500, info: true })
+      } else if (e.type === 'MatchFinished') {
+        this.input.reset()
+        const s = this.sim.state
+        ui.setResult({
+          score: [e.score[0], e.score[1]],
+          names: [s.teams[0].name, s.teams[1].name],
+          colors: [hex(s.teams[0].primaryColor), hex(s.teams[1].primaryColor)],
+          stats: [{ ...s.stats[0] }, { ...s.stats[1] }],
+        })
+      } else if (e.type === 'KeeperHoldTimeout') {
+        ui.showFlash({ key: 'hud.keeperHoldTimeout', until: performance.now() + 1800, info: true })
+      } else if (e.type === 'RestartTimeout' && e.team === this.sim.state.humanTeam) {
+        ui.showFlash({ key: 'hud.restartTimeout', until: performance.now() + 1800, info: true })
+      }
+    }
+  }
+
+  private pushHud(): void {
+    const s = this.sim.state
+    const c = s.controlledId !== null ? this.sim.player(s.controlledId) : null
+    useUi.getState().setHud({
+      clock: s.clock,
+      half: s.half,
+      phase: s.phase,
+      restartType: s.restart?.type ?? null,
+      score: [s.score[0], s.score[1]],
+      controlledName: c ? `${c.profile.firstName} ${c.profile.lastName}` : null,
+      controlledNumber: c ? c.profile.shirtNumber : null,
+      controlledRole: c ? c.role : null,
+      shotCharge: this.input.shotCharge,
+      keeperCountdown: this.humanKeeperHolding()
+        ? Math.max(0, HANDS.holdLimit - this.sim.state.ball.handsTimer)
+        : null,
+      restartCountdown:
+        s.restart?.ready && (s.restart.type === 'kickIn' || s.restart.type === 'corner')
+          ? Math.max(0, RESTART.kickTimeLimit - s.restart.readyTimer)
+          : null,
+    })
+  }
+}
