@@ -42,6 +42,7 @@ function difficultyFor(state: MatchState, team: TeamId): DifficultyParams {
 }
 
 export function updateAI(state: MatchState, actions: AIActions, rng: SeededRandom, dt: number): void {
+  updateDefensiveTransitions(state)
   const chasers: [number | null, number | null] = [pickBallWinner(state, 0), pickBallWinner(state, 1)]
   const helpers: [number | null, number | null] = [
     pickHelper(state, 0, chasers[0]),
@@ -205,12 +206,21 @@ function pickBallWinner(state: MatchState, team: TeamId): number | null {
     if (recv.team === team) return recv.id
   }
   const target = owner ? owner.pos : addScaled(ball.pos, ball.vel, 0.35)
+  const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
+  // Counter-attack against us: a defender goal-side of the carrier engages him (delays him while the
+  // others recover) rather than one chasing from behind.
+  const preferGoalSide = owner !== null && state.defTransition[team]
   let best: PlayerState | null = null
   let bestT = Infinity
   let humanT = Infinity
   for (const p of state.players) {
     if (p.team !== team || p.role === 'GK') continue
-    const t = estimateTimeToReach(p, target)
+    let t = estimateTimeToReach(p, target)
+    // The current presser keeps the job unless someone is clearly faster (no flicker between two).
+    if (p.aiState === 'press' || p.aiState === 'chase') t -= 0.3
+    if (preferGoalSide && dist(p.pos, ownGoal) > dist(target, ownGoal) - 0.5) t += 1.0
+    // Near our goal the fixo does not leave a man he is marking in front of goal to press the ball.
+    if (p.role === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id)) t += 0.8
     if (p.id === state.controlledId) {
       humanT = t
       continue
@@ -267,7 +277,8 @@ function offBallDecision(
     p.aiTarget = cut
     return
   }
-  const anchor = dynamicAnchor(p.role, inPossession ? 'attack' : 'defend', dir, ball.pos)
+  let anchor = dynamicAnchor(p.role, inPossession ? 'attack' : 'defend', dir, ball.pos)
+  if (inPossession && p.role === 'PIVOT') anchor = pivotAnchor(state, p, anchor)
   if (inPossession) {
     p.aiState = 'support'
     p.aiTarget = supportPosition(state, p, anchor)
@@ -299,11 +310,28 @@ function markingPosition(state: MatchState, p: PlayerState, pressing: (number | 
   const away = clamp((dist(a.pos, ball) - 7) / 10, 0, 0.45)
   const middle = { x: a.pos.x * 0.3, y: (a.pos.y + ownGoal.y) / 2 }
   mark = { x: mark.x + (middle.x - mark.x) * away, y: mark.y + (middle.y - mark.y) * away }
+  // A man in front of our goal is followed even outside the zone.
+  if (dist(a.pos, ownGoal) < 9) return mark
   const off = sub(mark, anchor)
   // The fixo guards the middle and leaves his zone least.
   const zone = p.role === 'FIXO' ? 4 : p.role === 'PIVOT' ? 6.5 : 5.5
   const l = len(off)
   return l > zone ? addScaled(anchor, off, zone / l) : mark
+}
+
+/** An opponent (other than the carrier) within 4 m of the fixo, close to our goal. */
+function fixoHasMan(state: MatchState, fixo: PlayerState, carrierId: number): boolean {
+  const ownGoal = { x: 0, y: -state.teams[fixo.team].attackDir * COURT.halfLength }
+  for (const o of state.players)
+    if (
+      o.team !== fixo.team &&
+      o.role !== 'GK' &&
+      o.id !== carrierId &&
+      dist(o.pos, fixo.pos) < 4 &&
+      dist(o.pos, ownGoal) < 12
+    )
+      return true
+  return false
 }
 
 /** One-to-one marking assignment for a defending team: defender id -> opponent id. */
@@ -350,9 +378,43 @@ export function markingAssignment(
 }
 
 /**
- * Cover defender: when an opponent carries the ball within 16 m of goal and the first defender is
- * beaten (not goal-side of him, or more than 3.5 m away), the next defender who can get goal-side of
- * the carrier fastest goes to help.
+ * Counter-attack detection. When a team loses the ball with at most one outfield player goal-side of
+ * it, it is out of shape: the nearest player (preferably one goal-side) presses, the others sprint
+ * back to their men (one-to-one marking) and the cover defender may step out anywhere. It returns to the diamond once the attackers play the ball
+ * backwards, the ball goes dead (restart), three players are goal-side again or it wins the ball.
+ */
+export function updateDefensiveTransitions(state: MatchState): void {
+  const ball = state.ball
+  for (const team of [0, 1] as const) {
+    const defending = state.possessionTeam !== null && state.possessionTeam !== team
+    if (!defending || state.phase !== 'play') {
+      state.defTransition[team] = false
+      continue
+    }
+    const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
+    const ballToGoal = dist(ball.pos, ownGoal)
+    let goalSide = 0
+    for (const p of state.players)
+      if (p.team === team && p.role !== 'GK' && dist(p.pos, ownGoal) < ballToGoal - 1) goalSide++
+    // Caught out: the ball was lost with at most one outfield player goal-side of it.
+    if (state.aiPrevPossession !== state.possessionTeam) state.defTransition[team] = goalSide < 2
+    // Back in shape: three players goal-side of the ball again.
+    if (goalSide >= 3) state.defTransition[team] = false
+    if (state.defTransition[team] && ball.mode === 'free' && ball.intendedReceiverId !== null) {
+      const recv = state.players[ball.intendedReceiverId]!
+      const attackDir = state.teams[recv.team].attackDir
+      // A pass backwards by the attackers: time to reorganise.
+      if (recv.team !== team && ball.vel.y * attackDir < -2) state.defTransition[team] = false
+    }
+  }
+  state.aiPrevPossession = state.possessionTeam
+}
+
+/**
+ * Cover defender: when an opponent carries the ball in our half (within 28 m of goal) and the first
+ * defender (usually the pivot at the top of the diamond) is beaten — not goal-side of him or more than
+ * 3.5 m away — the next defender who can get goal-side of the carrier fastest goes to help: an ala, or
+ * the fixo if nobody is near him.
  */
 export function pickHelper(state: MatchState, team: TeamId, winnerId: number | null): number | null {
   if (state.phase !== 'play') return null
@@ -361,10 +423,12 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   if (!owner || owner.team === team || ball.inHands || owner.role === 'GK') return null
   const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
   const carrierToGoal = dist(owner.pos, ownGoal)
-  if (carrierToGoal > 20) return null
+  const transition = state.defTransition[team]
+  if (carrierToGoal > 28 && !transition) return null
   if (winnerId !== null) {
     const w = state.players[winnerId]!
-    const goalSide = dist(w.pos, ownGoal) < carrierToGoal - 0.3
+    // Level with the carrier still counts (margin, so the help does not flicker on and off).
+    const goalSide = dist(w.pos, ownGoal) < carrierToGoal + 0.4
     if (goalSide && dist(w.pos, owner.pos) < 3.5) return null
   }
   const spot = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 1.5)
@@ -372,6 +436,13 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   let bestT = Infinity
   for (const d of state.players) {
     if (d.team !== team || d.role === 'GK' || d.id === winnerId || d.id === state.controlledId) continue
+    // The fixo only steps out if no opponent is near him (he would leave a man free in front of goal).
+    if (d.role === 'FIXO' && !transition) {
+      let near = false
+      for (const o of state.players)
+        if (o.team !== team && o.role !== 'GK' && o.id !== owner.id && dist(o.pos, d.pos) < 4) near = true
+      if (near) continue
+    }
     const t = estimateTimeToReach(d, spot)
     if (t < bestT) {
       bestT = t
@@ -411,6 +482,21 @@ export function setPieceRoutine(state: MatchState, team: TeamId): Map<number, Ve
     free.splice(bi, 1)
   }
   return out
+}
+
+/**
+ * The pivot does not stay in the middle: every few seconds he moves between the middle, the ball-side
+ * wing and the far post/wing to find space (deterministic rhythm per team and half).
+ */
+function pivotAnchor(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 {
+  const dir = state.teams[p.team].attackDir
+  const phase = Math.floor((state.tick + p.team * 157) / (60 * 4.5)) % 3
+  const ballSide = Math.sign(state.ball.pos.x) || 1
+  if (phase === 0) return anchor
+  const x = phase === 1 ? ballSide * 6.2 : -ballSide * 4.5
+  // On the wing a little deeper towards the goal line.
+  const y = clamp(anchor.y + dir * 1.5, -COURT.halfLength + 3, COURT.halfLength - 3)
+  return { x, y }
 }
 
 /** Move off the anchor towards a spot with an open passing lane to the ball. */
@@ -512,13 +598,42 @@ function steer(state: MatchState, p: PlayerState): void {
     return
   }
   const d = dist(p.aiTarget, p.pos)
+  // In a counter-attack against us everybody sprints back to his man.
+  const recovering = p.aiState === 'cover' && state.defTransition[p.team] && d > 1.5
   const urgent =
-    p.aiState === 'chase' || p.aiState === 'intercept' || (p.aiState === 'press' && d > 2.5) || d > 5
-  walkTo(p, p.aiTarget, urgent)
+    p.aiState === 'chase' ||
+    p.aiState === 'intercept' ||
+    (p.aiState === 'press' && d > 2.5) ||
+    d > 5 ||
+    recovering
+  // A marker whose spot is on the far side of an opponent goes round him (to get goal-side of his
+  // man) instead of walking into his back.
+  const target =
+    p.aiState === 'cover' || p.aiState === 'press' ? aroundBodies(state, p, p.aiTarget) : p.aiTarget
+  walkTo(p, target, urgent)
   if (p.aiState === 'press' && d < 1.5) {
     p.moveIntent = { x: p.moveIntent.x * 0.6, y: p.moveIntent.y * 0.6 }
   }
   if (p.aiState !== 'chase') p.faceTarget = state.ball.pos
+}
+
+/** Detour point round the first opponent standing in the way to `target` (else `target`). */
+function aroundBodies(state: MatchState, p: PlayerState, target: Vec2): Vec2 {
+  const to = sub(target, p.pos)
+  if (len(to) < 0.3) return target
+  for (const o of state.players) {
+    if (o.team === p.team || o.role === 'GK') continue
+    if (dist(o.pos, p.pos) > 4) continue
+    const { point, t } = closestOnSegment(p.pos, target, o.pos)
+    if (t <= 0.02 || t >= 0.98 || dist(point, o.pos) > 0.75) continue
+    // Pass on the side that makes the shorter way round (stable from tick to tick).
+    const n = normalize(to)
+    const left = addScaled(o.pos, { x: -n.y, y: n.x }, 1.0)
+    const right = addScaled(o.pos, { x: n.y, y: -n.x }, 1.0)
+    const via = (w: Vec2) => dist(p.pos, w) + dist(w, target)
+    return via(left) <= via(right) ? left : right
+  }
+  return target
 }
 
 /** Arrival steering: full intent far away, easing in within 1.5 m, idle inside 0.15 m. */
@@ -959,7 +1074,10 @@ function bestPassOption(
     for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
     const progress = ((t.pos.y - p.pos.y) * dir) / 10
     const keeper = t.role === 'GK' ? -1.2 + pressure : 0
-    const score = open * 0.9 + progress * 1.1 + Math.min(space, 4) * 0.3 + keeper + rng.range(-0.15, 0.15)
+    // A tightly marked receiver is a bad option even with an open lane.
+    const marked = space < 1.3 ? -1.5 : 0
+    const score =
+      open * 0.9 + progress * 1.1 + Math.min(space, 4) * 0.3 + keeper + marked + rng.range(-0.15, 0.15)
     if (score > bestScore) {
       bestScore = score
       best = t

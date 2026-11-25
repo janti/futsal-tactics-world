@@ -24,7 +24,7 @@ function runAiMatch(seed: number, seconds: number) {
       maxPressers = Math.max(maxPressers, n)
       const owner = sim.state.ball.ownerId !== null ? sim.state.players[sim.state.ball.ownerId]! : null
       const ownGoalY = -sim.state.teams[team]!.attackDir * COURT.halfLength
-      if (owner && Math.hypot(owner.pos.x, owner.pos.y - ownGoalY) > 21)
+      if (owner && Math.hypot(owner.pos.x, owner.pos.y - ownGoalY) > 29)
         maxPressersFar = Math.max(maxPressersFar, n)
     }
   }
@@ -46,7 +46,7 @@ describe('AI vs AI match flow (headless)', () => {
     expect(Number.isFinite(sim.state.ball.pos.x)).toBe(true)
   })
 
-  it('never sends more than one player per team to the ball (anti-ball-chasing); a cover defender helps only within 20 m of goal', () => {
+  it('never sends more than one player per team to the ball (anti-ball-chasing); a cover defender helps only in the own half', () => {
     const { maxPressers, maxPressersFar } = runAiMatch(11, 120)
     expect(maxPressersFar).toBeLessThanOrEqual(1)
     expect(maxPressers).toBeLessThanOrEqual(2)

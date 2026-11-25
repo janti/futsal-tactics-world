@@ -1559,6 +1559,8 @@ export function createInitialState(setup: MatchSetup): MatchState {
     control: { ...DEFAULT_CONTROL_OPTIONS, ...setup.control },
     difficulty: setup.difficulty ?? 'normal',
     indirectKickBy: null,
+    defTransition: [false, false],
+    aiPrevPossession: null,
     possessionTeam: null,
     rngState: 0,
   }

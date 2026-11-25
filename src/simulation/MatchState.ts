@@ -244,6 +244,14 @@ export interface MatchState {
    * from it does not count (goal clearance instead).
    */
   indirectKickBy: number | null
+  /**
+   * AI: a team caught out of shape after losing the ball (counter-attack against it): a goal-side
+   * player presses, the others sprint back to their men, until the attackers play the ball back, the
+   * ball goes dead or the team is back in shape.
+   */
+  defTransition: [boolean, boolean]
+  /** AI bookkeeping: possession seen on the previous AI update. */
+  aiPrevPossession: TeamId | null
   /** Strength of the computer opponent (affects only the non-human team). */
   difficulty: Difficulty
   possessionTeam: TeamId | null

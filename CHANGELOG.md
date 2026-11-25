@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Fixed: in front of goal a defender could mark the pivot from the wrong side (pivot between him and
+  the keeper). Markers now go round their man to get goal-side, a man within 9 m of goal is followed
+  outside the zone, and the fixo does not leave a man in front of goal to press the ball.
+- The attacking pivot no longer stays in the middle: every few seconds he moves between the middle,
+  the ball-side wing and the far post/wing.
+- Help defence: when a carrier gets past the first defender (usually the pivot) anywhere in our half,
+  an ala comes across, or the fixo if no opponent is near him.
+- Counter-attacks: a team that loses the ball with at most one player goal-side of it sprints back to
+  its men; a goal-side defender engages the carrier and the cover defender may step out anywhere. It
+  returns to the normal diamond after a back pass, a dead ball or once three players are goal-side.
+- Pressing roles no longer flicker between two players (the current presser keeps the job unless
+  someone is clearly faster).
+- Measured AI vs AI (6 x 3 min): 78 % pass completion, 85 shots, 12 goals.
+
 - Defending reworked: the defending team plays a high, compact diamond (pivot on top just goal-side
   of the ball, alas either side, fixo at the bottom, about 4.4 m between the lines) that moves with
   the ball. Every defender outside the press marks one opponent (one-to-one, the opponent nearest his

@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
 import { MatchSimulation } from '../../src/simulation/MatchSimulation'
-import { markingAssignment, pickHelper, setPieceRoutine } from '../../src/ai/BasicAI'
+import {
+  markingAssignment,
+  pickHelper,
+  setPieceRoutine,
+  updateDefensiveTransitions,
+} from '../../src/ai/BasicAI'
 import { diamondAnchor } from '../../src/ai/positioning/Formation'
 import { COURT, TICK_RATE } from '../../src/simulation/SimulationConfig'
 import type { Vec2 } from '../../src/core/math/vec2'
@@ -194,5 +199,124 @@ describe('shot blocks', () => {
     }
     expect(owned).toBe(0)
     expect(deflected).toBeGreaterThan(15)
+  })
+})
+
+describe('marking the pivot in front of goal', () => {
+  it('the marker goes round the pivot and ends up goal-side, between him and the keeper', () => {
+    for (const seed of [2, 4]) {
+      const { sim, s } = openPlay(seed, { x: 7, y: -12 })
+      const pivot = sim.player(9)
+      for (let i = 0; i < TICK_RATE * 5; i++) {
+        pivot.pos = { x: 0.5, y: -16.5 }
+        pivot.vel = { x: 0, y: 0 }
+        const c = sim.player(7)
+        c.pos = { x: 7, y: -12 }
+        c.vel = { x: 0, y: 0 }
+        s.ball.ownerId = 7
+        s.ball.mode = 'controlled'
+        s.ball.pos = { x: 7, y: -12.4 }
+        s.possessionTeam = 1
+        sim.step()
+      }
+      const goal = { x: 0, y: -COURT.halfLength }
+      const marker = s.players
+        .filter((q) => q.team === 0 && q.role !== 'GK')
+        .reduce((a, q) => (d(q.pos, pivot.pos) < d(a.pos, pivot.pos) ? q : a))
+      expect(d(marker.pos, pivot.pos)).toBeLessThan(2.2)
+      expect(d(marker.pos, goal)).toBeLessThan(d(pivot.pos, goal))
+    }
+  })
+})
+
+describe('attacking pivot', () => {
+  it('does not stay in the middle: he also looks for space on the wings', () => {
+    const sim = new MatchSimulation({
+      seed: 7,
+      home: TEAM_LIBRARY[0]!,
+      away: TEAM_LIBRARY[1]!,
+      humanTeam: null,
+    })
+    const s = sim.state
+    let wide = 0
+    let central = 0
+    for (let i = 0; i < TICK_RATE * 120; i++) {
+      sim.step()
+      if (s.phase !== 'play') continue
+      for (const p of s.players) {
+        if (p.role !== 'PIVOT' || s.possessionTeam !== p.team || s.ball.ownerId === p.id) continue
+        if (Math.abs(p.pos.x) > 4.5) wide++
+        else if (Math.abs(p.pos.x) < 2) central++
+      }
+    }
+    expect(wide).toBeGreaterThan(TICK_RATE * 10)
+    expect(central).toBeGreaterThan(TICK_RATE * 10)
+  })
+})
+
+describe('help when the pivot is beaten', () => {
+  it('an ala comes across, or the fixo if nobody is near him', () => {
+    const { sim, s } = openPlay(5, { x: 2, y: -2 })
+    // Team 0 defends y = -20. Their pivot (4) pressed and is beaten (behind the carrier).
+    sim.player(4).pos = { x: 2, y: 1 }
+    sim.player(1).pos = { x: 0, y: -12 } // fixo
+    sim.player(2).pos = { x: 7, y: -8 } // ala
+    sim.player(3).pos = { x: -7, y: -8 } // ala
+    // An attacker right next to the fixo: he stays, an ala helps.
+    sim.player(9).pos = { x: 0.5, y: -13 }
+    const h1 = pickHelper(s, 0, 4)
+    expect(h1 === 2 || h1 === 3).toBe(true)
+    // Nobody near the fixo and he is closest: the fixo steps up.
+    sim.player(9).pos = { x: -9, y: -15 }
+    sim.player(2).pos = { x: 9.5, y: -16 }
+    sim.player(3).pos = { x: -9.5, y: -16 }
+    sim.player(1).pos = { x: 1, y: -7 }
+    expect(pickHelper(s, 0, 4)).toBe(1)
+  })
+})
+
+describe('counter-attack defending', () => {
+  it('a team caught upfield switches to counter mode; a back pass or a dead ball ends it', () => {
+    const { sim, s } = openPlay(6, { x: 0, y: 6 })
+    // Team 0 (defends y = -20) is caught upfield: all four outfield players beyond the ball.
+    for (const id of [1, 2, 3, 4]) sim.player(id).pos = { x: (id - 2.5) * 3, y: 10 }
+    s.aiPrevPossession = 0
+    updateDefensiveTransitions(s)
+    expect(s.defTransition[0]).toBe(true)
+    // Attackers pass backwards (team 1 attacks -y, so backwards is +y): back in shape.
+    s.ball.ownerId = null
+    s.ball.mode = 'free'
+    s.ball.intendedReceiverId = 6
+    s.ball.vel = { x: 0, y: 6 }
+    updateDefensiveTransitions(s)
+    expect(s.defTransition[0]).toBe(false)
+    // A dead ball also ends it.
+    s.defTransition[0] = true
+    s.phase = 'restart'
+    updateDefensiveTransitions(s)
+    expect(s.defTransition[0]).toBe(false)
+  })
+
+  it('in a counter the defenders sprint back and the team gets back goal-side of the ball', () => {
+    const { sim, s } = openPlay(8, { x: 0, y: 4 })
+    for (const id of [1, 2, 3, 4]) sim.player(id).pos = { x: (id - 2.5) * 3, y: 9 }
+    s.aiPrevPossession = 0
+    let sprinted = false
+    const carrier = sim.player(7)
+    for (let i = 0; i < TICK_RATE * 3; i++) {
+      carrier.pos = { x: 0, y: 4 } // the carrier is held up (we measure the others recovering)
+      carrier.vel = { x: 0, y: 0 }
+      sim.step()
+      s.ball.ownerId = 7
+      s.ball.mode = 'controlled'
+      s.possessionTeam = 1
+      if (s.players.some((q) => q.team === 0 && q.aiState === 'cover' && q.sprint)) sprinted = true
+    }
+    expect(sprinted).toBe(true)
+    const goal = { x: 0, y: -COURT.halfLength }
+    const goalSide = s.players.filter(
+      (q) => q.team === 0 && q.role !== 'GK' && d(q.pos, goal) < d(s.ball.pos, goal),
+    ).length
+    expect(goalSide).toBeGreaterThanOrEqual(2)
   })
 })

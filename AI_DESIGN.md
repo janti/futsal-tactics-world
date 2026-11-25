@@ -19,8 +19,16 @@ the full system will be built on:
   (`markingAssignment`: one-to-one, minimum total distance from their diamond places) and stand
   goal-side of him (1–2.2 m: tighter near goal and ball), sagging to the middle when he is far from the
   ball, never more than their zone radius from the diamond (fixo 4 m, alas 5.5 m, pivot 6.5 m).
-- **Cover defender** (`pickHelper`): carrier within 20 m of goal and the first defender beaten (not
-  goal-side or > 3.5 m away) → the defender who gets goal-side of the carrier fastest also presses.
+- **Cover defender** (`pickHelper`): carrier in our half (28 m; anywhere in a counter-attack) and the
+  first defender beaten (not level/goal-side or > 3.5 m away) → the defender who gets goal-side of the
+  carrier fastest also presses; the fixo only if no opponent is near him (except in a counter).
+- **Counter-attack** (`updateDefensiveTransitions`): ball lost with at most one outfield player
+  goal-side → markers sprint back, a goal-side defender is preferred as presser; ends on a back pass,
+  a dead ball or three players goal-side.
+- **Marking details**: markers detour round opponents to reach their goal-side spot; a man within 9 m
+  of goal is followed outside the zone; the fixo does not press when he has a man near goal; the
+  current presser keeps the role unless another is 0.3 s faster.
+- **Attacking pivot**: rotates every 4.5 s between the middle, the ball-side wing and the far side.
 - **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): shooter
   behind the ball at 8.5–13 m from goal (firm pass, first-time shot), back-post runner, safety player at
   halfway.
