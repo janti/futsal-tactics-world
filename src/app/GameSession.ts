@@ -58,9 +58,10 @@ export class GameSession {
       humanTeam: 0,
       control: useUi.getState().controls,
       rules: { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
+      difficulty: setup.difficulty,
     })
     this.renderer = new ThreeRenderer(container, this.sim.state, graphicsFromUrl(window.location.search))
-    this.input = new InputManager(window)
+    this.input = new InputManager(window, useUi.getState().keyBindings)
     this.prev = createSnapshot(this.sim.state)
     this.curr = createSnapshot(this.sim.state)
 
@@ -85,6 +86,7 @@ export class GameSession {
       if (s.keepAttackingUp !== p.keepAttackingUp) this.renderer.keepHumanAttackingUp = s.keepAttackingUp
       if (s.playerScale !== p.playerScale) this.renderer.setPlayerScale(s.playerScale)
       if (s.paused !== p.paused) this.input.reset()
+      if (s.keyBindings !== p.keyBindings) this.input.setBindings(s.keyBindings)
       if (s.controls !== p.controls)
         this.pendingCommands.push({ type: 'SetControlOptions', options: s.controls })
     })
@@ -123,6 +125,7 @@ export class GameSession {
       this.accumulator += dt
       while (this.accumulator >= DT) {
         this.input.setThrowMode(this.humanKeeperHolding())
+        this.input.setPassCharge(ui.controls.passAssist === 'manual')
         const commands = this.input.sample(this.renderer.cameraController.getBasis())
         if (this.pendingCommands.length) commands.push(...this.pendingCommands.splice(0))
         copySnapshot(this.curr, this.prev)
@@ -239,7 +242,8 @@ export class GameSession {
         : null,
       keeperHands: this.humanKeeperHolding(),
       restartCountdown:
-        s.restart?.ready && (s.restart.type === 'kickIn' || s.restart.type === 'corner')
+        s.restart?.ready &&
+        (s.restart.type === 'kickIn' || s.restart.type === 'corner' || s.restart.type === 'freeKick')
           ? Math.max(0, RESTART.kickTimeLimit - s.restart.readyTimer)
           : null,
     })

@@ -220,3 +220,80 @@ test('quick match setup, half-time and the full-time result screen', async ({ pa
   await expect(page.getByTestId('match-end')).toBeHidden()
   await expect(page.getByTestId('clock')).toHaveText('02:00')
 })
+
+/** A fake standard gamepad the test can press buttons on (window.__pad.buttons[i] = true/false). */
+const FAKE_PAD = () => {
+  const pad = { buttons: Array.from({ length: 17 }, () => false), axes: [0, 0, 0, 0] }
+  ;(window as unknown as { __pad: typeof pad }).__pad = pad
+  navigator.getGamepads = () =>
+    [
+      {
+        id: 'fake',
+        index: 0,
+        connected: true,
+        mapping: 'standard',
+        timestamp: 0,
+        axes: pad.axes,
+        buttons: pad.buttons.map((p) => ({ pressed: p, touched: p, value: p ? 1 : 0 })),
+        vibrationActuator: null,
+        hapticActuators: [],
+      },
+    ] as unknown as (Gamepad | null)[]
+}
+
+async function padPress(page: Page, button: number) {
+  await page.evaluate(
+    (b) => ((window as unknown as { __pad: { buttons: boolean[] } }).__pad.buttons[b] = true),
+    button,
+  )
+  await page.waitForTimeout(80)
+  await page.evaluate(
+    (b) => ((window as unknown as { __pad: { buttons: boolean[] } }).__pad.buttons[b] = false),
+    button,
+  )
+  await page.waitForTimeout(80)
+}
+
+test('gamepad: Start pauses, B resumes; menus can be navigated and activated with the pad', async ({
+  page,
+}) => {
+  await page.addInitScript(FAKE_PAD)
+  await page.goto('/?gfx=low')
+  // Title menu: A on the focused Quick Match button opens the setup screen; A again starts.
+  await padPress(page, 0)
+  await expect(page.getByTestId('setup-screen')).toBeVisible()
+  await page.getByTestId('start-match').focus()
+  await padPress(page, 0)
+  await page.waitForFunction(() => window.__FTW__?.getState() !== undefined)
+  await padPress(page, 9) // Start
+  await expect(page.getByTestId('pause-menu')).toBeVisible()
+  await padPress(page, 1) // B
+  await expect(page.getByTestId('pause-menu')).toBeHidden()
+})
+
+test('settings: passing assistance, rebound keys and difficulty reach the match', async ({ page }) => {
+  await page.goto('/?gfx=low')
+  await page.getByTestId('setting-pass-assist').selectOption('manual')
+  await page.getByTestId('keys-panel').locator('summary').click()
+  await page.getByTestId('bind-pass').click()
+  await page.keyboard.press('KeyQ')
+  await expect(page.getByTestId('bind-pass')).toContainText('Q')
+  await page.getByTestId('quick-match').click()
+  await page.getByTestId('difficulty-hard').click()
+  await page.getByTestId('start-match').click()
+  await page.waitForFunction(() => window.__FTW__?.getState().restart?.ready === true, undefined, {
+    timeout: 15_000,
+  })
+  const info = await page.evaluate(() => {
+    const s = window.__FTW__!.getState()
+    return { assist: s.control.passAssist, difficulty: s.difficulty }
+  })
+  expect(info).toEqual({ assist: 'manual', difficulty: 'hard' })
+  // Kick off with the rebound key (manual passing: tap = soft pass).
+  await page.keyboard.down('KeyQ')
+  await page.waitForTimeout(60)
+  await page.keyboard.up('KeyQ')
+  await page.waitForFunction(() => window.__FTW__?.getState().phase === 'play', undefined, { timeout: 5_000 })
+  await page.reload()
+  await expect(page.getByTestId('setting-pass-assist')).toHaveValue('manual')
+})

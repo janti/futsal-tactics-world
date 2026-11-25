@@ -1,3 +1,4 @@
+import { keyLabel, type InputAction } from '../../input/InputMapping'
 import { useEffect, useState } from 'react'
 import { useUi } from '../store'
 import { useT } from '../useT'
@@ -14,6 +15,7 @@ const RESTART_KEYS: Record<string, TranslationKey> = {
   kickIn: 'hud.kickIn',
   corner: 'hud.corner',
   goalClearance: 'hud.goalClearance',
+  freeKick: 'hud.freeKick',
 }
 
 export function Hud() {
@@ -100,15 +102,18 @@ export function Hud() {
 
 export function ControlsPanel() {
   const t = useT()
+  const b = useUi((s) => s.keyBindings)
+  const k = (a: InputAction) => b[a].map(keyLabel).join(' / ')
+  const first = (a: InputAction) => keyLabel(b[a][0] ?? '')
   const rows: [string, TranslationKey][] = [
-    ['WASD / ←↑→↓', 'controls.move'],
-    ['Z', 'controls.pass'],
-    ['X', 'controls.shoot'],
-    ['C', 'controls.through'],
-    ['Z / X', 'controls.throw'],
-    ['V', 'controls.switch'],
-    ['Shift', 'controls.sprint'],
-    ['Space', 'controls.sole'],
+    [`${first('up')}${first('left')}${first('down')}${first('right')}`, 'controls.move'],
+    [k('pass'), 'controls.pass'],
+    [k('shoot'), 'controls.shoot'],
+    [k('through'), 'controls.through'],
+    [`${first('pass')} / ${first('shoot')}`, 'controls.throw'],
+    [k('switch'), 'controls.switch'],
+    [k('sprint'), 'controls.sprint'],
+    [k('sole'), 'controls.sole'],
     ['F5 / 5', 'controls.camera'],
     ['Esc / P', 'controls.pause'],
   ]

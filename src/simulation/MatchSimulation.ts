@@ -28,6 +28,7 @@ import { planShot } from '../physics/ShootingPhysics'
 import { generatePlayer } from '../data/playerGenerator'
 import { STARTING_NUMBERS, STARTING_ROLES, type TeamDefinition } from '../data/teams'
 import type { Command } from './Commands'
+import { DIFFICULTY, type Difficulty } from './Difficulty'
 import type { MatchEvent } from './Events'
 import type { BallState, MatchState, PlayerState, RestartType, TeamId } from './MatchState'
 import {
@@ -57,6 +58,8 @@ export interface MatchSetup {
   control?: Partial<ControlOptions>
   /** Match format (defaults: DEFAULT_RULES). */
   rules?: Partial<MatchRules>
+  /** Strength of the computer opponent (default normal). */
+  difficulty?: Difficulty
 }
 
 export class MatchSimulation implements AIActions {
@@ -175,15 +178,24 @@ export class MatchSimulation implements AIActions {
           p.sprint = c.sprint
           p.sole = c.sole
           p.faceTarget = c.sole && s.ball.ownerId !== p.id ? s.ball.pos : null
+          // Shielding: holding the ball with the sole and no direction, turn the back to the nearest
+          // opponent so the body is between him and the ball.
+          if (c.sole && s.ball.ownerId === p.id && len(c.dir) < 0.15) p.faceTarget = this.shieldFacing(p)
           break
         case 'Throw':
           if (s.ball.ownerId === p.id && s.ball.inHands) this.throwBall(p, c.dir, c.power)
           else if (s.ball.ownerId === p.id) this.pass(p, c.dir, false, null)
           break
         case 'Pass':
-          if (s.ball.ownerId === p.id) this.pass(p, c.dir, c.through, null)
+          if (s.ball.ownerId === p.id) this.pass(p, c.dir, c.through, null, c.power)
           else if (this.shouldBuffer(p))
-            p.buffered = { kind: 'pass', through: c.through, dir: c.dir, ttl: CONTROL.inputBufferTime }
+            p.buffered = {
+              kind: 'pass',
+              through: c.through,
+              dir: c.dir,
+              ttl: CONTROL.inputBufferTime,
+              ...(c.power !== undefined ? { power: c.power } : {}),
+            }
           else this.tackle(p)
           break
         case 'Shoot':
@@ -213,10 +225,12 @@ export class MatchSimulation implements AIActions {
 
   // ---------------------------------------------------------------- actions (also used by AI)
 
-  pass(p: PlayerState, dir: Vec2, through: boolean, receiver: PlayerState | null): void {
+  pass(p: PlayerState, dir: Vec2, through: boolean, receiver: PlayerState | null, power?: number): void {
     const s = this.state
     if (s.ball.ownerId !== p.id) return
-    const plan = planPass(s, p, dir, through, this.rng, receiver)
+    // Passing assistance applies to the human player only; the AI always passes assisted.
+    const assist = p.id === s.controlledId && p.team === s.humanTeam ? s.control.passAssist : 'assisted'
+    const plan = planPass(s, p, dir, through, this.rng, receiver, assist, power)
     this.kick(p, plan.velocity, 0, 0, 'pass')
     s.ball.intendedReceiverId = plan.receiverId
     s.ball.isShot = false
@@ -379,6 +393,7 @@ export class MatchSimulation implements AIActions {
     const s = this.state
     if (s.phase === 'restart' && s.restart?.ready) {
       // Play restarts only with the kick. The taker may not touch the ball again until someone else has.
+      s.indirectKickBy = s.restart.type === 'freeKick' ? p.id : null
       s.phase = 'play'
       s.restart = null
       b.blockedTouchId = p.id
@@ -453,14 +468,13 @@ export class MatchSimulation implements AIActions {
     // Four-second rule: the keeper may control the ball (hands or feet) in the own half for 4 s.
     if (owner.role === 'GK' && this.inOwnHalf(owner) && s.phase === 'play') {
       b.handsTimer += DT
-      if (owner.id === s.controlledId && b.handsTimer >= HANDS.holdLimit) {
-        // Held too long by the human keeper: the AI takes over and plays the ball at once.
+      if (b.handsTimer >= HANDS.holdLimit) {
+        // Four seconds exceeded: indirect free kick to the opponents where the ball is (on the
+        // penalty-area line if the offence was inside the area).
         this.emit({ type: 'KeeperHoldTimeout', tick: s.tick, playerId: owner.id })
-        const nearest = s.players
-          .filter((q) => q.team === owner.team && q.role !== 'GK')
-          .reduce((a, q) => (dist(q.pos, owner.pos) < dist(a.pos, owner.pos) ? q : a))
-        this.setControlled(nearest.id)
-        owner.aiHoldTimer = 10
+        const other: TeamId = owner.team === 0 ? 1 : 0
+        this.beginRestart('freeKick', other, this.freeKickSpot(owner.team, b.pos))
+        return
       }
     }
     if (b.inHands) {
@@ -492,7 +506,15 @@ export class MatchSimulation implements AIActions {
         o.touchCooldown = success ? 0 : 0.35
         this.emit({ type: 'Tackle', tick: s.tick, playerId: o.id, success })
       } else {
-        const rate = CONTROL.stealRate * ratio * (owner.sole ? 0.4 : 1)
+        let rate = CONTROL.stealRate * ratio * (owner.sole ? 0.4 : 1)
+        const toBall = sub(b.pos, owner.pos)
+        const toOpp = sub(o.pos, owner.pos)
+        const ballDist = len(toBall)
+        if (ballDist > CONTROL.touchReach + 0.2)
+          rate *= CONTROL.looseBallStealFactor // knocked ahead
+        else if (toBall.x * toOpp.x + toBall.y * toOpp.y < 0)
+          // Shielded: the dribbler's body is between the opponent and the ball.
+          rate *= attr(oa.strength, CONTROL.shieldFactor[0], CONTROL.shieldFactor[1])
         success = this.rng.chance(rateToChance(rate, DT))
       }
       if (success) {
@@ -518,9 +540,49 @@ export class MatchSimulation implements AIActions {
       }
     }
 
-    // Dribble: a limited spring relationship towards a point in front of the owner (never attached).
     const a = owner.profile.attributes
     const speed = len(owner.vel)
+    owner.dribbleTouchTimer = Math.max(0, owner.dribbleTouchTimer - DT)
+    if (!owner.sole && owner.sprint && speed > CONTROL.touchDribbleSpeed) {
+      // Sprint dribble, touch-based: the ball is knocked ahead, rolls a little slower than the
+      // runner and is touched again when he has caught it up. Worse dribblers knock it further and
+      // less straight; a ball away from the feet is easier to win (see the steal rate above).
+      const fwd = fromAngle(owner.facing)
+      const rel = sub(b.pos, owner.pos)
+      const ahead = rel.x * fwd.x + rel.y * fwd.y
+      if (owner.dribbleTouchTimer <= 0 && ahead < CONTROL.touchReach) {
+        const extra = attr(a.dribbling, 3.4, 2.3)
+        const dir = fromAngle(owner.facing + this.rng.gaussian() * attr(a.ballControl, 0.1, 0.03))
+        b.vel = { x: dir.x * (speed + extra), y: dir.y * (speed + extra) }
+        owner.dribbleTouchTimer = CONTROL.touchInterval
+      } else {
+        // Between touches: the ball rolls on (slower than the runner) and drifts into his line.
+        const along = b.vel.x * fwd.x + b.vel.y * fwd.y
+        const lat = { x: b.vel.x - fwd.x * along, y: b.vel.y - fwd.y * along }
+        const ownerAlong = owner.vel.x * fwd.x + owner.vel.y * fwd.y
+        const ownerLat = { x: owner.vel.x - fwd.x * ownerAlong, y: owner.vel.y - fwd.y * ownerAlong }
+        const fa = 1 - Math.exp(-3 * DT)
+        const fl = 1 - Math.exp(-6 * DT)
+        const newAlong = along + (ownerAlong * CONTROL.touchRollRatio - along) * fa
+        // Sideways offset of the ball from his line (left positive): steer it back in.
+        const latOff = rel.x * -fwd.y + rel.y * fwd.x
+        const pull = -latOff * 8 * DT
+        const newLat = {
+          x: lat.x + (ownerLat.x - lat.x) * fl - fwd.y * pull,
+          y: lat.y + (ownerLat.y - lat.y) * fl + fwd.x * pull,
+        }
+        b.vel = { x: fwd.x * newAlong + newLat.x, y: fwd.y * newAlong + newLat.y }
+      }
+      b.z = 0
+      b.vz = 0
+      if (dist(b.pos, owner.pos) > CONTROL.touchLoseDistance || ahead < -0.4) {
+        b.ownerId = null
+        b.mode = 'free'
+      }
+      return
+    }
+
+    // Dribble: a limited spring relationship towards a point in front of the owner (never attached).
     const offset = owner.sole
       ? CONTROL.soleOffset
       : CONTROL.dribbleOffset + speed * CONTROL.dribbleOffsetPerSpeed
@@ -536,6 +598,21 @@ export class MatchSimulation implements AIActions {
       b.ownerId = null
       b.mode = 'free'
     }
+  }
+
+  /** Facing that turns the back to the nearest opponent within 3 m (shielding), else no change. */
+  private shieldFacing(p: PlayerState): Vec2 | null {
+    let near: PlayerState | null = null
+    let nd = 3
+    for (const o of this.state.players) {
+      if (o.team === p.team) continue
+      const d = dist(o.pos, p.pos)
+      if (d < nd) {
+        nd = d
+        near = o
+      }
+    }
+    return near ? addScaled(p.pos, normalize(sub(p.pos, near.pos)), 3) : null
   }
 
   private giveBall(p: PlayerState): void {
@@ -589,7 +666,7 @@ export class MatchSimulation implements AIActions {
     const buf = p.buffered
     if (buf) {
       p.buffered = null
-      if (buf.kind === 'pass') this.pass(p, buf.dir, buf.through, null)
+      if (buf.kind === 'pass') this.pass(p, buf.dir, buf.through, null, buf.power)
       else this.shoot(p, buf.dir, buf.power)
     }
   }
@@ -609,8 +686,17 @@ export class MatchSimulation implements AIActions {
       onBounce: (speed) => this.emit({ type: 'BallBounced', tick: s.tick, speed }),
     })
     if (s.phase !== 'play') return
+    // Indirect free kick: once anybody else has touched the ball, a goal counts again.
+    if (s.indirectKickBy !== null && b.lastTouchId !== s.indirectKickBy) s.indirectKickBy = null
 
     const goal = isGoal(b)
+    if (goal !== 0 && s.indirectKickBy !== null) {
+      // Straight into the goal from an indirect free kick: no goal, goal clearance to the defenders.
+      const defending: TeamId = s.teams[0].attackDir === goal ? 1 : 0
+      s.indirectKickBy = null
+      this.beginRestart('goalClearance', defending, { x: 0, y: goal * (COURT.halfLength - 1.2) }, true)
+      return
+    }
     if (goal !== 0) {
       // Goal at +y is scored by the team attacking +y.
       const team: TeamId = s.teams[0].attackDir === goal ? 0 : 1
@@ -699,6 +785,11 @@ export class MatchSimulation implements AIActions {
           const t = (rel - CONTROL.cleanControlSpeed) / (CONTROL.maxControlSpeed - CONTROL.cleanControlSpeed)
           const chance = clamp(1 - t * attr(a.firstTouch, 1.1, 0.55), 0.05, 1)
           if (this.rng.chance(chance)) {
+            // A controlled but heavy first touch: the ball bounces off the foot a few metres away.
+            if (p.role !== 'GK' && this.rng.chance(t * attr(a.firstTouch, 0.55, 0.12))) {
+              this.heavyTouch(p, b, rel)
+              return true
+            }
             this.giveBall(p)
             return true
           }
@@ -710,6 +801,30 @@ export class MatchSimulation implements AIActions {
       }
     }
     return false
+  }
+
+  /** Heavy first touch: the ball is touched but runs on, slowed, in roughly its own direction. */
+  private heavyTouch(p: PlayerState, b: BallState, rel: number): void {
+    const dir = normalize(b.vel)
+    const spd = clamp(rel * this.rng.range(0.22, 0.36), 2, 5.5)
+    const ang = Math.atan2(dir.y, dir.x) + this.rng.range(-0.6, 0.6)
+    b.vel = add(fromAngle(ang, spd), { x: p.vel.x * 0.4, y: p.vel.y * 0.4 })
+    b.z = 0
+    b.vz = Math.max(0, b.vz * 0.2)
+    const intercepted = b.lastTouchTeam !== p.team
+    this.updateKeeperRetouch(p)
+    b.mode = 'free'
+    b.ownerId = null
+    b.lastKickerId = null
+    b.blockedTouchId = null
+    b.lastTouchId = p.id
+    b.lastTouchTeam = p.team
+    b.intendedReceiverId = null
+    b.isShot = false
+    p.touchCooldown = 0.22
+    this.emit({ type: 'BallKicked', tick: this.state.tick, playerId: p.id, speed: spd })
+    if (intercepted)
+      this.emit({ type: 'BallIntercepted', tick: this.state.tick, playerId: p.id, team: p.team })
   }
 
   private deflect(p: PlayerState, b: BallState, nx: number, ny: number): void {
@@ -890,6 +1005,8 @@ export class MatchSimulation implements AIActions {
     b.isShot = false
     b.blockedTouchId = null
     b.inHands = false
+    b.handsTimer = 0
+    s.indirectKickBy = null
     let taker: PlayerState
     const teamPlayers = s.players.filter((p) => p.team === team)
     if (type === 'goalClearance') taker = teamPlayers.find((p) => p.role === 'GK')!
@@ -995,11 +1112,16 @@ export class MatchSimulation implements AIActions {
     }
     if (r.ready) {
       r.readyTimer += DT
-      if ((r.type === 'kickIn' || r.type === 'corner') && r.readyTimer >= RESTART.kickTimeLimit) {
-        // Four-second rule: kick-in to the opponents, or a goal clearance after a late corner.
+      if (
+        (r.type === 'kickIn' || r.type === 'corner' || r.type === 'freeKick') &&
+        r.readyTimer >= RESTART.kickTimeLimit
+      ) {
+        // Four-second rule: kick-in to the opponents, or a goal clearance after a late corner; a
+        // late free kick becomes an indirect free kick to the opponents from the same spot.
         const other: TeamId = r.team === 0 ? 1 : 0
         this.emit({ type: 'RestartTimeout', tick: s.tick, restart: r.type, team: r.team })
         if (r.type === 'kickIn') this.beginRestart('kickIn', other, r.spot)
+        else if (r.type === 'freeKick') this.beginRestart('freeKick', other, r.spot)
         else
           this.beginRestart('goalClearance', other, {
             x: 0,
@@ -1091,6 +1213,32 @@ export class MatchSimulation implements AIActions {
     const ax = Math.abs(pos.x)
     const r = COURT.penaltyAreaRadius
     return ax <= POST_X ? depth <= r : Math.hypot(ax - POST_X, Math.max(0, depth)) <= r
+  }
+
+  /**
+   * Spot of an indirect free kick for an offence at `pos` by `offenders`: where it happened, but an
+   * offence inside the offending team's penalty area is moved to the nearest point on the area line.
+   */
+  freeKickSpot(offenders: TeamId, pos: Vec2): Vec2 {
+    const dir = this.state.teams[offenders].attackDir
+    const goalY = -dir * COURT.halfLength
+    const r = COURT.penaltyAreaRadius + 0.05
+    const keeper = this.state.players.find((p) => p.team === offenders && p.role === 'GK')!
+    let spot = { ...pos }
+    if (this.inOwnPenaltyArea(keeper, pos)) {
+      const ax = Math.abs(pos.x)
+      if (ax <= POST_X) spot = { x: pos.x, y: goalY + dir * r }
+      else {
+        const c = { x: Math.sign(pos.x) * POST_X, y: goalY }
+        let n = normalize(sub(pos, c))
+        if (n.y * dir < 0) n = { x: Math.sign(pos.x), y: 0 }
+        spot = addScaled(c, n, r)
+      }
+    }
+    return {
+      x: clamp(spot.x, -COURT.halfWidth + 0.3, COURT.halfWidth - 0.3),
+      y: clamp(spot.y, -COURT.halfLength + 0.3, COURT.halfLength - 0.3),
+    }
   }
 
   /** Put a (new) ball at rest on a restart spot. */
@@ -1293,6 +1441,13 @@ export function createInitialState(setup: MatchSetup): MatchState {
       const role = STARTING_ROLES[i]!
       const id = players.length
       const profile = generatePlayer(rng, id, role, STARTING_NUMBERS[i]!, def.quality)
+      if (setup.humanTeam !== null && t !== setup.humanTeam) {
+        // Difficulty: the computer opponent's attributes are shifted (decision and execution quality).
+        const off = DIFFICULTY[setup.difficulty ?? 'normal'].attributeOffset
+        const attrs = { ...profile.attributes }
+        for (const k of Object.keys(attrs) as (keyof typeof attrs)[]) attrs[k] = clamp(attrs[k] + off, 1, 100)
+        profile.attributes = attrs
+      }
       players.push({
         id,
         team: t as TeamId,
@@ -1317,6 +1472,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiBreakawayCorner: 0,
         aiChallengeTimer: 0,
         aiChallengeSide: 0,
+        dribbleTouchTimer: 0,
         aiState: '',
       })
     }
@@ -1379,6 +1535,8 @@ export function createInitialState(setup: MatchSetup): MatchState {
     switchCooldown: 0,
     autoSwitchHold: 0,
     control: { ...DEFAULT_CONTROL_OPTIONS, ...setup.control },
+    difficulty: setup.difficulty ?? 'normal',
+    indirectKickBy: null,
     possessionTeam: null,
     rngState: 0,
   }

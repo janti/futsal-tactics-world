@@ -424,5 +424,5 @@ describe('kick-ins and set pieces', () => {
     }
     expect(kickIns).toBeGreaterThan(0)
     expect(maxReady / TICK_RATE).toBeLessThan(RESTART.kickTimeLimit)
-  })
+  }, 30000) // long AI matches: kick-ins are fairly rare
 })

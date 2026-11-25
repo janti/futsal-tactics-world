@@ -1,4 +1,4 @@
-import { attr, clamp } from '../core/math/scalar'
+import { attr, clamp, lerp } from '../core/math/scalar'
 import type { SeededRandom } from '../core/random/SeededRandom'
 import {
   addScaled,
@@ -13,7 +13,8 @@ import {
   type Vec2,
 } from '../core/math/vec2'
 import type { MatchState, PlayerState } from '../simulation/MatchState'
-import { COURT, PASS } from '../simulation/SimulationConfig'
+import { BALL, COURT, PASS } from '../simulation/SimulationConfig'
+import type { PassAssistMode } from '../simulation/ControlOptions'
 import { rollingLaunchSpeed, rollingTravelTime } from './BallPhysics'
 
 export interface PassPlan {
@@ -40,7 +41,12 @@ export function laneOpenness(state: MatchState, team: number, from: Vec2, to: Ve
  * Assisted receiver selection: teammates inside a cone around the input direction, scored by angle,
  * distance and lane openness. Returns null if nobody is in the cone (pass goes into space).
  */
-export function chooseReceiver(state: MatchState, passer: PlayerState, dir: Vec2): PlayerState | null {
+export function chooseReceiver(
+  state: MatchState,
+  passer: PlayerState,
+  dir: Vec2,
+  coneCos: number = PASS.assistConeCos,
+): PlayerState | null {
   const aim = len(dir) > 0.2 ? normalize(dir) : fromAngle(passer.facing)
   let best: PlayerState | null = null
   let bestScore = -Infinity
@@ -51,12 +57,50 @@ export function chooseReceiver(state: MatchState, passer: PlayerState, dir: Vec2
     const d = len(to)
     if (d < 1.5 || d > 30) continue
     const cos = dot(normalize(to), aim)
-    if (cos < PASS.assistConeCos) continue
+    if (cos < coneCos) continue
     const open = clamp(laneOpenness(state, passer.team, passer.pos, t.pos), 0, 3)
     const keeperPenalty = t.role === 'GK' ? 0.6 : 0
     const score = cos * 3 - d / 14 + open * 0.5 - keeperPenalty
     if (score > bestScore) {
       bestScore = score
+      best = t
+    }
+  }
+  return best
+}
+
+/** Distance a ground pass launched at `speed` rolls before it has slowed to about 2 m/s. */
+export function rollingReach(speed: number): number {
+  let v = speed
+  let d = 0
+  const h = 0.05
+  for (let t = 0; t < 10 && v > 2; t += h) {
+    v = Math.max(0, v - (BALL.rollingDecel + BALL.rollingDrag * v) * h)
+    d += v * h
+  }
+  return d
+}
+
+/**
+ * Manual passing: the teammate who can best meet a ball played along `aim` — within 2.5 m of the
+ * line, ahead of the passer and not far beyond where it slows down.
+ */
+export function receiverOnLine(
+  state: MatchState,
+  passer: PlayerState,
+  aim: Vec2,
+  reach: number,
+): PlayerState | null {
+  let best: PlayerState | null = null
+  let bestOff = 2.5
+  for (const t of state.players) {
+    if (t.team !== passer.team || t.id === passer.id || t.id === state.ball.keeperRetouchId) continue
+    const to = sub(t.pos, passer.pos)
+    const along = dot(to, aim)
+    if (along < 1.5 || along > reach + 4) continue
+    const off = Math.abs(to.x * aim.y - to.y * aim.x)
+    if (off < bestOff) {
+      bestOff = off
       best = t
     }
   }
@@ -114,9 +158,26 @@ export function planPass(
   through: boolean,
   rng: SeededRandom,
   forcedReceiver: PlayerState | null = null,
+  assist: PassAssistMode = 'assisted',
+  power?: number,
 ): PassPlan {
   const attackDir = state.teams[passer.team].attackDir
-  const receiver = forcedReceiver ?? chooseReceiver(state, passer, dir)
+  const a = passer.profile.attributes
+  const pressure = pressureOn(state, passer)
+  if (assist === 'manual' && !forcedReceiver) {
+    // Manual: exactly along the input, power from the button hold. The teammate nearest the line
+    // ahead is flagged as the receiver (he moves to meet it and control follows the ball).
+    const aim = len(dir) > 0.2 ? normalize(dir) : fromAngle(passer.facing)
+    const speed = lerp(PASS.minSpeed, PASS.maxSpeed, clamp(power ?? PASS.manualDefaultPower, 0, 1))
+    const sigma = PASS.maxAngleErrorRad * attr(a.passing, 1, 0.15) * (0.6 + pressure) * 0.8
+    const velocity = fromAngle(angleOf(aim) + rng.gaussian() * sigma, speed)
+    const reach = rollingReach(speed)
+    const receiver = receiverOnLine(state, passer, aim, reach)
+    const target = addScaled(passer.pos, aim, reach)
+    return { receiverId: receiver ? receiver.id : null, target, velocity, speed }
+  }
+  const coneCos = assist === 'semi' ? PASS.semiAssistConeCos : PASS.assistConeCos
+  const receiver = forcedReceiver ?? chooseReceiver(state, passer, dir, coneCos)
   let target: Vec2
   let arrival: number = through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed
   if (receiver) {
@@ -129,10 +190,9 @@ export function planPass(
   }
   const d = dist(passer.pos, target)
   const speed = clamp(rollingLaunchSpeed(d, arrival), PASS.minSpeed, PASS.maxSpeed)
-  const a = passer.profile.attributes
-  const pressure = pressureOn(state, passer)
   const skill = attr(a.passing, 1, 0.15)
-  const sigma = PASS.maxAngleErrorRad * skill * (0.6 + pressure) * (through ? 1.3 : 1)
+  const sigma =
+    PASS.maxAngleErrorRad * skill * (0.6 + pressure) * (through ? 1.3 : 1) * (assist === 'semi' ? 1.3 : 1)
   const angle = angleOf(sub(target, passer.pos)) + rng.gaussian() * sigma
   const velocity = fromAngle(angle, speed)
   return { receiverId: receiver ? receiver.id : null, target, velocity, speed }

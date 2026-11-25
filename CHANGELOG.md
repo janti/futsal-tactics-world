@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Milestone 3 — gameplay physics and controls
+
+- Touch-based dribbling: at a sprint the ball is knocked ahead, rolls a little slower than the runner
+  and is touched again when he catches it up; worse dribblers knock it further. A ball away from the
+  feet is three times easier to win. Normal running keeps it close.
+- Shielding: hold sole control (Space) without a direction and the player turns his back to the
+  nearest opponent; a shielded ball is much harder to steal (stronger players shield better). AI
+  carriers under close pressure shield too.
+- First touch: fast balls are sometimes controlled with a heavy touch that bounces a few metres away.
+- AI defenders read opponents' passes and step into the path when they can get there first.
+- Passing assistance setting: assisted (default), semi-assisted (only a teammate close to your
+  direction, slightly less accurate) and manual (exactly your direction; hold the pass button for
+  power, tap = short pass).
+- Difficulty (Quick Match): easy / normal / hard changes the computer opponent's attributes, how often
+  it decides and how quickly it reads passes. AI vs AI is unaffected.
+- Gamepad: Start opens and closes the pause menu; in menus the D-pad or stick moves the focus,
+  left/right changes a setting, A selects, B goes back.
+- Keyboard controls can be rebound in the settings (one key never does two things; reset to defaults).
+- Goalkeeper four-second rule: holding the ball longer than 4 s in the own half now gives the
+  opponents an indirect free kick (on the penalty-area line if inside the area) instead of the AI
+  taking over. A goal straight from an indirect free kick does not count.
+- A pressing defender close to the carrier steps in with a speed based on tackling and agility.
+
 - AI takes defenders on 1v1 (wing: cut inside or down the line; middle: past the side away from the
   defender); the last man never does. Better dribblers try it more often.
 - AI plays forward: a pass to a teammate clearly ahead with an open lane is preferred once the carry

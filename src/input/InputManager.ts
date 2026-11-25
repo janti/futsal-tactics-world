@@ -1,9 +1,15 @@
 import { clamp } from '../core/math/scalar'
 import { clampLen, len, type Vec2 } from '../core/math/vec2'
 import type { Command } from '../simulation/Commands'
-import { DT, SHOT, THROW } from '../simulation/SimulationConfig'
+import { DT, PASS, SHOT, THROW } from '../simulation/SimulationConfig'
 import { screenToSimDirection, type ScreenBasis } from '../camera/ScreenToWorld'
-import { DEFAULT_GAMEPAD, DEFAULT_KEYBOARD, GAMEPAD_DEADZONE, type InputAction } from './InputMapping'
+import {
+  DEFAULT_GAMEPAD,
+  DEFAULT_KEYBOARD,
+  GAMEPAD_DEADZONE,
+  type InputAction,
+  type KeyBindings,
+} from './InputMapping'
 
 const ACTIONS = Object.keys(DEFAULT_KEYBOARD) as InputAction[]
 
@@ -29,18 +35,29 @@ export class InputManager {
    */
   private throwMode = false
   private throwTicks = 0
+  /** Manual passing: pass/through keys charge the pass power (hold, release to pass). */
+  private passCharge = false
+  private passTicks = 0
+  private passThrough = false
   private lastMove: Vec2 = { x: 0, y: 0 }
   /** UI-level actions (pause, camera, help) pressed since the last poll. */
   private uiPresses: InputAction[] = []
   private readonly target: Window
 
-  constructor(target: Window = window) {
+  constructor(target: Window = window, bindings: KeyBindings = DEFAULT_KEYBOARD) {
     this.target = target
-    for (const action of ACTIONS)
-      for (const code of DEFAULT_KEYBOARD[action]) this.codeToAction.set(code, action)
+    this.setBindings(bindings)
     target.addEventListener('keydown', this.onKeyDown)
     target.addEventListener('keyup', this.onKeyUp)
     target.addEventListener('blur', this.onBlur)
+  }
+
+  /** Apply (re)bound keys; takes effect immediately. */
+  setBindings(bindings: KeyBindings): void {
+    this.codeToAction.clear()
+    for (const action of ACTIONS)
+      for (const code of bindings[action] ?? []) this.codeToAction.set(code, action)
+    this.keys.clear()
   }
 
   dispose(): void {
@@ -52,6 +69,7 @@ export class InputManager {
   /** Current shot or throw charge 0..1 (for the HUD power bar and the aim arrow). */
   get shotCharge(): number {
     if (this.throwTicks > 0) return clamp((this.throwTicks * DT) / THROW.maxChargeTime, 0, 1)
+    if (this.passTicks > 0) return clamp((this.passTicks * DT) / PASS.manualMaxChargeTime, 0, 1)
     return this.shootTicks > 0 ? clamp((this.shootTicks * DT) / SHOT.maxChargeTime, 0, 1) : 0
   }
 
@@ -69,6 +87,13 @@ export class InputManager {
     this.shootTicks = !on && this.held.has('shoot') ? -1 : 0
   }
 
+  /** Manual passing on/off: pass keys charge power instead of passing on press. */
+  setPassCharge(on: boolean): void {
+    if (on === this.passCharge) return
+    this.passCharge = on
+    this.passTicks = 0
+  }
+
   /** Pop UI actions (pause / camera / help) that were pressed. */
   takeUiPresses(): InputAction[] {
     const p = this.uiPresses
@@ -80,6 +105,7 @@ export class InputManager {
   reset(): void {
     this.shootTicks = 0
     this.throwTicks = 0
+    this.passTicks = 0
     this.held.clear()
     this.prevHeld.clear()
     this.tapped.clear()
@@ -110,8 +136,11 @@ export class InputManager {
     const commands: Command[] = [
       { type: 'Move', dir, sprint: this.held.has('sprint'), sole: this.held.has('sole') },
     ]
-    if (this.pressed('pass')) commands.push({ type: 'Pass', dir, through: false })
-    if (this.pressed('through')) commands.push({ type: 'Pass', dir, through: true })
+    if (this.passCharge) this.sampleManualPass(dir, commands)
+    else {
+      if (this.pressed('pass')) commands.push({ type: 'Pass', dir, through: false })
+      if (this.pressed('through')) commands.push({ type: 'Pass', dir, through: true })
+    }
     if (this.pressed('switch')) commands.push({ type: 'SwitchPlayer', dir })
 
     // Shooting: hold to charge, release to shoot; full charge fires automatically.
@@ -135,6 +164,34 @@ export class InputManager {
     }
     this.tapped.clear()
     return commands
+  }
+
+  /** Manual passing: hold pass (or through) to charge, release to pass; full charge passes at once. */
+  private sampleManualPass(dir: Vec2, commands: Command[]): void {
+    const holdPass = this.held.has('pass')
+    const holdThrough = this.held.has('through')
+    if (holdPass || holdThrough) {
+      if (this.passTicks < 0) return // still held after a full-power pass
+      this.passTicks++
+      this.passThrough = holdThrough && !holdPass
+      if (this.passTicks * DT >= PASS.manualMaxChargeTime) {
+        commands.push({ type: 'Pass', dir, through: this.passThrough, power: 1 })
+        this.passTicks = -1
+      }
+      return
+    }
+    if (this.passTicks > 0) {
+      const power = clamp((this.passTicks * DT) / PASS.manualMaxChargeTime, PASS.manualDefaultPower, 1)
+      commands.push({ type: 'Pass', dir, through: this.passThrough, power })
+    } else if (this.passTicks === 0 && (this.tapped.has('pass') || this.tapped.has('through'))) {
+      commands.push({
+        type: 'Pass',
+        dir,
+        through: this.tapped.has('through'),
+        power: PASS.manualDefaultPower,
+      })
+    }
+    this.passTicks = 0
   }
 
   /** Keeper throw: hold pass/shoot/through to charge, aim with the direction keys, release to throw. */

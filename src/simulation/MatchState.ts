@@ -1,3 +1,4 @@
+import type { Difficulty } from './Difficulty'
 import type { Vec2 } from '../core/math/vec2'
 import type { ControlOptions } from './ControlOptions'
 import type { MatchRules, TeamStats } from './MatchRules'
@@ -106,11 +107,13 @@ export interface PlayerState {
   /** 1v1 dribble challenge in progress: time left and the side (sim x sign) he goes past on. */
   aiChallengeTimer: number
   aiChallengeSide: number
+  /** Time until the next sprint-dribble touch is possible. */
+  dribbleTouchTimer: number
   aiState: string
 }
 
 export type BufferedAction =
-  | { kind: 'pass'; through: boolean; dir: Vec2; ttl: number }
+  | { kind: 'pass'; through: boolean; dir: Vec2; ttl: number; power?: number }
   | { kind: 'shot'; power: number; dir: Vec2; ttl: number }
 
 export type BallMode = 'free' | 'controlled' | 'dead'
@@ -167,7 +170,7 @@ export interface BallState {
   blockedTouchId: number | null
 }
 
-export type RestartType = 'kickoff' | 'kickIn' | 'corner' | 'goalClearance'
+export type RestartType = 'kickoff' | 'kickIn' | 'corner' | 'goalClearance' | 'freeKick'
 
 export interface RestartInfo {
   type: RestartType
@@ -234,6 +237,13 @@ export interface MatchState {
   /** After a manual switch, automatic defensive switching pauses for this long (seconds). */
   autoSwitchHold: number
   control: ControlOptions
+  /**
+   * Taker of an indirect free kick until another player touches the ball: a goal scored straight
+   * from it does not count (goal clearance instead).
+   */
+  indirectKickBy: number | null
+  /** Strength of the computer opponent (affects only the non-human team). */
+  difficulty: Difficulty
   possessionTeam: TeamId | null
   rngState: number
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
 import { MatchSimulation } from '../../src/simulation/MatchSimulation'
-import { HANDS, THROW, TICK_RATE } from '../../src/simulation/SimulationConfig'
+import { COURT, HANDS, THROW, TICK_RATE } from '../../src/simulation/SimulationConfig'
 
 /** Human team 0 (defends y = -20). An opponent's ball rolls to our keeper (id 0), who gathers it. */
 function keeperWithBall(seed = 31) {
@@ -109,20 +109,22 @@ describe('controllable goalkeeper throw', () => {
     expect(sim.state.ball.inHands).toBe(true)
   })
 
-  it('holding too long hands the throw to the AI', () => {
-    const { sim, s } = keeperWithBall()
+  it('holding longer than four seconds gives the opponents an indirect free kick on the area line', () => {
+    const { sim, s, gk } = keeperWithBall()
     let timeout = false
-    let thrown = false
-    for (let i = 0; i < TICK_RATE * (HANDS.holdLimit + 2) && !thrown; i++) {
+    for (let i = 0; i < TICK_RATE * (HANDS.holdLimit + 1) && !timeout; i++) {
       sim.step()
-      for (const e of sim.drainEvents()) {
-        if (e.type === 'KeeperHoldTimeout') timeout = true
-        if (e.type === 'PassStarted' && e.playerId === 0) thrown = true
-      }
+      for (const e of sim.drainEvents()) if (e.type === 'KeeperHoldTimeout') timeout = true
     }
     expect(timeout).toBe(true)
-    expect(thrown).toBe(true)
-    expect(s.ball.inHands).toBe(false)
+    expect(s.phase).toBe('restart')
+    expect(s.restart?.type).toBe('freeKick')
+    expect(s.restart?.team).toBe(1)
+    // Offence inside the area: the kick is taken from the nearest point on the area line.
+    const spot = s.restart!.spot
+    expect(sim.inOwnPenaltyArea(gk, spot)).toBe(false)
+    expect(Math.abs(spot.y - -20)).toBeGreaterThan(COURT.penaltyAreaRadius - 0.1)
+    expect(Math.abs(spot.y - -20)).toBeLessThan(COURT.penaltyAreaRadius + 0.5)
   })
 })
 
@@ -159,5 +161,54 @@ describe('goal clearance', () => {
       expect(Math.sin(gk.facing) * dir).toBeGreaterThan(0.9)
       expect((s.ball.pos.y - gk.pos.y) * dir).toBeGreaterThan(0.15)
     }
+  })
+})
+
+describe('indirect free kick', () => {
+  /** Human team 0 (attacking +y) gets an indirect free kick 7 m out; the opponents' keeper is away. */
+  function freeKick(seed = 3) {
+    const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
+    const s = sim.state
+    for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
+    sim.step([{ type: 'Pass', dir: { x: 0, y: -1 }, through: false }])
+    for (let i = 0; i < 30; i++) sim.step()
+    ;(
+      sim as unknown as { beginRestart(t: string, team: number, spot: { x: number; y: number }): void }
+    ).beginRestart('freeKick', 0, { x: 0, y: 13 })
+    for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
+    expect(s.restart?.ready).toBe(true)
+    sim.drainEvents()
+    return { sim, s }
+  }
+
+  it('a shot straight into the goal does not count: goal clearance instead', () => {
+    const { sim, s } = freeKick()
+    const gk = sim.player(5)
+    const walls = s.players.filter((p) => p.team === 1)
+    sim.step([{ type: 'Shoot', dir: { x: 1, y: 1 }, power: 0.3 }])
+    let goal = false
+    let clearance = false
+    for (let i = 0; i < 120 && !clearance; i++) {
+      for (const p of walls) p.pos = { x: p.id % 2 ? 9 : -9, y: 0 }
+      gk.pos = { x: 9.5, y: 18 }
+      sim.step()
+      for (const e of sim.drainEvents()) {
+        if (e.type === 'GoalScored') goal = true
+        if (e.type === 'BallOut' && e.restart === 'goalClearance') clearance = true
+      }
+    }
+    expect(goal).toBe(false)
+    expect(clearance).toBe(true)
+    expect(s.score).toEqual([0, 0])
+  })
+
+  it('the free kick taker is marked until another player touches the ball', () => {
+    const { sim, s } = freeKick()
+    const taker = s.restart!.takerId
+    sim.step([{ type: 'Pass', dir: { x: 1, y: 0 }, through: false }])
+    expect(s.indirectKickBy).toBe(taker)
+    s.ball.lastTouchId = s.players.find((p) => p.team === 0 && p.id !== taker)!.id
+    sim.step()
+    expect(s.indirectKickBy).toBeNull()
   })
 })

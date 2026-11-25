@@ -17,6 +17,7 @@ import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
 import { COURT, PASS, PLAYER, RESTART, SCREEN, THROW } from '../simulation/SimulationConfig'
 import { baseAnchor, dynamicAnchor } from './positioning/Formation'
 import { clampRestartAim, restartTakerSpot } from '../simulation/RestartGeometry'
+import { DIFFICULTY, type DifficultyParams } from '../simulation/Difficulty'
 
 export interface AIActions {
   pass(p: PlayerState, dir: Vec2, through: boolean, receiver: PlayerState | null): void
@@ -25,7 +26,12 @@ export interface AIActions {
   throwBall(p: PlayerState, dir: Vec2, power: number): void
 }
 
-const DECISION_INTERVAL = 0.1
+/** Difficulty parameters for a team: only the human's computer opponent is affected. */
+function difficultyFor(state: MatchState, team: TeamId): DifficultyParams {
+  return state.humanTeam !== null && team !== state.humanTeam
+    ? DIFFICULTY[state.difficulty]
+    : DIFFICULTY.normal
+}
 
 export function updateAI(state: MatchState, actions: AIActions, rng: SeededRandom, dt: number): void {
   const chasers: [number | null, number | null] = [pickBallWinner(state, 0), pickBallWinner(state, 1)]
@@ -33,7 +39,7 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
     if (p.id === state.controlledId) continue
     p.aiDecisionTimer -= dt
     const decide = p.aiDecisionTimer <= 0
-    if (decide) p.aiDecisionTimer += DECISION_INTERVAL
+    if (decide) p.aiDecisionTimer += difficultyFor(state, p.team).decisionInterval
     p.faceTarget = null
     p.sole = false
 
@@ -117,8 +123,18 @@ function restartBehaviour(
     target = kickoffAnchor(state, p)
   } else {
     const mode = r.team === p.team ? 'attack' : 'defend'
-    target = dynamicAnchor(p.role, mode, state.teams[p.team].attackDir, r.spot)
-    if (r.team !== p.team) target = keepDistance(target, r.spot, RESTART.opponentDistance + 0.3)
+    const dir = state.teams[p.team].attackDir
+    target = dynamicAnchor(p.role, mode, dir, r.spot)
+    if (r.team !== p.team && p.role === 'GK' && r.type === 'freeKick') {
+      // Free kick near goal: the keeper stays on his line between the posts.
+      target = { x: clamp(r.spot.x * 0.3, -1, 1), y: -dir * (COURT.halfLength - 0.4) }
+    } else if (r.team !== p.team) {
+      target = keepDistance(target, r.spot, RESTART.opponentDistance + 0.3)
+      // Pushed back over the own goal line (free kick on the area line): stand on the goal line
+      // between the posts instead, which the rules allow.
+      if (target.y * -dir > COURT.halfLength - 0.4)
+        target = { x: clamp(target.x, -1.3, 1.3), y: -dir * (COURT.halfLength - 0.4) }
+    }
   }
   walkTo(p, target, dist(p.pos, target) > 6)
   p.faceTarget = state.ball.pos
@@ -188,6 +204,14 @@ function offBallDecision(state: MatchState, p: PlayerState, winnerId: number | n
     return
   }
   const inPossession = state.possessionTeam === p.team
+  // Read an opponent's pass: step into its path if he can get there before the ball reaches the
+  // receiver.
+  const cut = passInterception(state, p)
+  if (cut) {
+    p.aiState = 'intercept'
+    p.aiTarget = cut
+    return
+  }
   const anchor = dynamicAnchor(p.role, inPossession ? 'attack' : 'defend', dir, ball.pos)
   if (inPossession) {
     p.aiState = 'support'
@@ -260,20 +284,56 @@ export function interceptPoint(state: MatchState, p: PlayerState): Vec2 {
   return pos
 }
 
+/**
+ * Interception of an opponent's ground pass in flight: the earliest point on the ball's path that
+ * this player reaches first (with an anticipation-based read delay), before the receiver gets it.
+ */
+export function passInterception(state: MatchState, p: PlayerState): Vec2 | null {
+  const ball = state.ball
+  if (ball.mode !== 'free' || ball.intendedReceiverId === null || ball.lastTouchTeam === p.team) return null
+  if (ball.z > 1.1 || len(ball.vel) < 4) return null
+  const receiver = state.players[ball.intendedReceiverId]!
+  if (receiver.team === p.team) return null
+  const toReceiver = dist(ball.pos, receiver.pos)
+  const read = Math.max(
+    0,
+    attr(p.profile.attributes.anticipation, 0.3, 0.08) + difficultyFor(state, p.team).readDelay,
+  )
+  let pos = ball.pos
+  let vel = ball.vel
+  let travelled = 0
+  const h = 0.05
+  for (let t = h; t < 2; t += h) {
+    const s = len(vel)
+    if (s < 0.5) break
+    const ns = Math.max(0, s - 1.8 * h)
+    vel = { x: (vel.x / s) * ns, y: (vel.y / s) * ns }
+    pos = addScaled(pos, vel, h)
+    travelled += ns * h
+    if (travelled > toReceiver - 0.8) break
+    // He only has to get a foot to it: reach the ball's path within about 0.6 m.
+    const gap = dist(p.pos, pos)
+    const reachAt = gap > 0.6 ? addScaled(pos, normalize(sub(p.pos, pos)), 0.6) : p.pos
+    if (estimateTimeToReach(p, reachAt) + read <= t) return pos
+  }
+  return null
+}
+
 function steer(state: MatchState, p: PlayerState): void {
   const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
   if (p.aiState === 'press' && owner && owner.team !== p.team && dist(owner.pos, p.pos) < 2.2) {
     // Close to the carrier: track him every tick and step in on the ball (where it is going), so a
     // dribbler has to beat him rather than just walk round a static marker.
     const to = sub(state.ball.pos, p.pos)
-    const k = attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.55, 0.8)
+    const k = attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.65, 0.9)
     p.moveIntent = len(to) > 0.05 ? { x: normalize(to).x * k, y: normalize(to).y * k } : { x: 0, y: 0 }
     p.sprint = false
     p.faceTarget = state.ball.pos
     return
   }
   const d = dist(p.aiTarget, p.pos)
-  const urgent = p.aiState === 'chase' || (p.aiState === 'press' && d > 2.5) || d > 5
+  const urgent =
+    p.aiState === 'chase' || p.aiState === 'intercept' || (p.aiState === 'press' && d > 2.5) || d > 5
   walkTo(p, p.aiTarget, urgent)
   if (p.aiState === 'press' && d < 1.5) {
     p.moveIntent = { x: p.moveIntent.x * 0.6, y: p.moveIntent.y * 0.6 }
@@ -367,6 +427,8 @@ function carrierBehaviour(
     p.moveIntent = { x: heading.x * 0.25, y: heading.y * 0.25 }
     p.sprint = false
     p.sole = nd < 1.6
+    // Shield: under close pressure turn the back to the opponent, body between him and the ball.
+    if (p.sole && nearest) p.faceTarget = addScaled(p.pos, normalize(sub(p.pos, nearest.pos)), 3)
   }
 
   if (!decide) return

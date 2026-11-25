@@ -22,8 +22,9 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 
 ### Goalkeeper rules
 
-- Four seconds: the keeper may control the ball (hands or feet) in the own half for 4 s; for the human
-  keeper the AI then plays it (no indirect free kick yet).
+- Four seconds: the keeper may control the ball (hands or feet) in the own half for 4 s; after that
+  the opponents get an indirect free kick where the ball is, or on the nearest point of the penalty
+  area line if the offence was inside the area.
 - Second possession: after releasing the ball in the own half the keeper may not play it again there
   until an opponent has touched it (involuntary rebounds off the body are allowed). Teammates and
   assisted passing avoid passing back to him meanwhile.
@@ -34,8 +35,7 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 - Hands only inside the own penalty area, and not for a ball deliberately kicked to the keeper by a
   teammate (back pass, kick-in). Shots, saves, the rebound of his own parry and deflections off
   teammates may be handled. Such a ball cannot be challenged. A back pass from a teammate must be played
-  with the feet. A human keeper holding the ball gets a 4-second countdown, after which the AI throws (arcade
-  simplification of the four-second rule; no indirect free kick yet).
+  with the feet. A human keeper holding the ball gets a 4-second countdown, after which an indirect free kick is given (see above).
   The keeper may walk with the ball in his hands inside the area; while charging a throw the
   direction keys only aim.
 
@@ -73,7 +73,9 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 - Goalkeepers hold the ball at their feet; no hand-handling restrictions, four-second rule or
   return-pass restriction yet.
 - No fouls, cards, accumulated fouls, timeouts, substitutions or penalties yet.
-- Goal clearances and free kicks have no four-second limit yet (no free kicks exist yet).
+- Goal clearances have no four-second limit yet. The only free kick is the indirect one for the
+  keeper's four-second offence; it has its own four-second limit (late: indirect free kick to the
+  other team) and a goal scored straight from it is a goal clearance.
 
 All of the above are Milestone 2 (basic match) and Milestone 7 (full, versioned, configurable
 official/arcade rules engine with automated edge-case tests).

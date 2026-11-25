@@ -171,6 +171,20 @@ export const CONTROL = {
   stealRate: 3.2,
   tackleStealChance: 0.75,
   inputBufferTime: 0.13,
+  /** Sprint dribbling is touch-based: above this speed the ball is knocked ahead in touches. */
+  touchDribbleSpeed: 5.2,
+  /** Next touch only when the ball is back within this distance in front of the feet. */
+  touchReach: 0.62,
+  /** Minimum time between sprint touches (s). */
+  touchInterval: 0.28,
+  /** Between touches the ball rolls at this fraction of the runner's speed, so he catches it up. */
+  touchRollRatio: 0.86,
+  /** A knocked-ahead ball is lost beyond this distance. */
+  touchLoseDistance: 2.3,
+  /** Opponents win a ball that is away from the dribbler's feet much more easily. */
+  looseBallStealFactor: 3,
+  /** Shielding: steal rate factor when the dribbler's body is between the opponent and the ball. */
+  shieldFactor: [0.5, 0.2] as const,
 } as const
 
 export const PASS = {
@@ -180,6 +194,11 @@ export const PASS = {
   maxSpeed: 19,
   maxAngleErrorRad: 0.07,
   assistConeCos: Math.cos((65 * Math.PI) / 180),
+  /** Semi-assisted passing only picks a teammate within this angle of the input. */
+  semiAssistConeCos: Math.cos((28 * Math.PI) / 180),
+  /** Manual passing: power of a quick tap; holding the button charges up to full power. */
+  manualDefaultPower: 0.3,
+  manualMaxChargeTime: 0.7,
   throughLead: 3.5,
 } as const
 

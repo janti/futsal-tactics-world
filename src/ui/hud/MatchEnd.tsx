@@ -29,7 +29,7 @@ export function MatchEnd() {
   if (!result) return null
   const [a, b] = result.stats
   return (
-    <div className="pause-overlay" data-testid="match-end">
+    <div className="pause-overlay" data-testid="match-end" data-menu>
       <div className="pause-card end-card">
         <h2>{t('end.title')}</h2>
         <div className="end-score">

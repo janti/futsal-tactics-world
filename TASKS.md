@@ -55,20 +55,28 @@
 - [x] Team statistics from the event stream
 - [x] 98 unit/integration/tactical tests, 4 Playwright browser tests
 
-## Current / next (Milestone 3: gameplay physics and controls)
+### Milestone 3
 
-- [ ] Touch-based dribbling and shielding, better first touch and interceptions
-- [ ] Gamepad completeness (pause, menus), configurable controls
-- [ ] Passing assistance levels (assisted / semi-assisted / manual)
-- [ ] Difficulty levels wired into AI decision quality
-- [ ] Goalkeeper four-second rule with indirect free kick (needs free kicks)
+- [x] Touch-based sprint dribbling, shielding (sole + turn the back), heavy first touch, AI reads and
+      intercepts passes
+- [x] Gamepad: Start pauses, menus navigable (D-pad/stick, A, B); rebindable keyboard controls
+- [x] Passing assistance levels (assisted / semi-assisted / manual with charged power)
+- [x] Difficulty levels (easy / normal / hard) wired into the opponent's decision quality
+- [x] Goalkeeper four-second rule with an indirect free kick (area-line spot, indirect: no direct goal,
+      four-second limit on the free kick itself)
+- [x] 163 unit/integration/tactical tests, 6 Playwright browser tests
+
+## Current / next (Milestone 4: camera and visual identity)
+
+- [ ] All camera presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall
 
 ## Known bugs / issues
 
 - AI vs AI produces many goals for real futsal (arcade-level scoring); tune with the M5 utility AI.
 - An idle human player near opponents loses the ball quickly (steal rate tuning pending playtests).
 - Players are small at the spec default 27 m visible length on 16:9 (tunable in the M4 Camera Lab).
-- Gamepad Start does not open the pause menu yet.
+- Kick-ins and corners are rare in AI vs AI play (accurate passing, close-range shooting).
+- HUD hint texts still name the default keys after rebinding.
 
 ## Technical debt
 

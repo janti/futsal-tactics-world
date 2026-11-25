@@ -1,3 +1,11 @@
+import {
+  defaultBindings,
+  rebind,
+  sanitizeBindings,
+  type InputAction,
+  type KeyBindings,
+} from '../input/InputMapping'
+import { isDifficulty, type Difficulty } from '../simulation/Difficulty'
 import { create } from 'zustand'
 import type { CameraPresetId } from '../camera/CameraSettings'
 import type { Lang, TranslationKey } from '../localization/i18n'
@@ -7,6 +15,7 @@ import {
   DEFAULT_CONTROL_OPTIONS,
   isDefensiveSwitchMode,
   type ControlOptions,
+  isPassAssistMode,
 } from '../simulation/ControlOptions'
 
 /**
@@ -42,6 +51,7 @@ export interface QuickMatchSetup {
   awayIndex: number
   halfMinutes: HalfLengthMinutes
   effectiveClock: boolean
+  difficulty: Difficulty
 }
 
 export interface MatchResult {
@@ -73,6 +83,8 @@ export interface UiState {
   playerScale: number
   /** Quick Match setup (persisted). */
   quickMatch: QuickMatchSetup
+  /** Keyboard bindings (persisted). */
+  keyBindings: KeyBindings
   /** Result of the finished match (end screen), or null. */
   result: MatchResult | null
   matchKey: number
@@ -89,6 +101,8 @@ export interface UiState {
   setKeepAttackingUp(v: boolean): void
   setPlayerScale(v: number): void
   setQuickMatch(q: Partial<QuickMatchSetup>): void
+  setKeyBinding(action: InputAction, code: string): void
+  resetKeyBindings(): void
   openSetup(): void
   setResult(r: MatchResult | null): void
   setHud(h: Partial<HudState>): void
@@ -100,6 +114,17 @@ const CAMERA_KEY = 'ftw.camera'
 const CONTROLS_KEY = 'ftw.controls'
 const PRESENTATION_KEY = 'ftw.keepAttackingUp'
 const PLAYER_SCALE_KEY = 'ftw.playerScale'
+const KEYS_KEY = 'ftw.keys'
+
+function loadKeyBindings(): KeyBindings {
+  try {
+    const raw = localStorage.getItem(KEYS_KEY)
+    if (raw) return sanitizeBindings(JSON.parse(raw))
+  } catch {
+    /* storage unavailable or invalid JSON */
+  }
+  return defaultBindings()
+}
 
 function loadPlayerScale(): number {
   try {
@@ -112,7 +137,13 @@ function loadPlayerScale(): number {
 }
 const QUICK_KEY = 'ftw.quickMatch'
 
-const DEFAULT_QUICK: QuickMatchSetup = { homeIndex: 0, awayIndex: 1, halfMinutes: 3, effectiveClock: true }
+const DEFAULT_QUICK: QuickMatchSetup = {
+  homeIndex: 0,
+  awayIndex: 1,
+  halfMinutes: 3,
+  effectiveClock: true,
+  difficulty: 'normal',
+}
 
 function loadQuickMatch(teamCount = 4): QuickMatchSetup {
   try {
@@ -127,6 +158,7 @@ function loadQuickMatch(teamCount = 4): QuickMatchSetup {
           ? (v.halfMinutes as HalfLengthMinutes)
           : 3,
         effectiveClock: typeof v.effectiveClock === 'boolean' ? v.effectiveClock : true,
+        difficulty: isDifficulty(v.difficulty) ? v.difficulty : 'normal',
       }
       if (q.homeIndex === q.awayIndex) q.awayIndex = (q.homeIndex + 1) % teamCount
       return q
@@ -161,6 +193,7 @@ function loadControls(): ControlOptions {
       return {
         ...DEFAULT_CONTROL_OPTIONS,
         ...(isDefensiveSwitchMode(v.defensiveSwitch) ? { defensiveSwitch: v.defensiveSwitch } : {}),
+        ...(isPassAssistMode(v.passAssist) ? { passAssist: v.passAssist } : {}),
       }
     }
   } catch {
@@ -205,6 +238,7 @@ export const useUi = create<UiState>((set) => ({
   keepAttackingUp: loadKeepAttackingUp(),
   playerScale: loadPlayerScale(),
   quickMatch: loadQuickMatch(),
+  keyBindings: loadKeyBindings(),
   result: null,
   matchKey: 0,
   hud: {
@@ -274,6 +308,16 @@ export const useUi = create<UiState>((set) => ({
       save(QUICK_KEY, JSON.stringify(quickMatch))
       return { quickMatch }
     }),
+  setKeyBinding: (action, code) =>
+    set((s) => {
+      const keyBindings = rebind(s.keyBindings, action, code)
+      save(KEYS_KEY, JSON.stringify(keyBindings))
+      return { keyBindings }
+    }),
+  resetKeyBindings: () => {
+    save(KEYS_KEY, JSON.stringify(defaultBindings()))
+    set({ keyBindings: defaultBindings() })
+  },
   openSetup: () => set({ screen: 'setup', paused: false, flash: null, result: null }),
   setResult: (result) => set({ result }),
   setHud: (h) => set((s) => ({ hud: { ...s.hud, ...h } })),

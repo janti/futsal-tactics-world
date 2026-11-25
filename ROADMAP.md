@@ -5,8 +5,8 @@
 | 0   | Project foundation (Vite, strict TS, Three.js, React, Zustand, Vitest, lint, docs, RNG, vectors)                                | ✅ Done |
 | 1   | Playable 3D prototype (court, goals, procedural players, ball physics, 78° camera, keyboard, pass, shoot, goals, animations)    | ✅ Done |
 | 2   | Complete basic arcade match (match clock + halves, full restarts, match end, Quick Match menu with team/length choice)          | ✅ Done |
-| 3   | Gameplay physics and controls polish (touch-based dribbling, shielding, interceptions, gamepad completeness, assistance levels) | Next    |
-| 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)               |         |
+| 3   | Gameplay physics and controls polish (touch-based dribbling, shielding, interceptions, gamepad completeness, assistance levels) | ✅ Done |
+| 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)               | Next    |
 | 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                       |         |
 | 6   | Advanced futsal tactics (all formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay)   |         |
 | 7   | Rules and tactical editor (versioned rules engine, fouls, cards, substitutions, stamina, timeouts, flying GK, AI coach)         |         |
@@ -24,6 +24,14 @@
   clock mode), two halves with half-time and ends switch, full time with a result and statistics
   screen, rematch (automated: `tests/integration/matchClock.test.ts`, browser test "quick match setup,
   half-time and the full-time result screen").
+
+- **M3**: touch-based sprint dribbling, shielding, heavy first touches and AI pass interceptions;
+  passing assistance levels (assisted / semi / manual with charged power); difficulty levels that
+  change the computer opponent's decision and execution quality; gamepad Start/B and menu navigation;
+  rebindable keyboard controls; keeper four-second rule with an indirect free kick — met (automated:
+  `tests/unit/dribbling.test.ts`, `passAssist.test.ts`, `bindings.test.ts`,
+  `tests/tactical/difficulty.test.ts`, `keeperThrow.test.ts`, browser tests "gamepad…" and
+  "settings…").
 
 ## Dependencies between milestones
 

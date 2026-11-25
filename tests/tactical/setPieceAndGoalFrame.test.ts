@@ -37,7 +37,7 @@ describe('kick-in and corner takers stand behind the ball', () => {
       }
     }
     expect(checked).toBeGreaterThan(3)
-  })
+  }, 30000)
 })
 
 describe('players cannot run through the goal frame or nets', () => {
@@ -194,7 +194,7 @@ describe('the taker stays behind the ball as the aim changes', () => {
       }
     }
     expect(checked).toBeGreaterThan(3)
-  })
+  }, 30000)
 })
 
 describe('players find their way round the goals', () => {

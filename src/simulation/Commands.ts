@@ -11,7 +11,8 @@ export type Command =
   | { type: 'Move'; dir: Vec2; sprint: boolean; sole: boolean; aimOnly?: boolean }
   /** Goalkeeper throw from the hands: direction and power (0..1) chosen by the player. */
   | { type: 'Throw'; dir: Vec2; power: number }
-  | { type: 'Pass'; dir: Vec2; through: boolean }
+  /** `power` (0..1): manual passing only (hold the button for a harder pass). */
+  | { type: 'Pass'; dir: Vec2; through: boolean; power?: number }
   | { type: 'Shoot'; dir: Vec2; power: number }
   | { type: 'Tackle' }
   | { type: 'SwitchPlayer'; dir: Vec2 }

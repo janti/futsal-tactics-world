@@ -482,3 +482,28 @@ button.primary:focus-visible {
   letter-spacing: 0.1em;
   font-style: italic;
 }
+
+.keys-panel {
+  margin: 8px 0 4px;
+  font-size: 0.85rem;
+}
+.keys-panel summary {
+  cursor: pointer;
+  color: var(--text2);
+  margin-bottom: 6px;
+}
+.keys-panel table {
+  border-collapse: collapse;
+  margin-bottom: 6px;
+}
+.keys-panel td {
+  padding: 2px 8px 2px 0;
+}
+.keys-panel td button {
+  min-width: 7.5em;
+  padding: 3px 8px;
+}
+.keys-panel td button.active {
+  color: var(--amber);
+  border-color: var(--amber);
+}

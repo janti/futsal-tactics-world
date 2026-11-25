@@ -1,15 +1,23 @@
 import { useEffect, useRef } from 'react'
 import { GameSession } from './GameSession'
+import { GamepadMenu } from '../input/GamepadMenu'
+import { KeyBindingsPanel } from '../ui/menus/KeyBindingsPanel'
 import { Hud, ControlsPanel } from '../ui/hud/Hud'
 import { MatchEnd } from '../ui/hud/MatchEnd'
 import { QuickMatchSetupScreen } from '../ui/menus/QuickMatchSetup'
 import { useUi } from '../ui/store'
 import { useT } from '../ui/useT'
-import { DEFENSIVE_SWITCH_MODES, type DefensiveSwitchMode } from '../simulation/ControlOptions'
+import {
+  DEFENSIVE_SWITCH_MODES,
+  PASS_ASSIST_MODES,
+  type DefensiveSwitchMode,
+  type PassAssistMode,
+} from '../simulation/ControlOptions'
 import type { TranslationKey } from '../localization/i18n'
 
 export function App() {
   const screen = useUi((s) => s.screen)
+  useEffect(() => new GamepadMenu().start(), [])
   if (screen === 'title') return <TitleScreen />
   if (screen === 'setup') return <QuickMatchSetupScreen />
   return <MatchScreen />
@@ -59,6 +67,22 @@ function SettingsPanel() {
       <p className="setting-help">
         {t(`settings.defensiveSwitch.${controls.defensiveSwitch}.help` as TranslationKey)}
       </p>
+      <label className="setting-row">
+        <span>{t('settings.passAssist')}</span>
+        <select
+          data-testid="setting-pass-assist"
+          value={controls.passAssist}
+          onChange={(e) => setControls({ passAssist: e.target.value as PassAssistMode })}
+        >
+          {PASS_ASSIST_MODES.map((m) => (
+            <option key={m} value={m}>
+              {t(`settings.passAssist.${m}` as TranslationKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="setting-help">{t(`settings.passAssist.${controls.passAssist}.help` as TranslationKey)}</p>
+      <KeyBindingsPanel />
       <label className="setup-check">
         <input
           type="checkbox"
@@ -96,7 +120,7 @@ function TitleScreen() {
   }, [openSetup])
   return (
     <div className="title-screen">
-      <div className="title-card">
+      <div className="title-card" data-menu>
         <h1>{t('app.title')}</h1>
         <p className="subtitle">{t('app.subtitle')}</p>
         <button className="primary" data-testid="quick-match" autoFocus onClick={openSetup}>
@@ -139,7 +163,7 @@ function PauseMenu() {
   const restartMatch = useUi((s) => s.restartMatch)
   const quit = useUi((s) => s.quitToTitle)
   return (
-    <div className="pause-overlay" data-testid="pause-menu">
+    <div className="pause-overlay" data-testid="pause-menu" data-menu>
       <div className="pause-card">
         <h2>{t('menu.paused')}</h2>
         <button className="primary" autoFocus onClick={() => setPaused(false)}>

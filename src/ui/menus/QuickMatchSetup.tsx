@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { TEAM_LIBRARY } from '../../data/teams'
 import { HALF_LENGTH_OPTIONS } from '../../simulation/MatchRules'
+import { DIFFICULTIES } from '../../simulation/Difficulty'
 import { useUi } from '../store'
 import { useT } from '../useT'
 
@@ -35,7 +36,7 @@ export function QuickMatchSetupScreen() {
 
   return (
     <div className="title-screen">
-      <div className="title-card setup-card" data-testid="setup-screen">
+      <div className="title-card setup-card" data-testid="setup-screen" data-menu>
         <h1>{t('menu.quickMatch')}</h1>
         <div className="setup-teams">
           {(['homeIndex', 'awayIndex'] as const).map((side) => {
@@ -75,6 +76,22 @@ export function QuickMatchSetupScreen() {
                 onClick={() => setQuickMatch({ halfMinutes: m })}
               >
                 {t('setup.minutes', { n: m })}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setup-row">
+          <span className="setup-label">{t('setup.difficulty')}</span>
+          <div className="segmented" role="group" aria-label={t('setup.difficulty')}>
+            {DIFFICULTIES.map((d) => (
+              <button
+                key={d}
+                data-testid={`difficulty-${d}`}
+                className={d === q.difficulty ? 'active' : ''}
+                onClick={() => setQuickMatch({ difficulty: d })}
+              >
+                {t(`setup.difficulty.${d}`)}
               </button>
             ))}
           </div>
