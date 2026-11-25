@@ -36,6 +36,7 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
   teammates may be handled. Such a ball cannot be challenged. A back pass from a teammate must be played
   with the feet. A human keeper holding the ball gets a 4-second countdown, after which the AI throws (arcade
   simplification of the four-second rule; no indirect free kick yet).
+  While holding the ball the human keeper stands still and the direction keys only aim the throw.
 
 ### Ball out of play (presentation)
 

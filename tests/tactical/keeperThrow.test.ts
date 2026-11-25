@@ -115,3 +115,39 @@ describe('controllable goalkeeper throw', () => {
     expect(s.ball.inHands).toBe(false)
   })
 })
+
+describe('goal clearance', () => {
+  it('the keeper gathers the ball facing the court, ball in his hands in front of him', () => {
+    for (const humanTeam of [0, null] as const) {
+      const sim = new MatchSimulation({ seed: 14, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam })
+      const s = sim.state
+      for (let i = 0; i < 600 && s.phase !== 'play'; i++) {
+        const r = s.restart
+        sim.step(
+          r?.ready && r.team === humanTeam ? [{ type: 'Pass', dir: { x: 0, y: -1 }, through: false }] : [],
+        )
+      }
+      // The ball goes over team 0's goal line off an opponent: goal clearance for team 0.
+      const dir = s.teams[0].attackDir
+      const gk = sim.player(0)
+      gk.pos = { x: 2, y: -dir * 14 } // out of his goal: he has to walk back towards it
+      s.ball.ownerId = null
+      s.ball.mode = 'free'
+      s.ball.pos = { x: 4, y: -dir * 19.6 }
+      s.ball.z = 0
+      s.ball.vel = { x: 0, y: -dir * 6 }
+      s.ball.lastTouchTeam = 1
+      s.ball.lastTouchId = 9
+      s.ball.lastKickerId = 9
+      let gathered = false
+      for (let i = 0; i < TICK_RATE * 10 && !gathered; i++) {
+        sim.step()
+        gathered = s.phase === 'play' && s.ball.ownerId === 0 && s.ball.inHands
+      }
+      expect(gathered).toBe(true)
+      // Facing the court (towards the opponent half), ball in front of him.
+      expect(Math.sin(gk.facing) * dir).toBeGreaterThan(0.9)
+      expect((s.ball.pos.y - gk.pos.y) * dir).toBeGreaterThan(0.15)
+    }
+  })
+})

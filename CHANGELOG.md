@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Human keeper holding the ball: the direction keys now only aim (he turns on the spot towards the
+  aim, like while charging a throw) instead of walking and turning sideways with the ball in his hands.
+- Goal clearance: the keeper gathers the ball facing the court with the ball in his hands in front
+  of him (he used to keep facing his own goal after walking back to the ball).
+
 - Keeper with the ball at his feet (back pass): the nearest opponent now goes straight for the ball
   and can win it.
 - Saves end in the hands: the keeper catches more shots, and the rebound of his own parry or a ball

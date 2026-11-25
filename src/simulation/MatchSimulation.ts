@@ -1014,6 +1014,8 @@ export class MatchSimulation implements AIActions {
       const n = normalize(to)
       const m = clamp(len(to) / 1.2, 0.3, 1)
       taker.moveIntent = { x: n.x * m, y: n.y * m }
+      // Approach the ball facing the court (a keeper does not turn his back to play).
+      if (dist(taker.pos, takerSpot) < 3) taker.faceTarget = addScaled(r.spot, restartInward(s, r), 4)
     }
     if (r.type === 'kickoff') this.returnToKickoffPositions()
     const minDelay = r.type === 'kickoff' ? 1.4 : RESTART.minRestartDelay
@@ -1022,11 +1024,17 @@ export class MatchSimulation implements AIActions {
       s.ball.mode = 'free'
       taker.touchCooldown = 0
       if (r.type === 'goalClearance') {
-        // The keeper restarts by gathering the ball and distributing it.
+        // The keeper restarts by gathering the ball and distributing it. He picks it up facing the
+        // court (not his own goal, whatever way he walked to the ball), ball in his hands in front.
         s.phase = 'play'
         s.restart = null
+        taker.facing = s.teams[taker.team].attackDir === 1 ? Math.PI / 2 : -Math.PI / 2
+        taker.faceTarget = null
         this.giveBall(taker)
         s.ball.inHands = true
+        s.ball.pos = addScaled(taker.pos, fromAngle(taker.facing), HANDS.forward)
+        s.ball.z = HANDS.height
+        s.ball.vz = 0
         taker.aiHoldTimer = 0.1
         this.emit({ type: 'PlayResumed', tick: s.tick })
       } else {

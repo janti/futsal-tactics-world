@@ -151,7 +151,8 @@ export class InputManager {
         this.throwTicks = 0
       }
     } else {
-      commands.push({ type: 'Move', dir, sprint: this.held.has('sprint'), sole: false })
+      // With the ball in the hands the direction keys only aim (the keeper turns on the spot).
+      commands.push({ type: 'Move', dir, sprint: false, sole: false, aimOnly: true })
       if (this.throwTicks > 0) {
         commands.push({
           type: 'Throw',

@@ -83,6 +83,17 @@ describe('input manager: keeper throw mode', () => {
     expect(t?.type === 'Throw' && t.dir.x).toBeLessThan(-0.9) // screen right = sim -x
   })
 
+  it('direction keys alone only aim: the keeper turns on the spot instead of walking', () => {
+    const target = new EventTarget()
+    const input = new InputManager(target as unknown as Window)
+    input.setThrowMode(true)
+    key(target, 'keydown', 'ArrowLeft')
+    key(target, 'keydown', 'ShiftLeft')
+    const move = input.sample(basis).find((c) => c.type === 'Move')
+    expect(move?.type === 'Move' && move.aimOnly).toBe(true)
+    expect(move?.type === 'Move' && move.sprint).toBe(false)
+  })
+
   it('a quick tap is a soft throw; no pass or shot commands in throw mode', () => {
     const target = new EventTarget()
     const input = new InputManager(target as unknown as Window)
