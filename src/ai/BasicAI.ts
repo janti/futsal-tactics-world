@@ -35,6 +35,9 @@ export interface AIActions {
 }
 
 /** Difficulty parameters for a team: only the human's computer opponent is affected. */
+/** Beyond this distance from our goal the presser contains (stands off) instead of engaging. */
+const PRESS_ENGAGE_DISTANCE = 22
+
 function difficultyFor(state: MatchState, team: TeamId): DifficultyParams {
   return state.humanTeam !== null && team !== state.humanTeam
     ? DIFFICULTY[state.difficulty]
@@ -224,6 +227,15 @@ function pickBallWinner(state: MatchState, team: TeamId): number | null {
   // Counter-attack against us: a defender goal-side of the carrier engages him (delays him while the
   // others recover) rather than one chasing from behind.
   const preferGoalSide = owner !== null && state.defTransition[team]
+  // Outnumbered (e.g. 2 v 1 against the fixo): the only outfield defender goal-side of the carrier
+  // near our goal steps out to him and leaves his man.
+  let lastMan: number | null = null
+  if (owner && dist(owner.pos, ownGoal) < 18) {
+    const goalSide = state.players.filter(
+      (q) => q.team === team && q.role !== 'GK' && dist(q.pos, ownGoal) < dist(owner.pos, ownGoal) + 0.4,
+    )
+    if (goalSide.length === 1) lastMan = goalSide[0]!.id
+  }
   let best: PlayerState | null = null
   let bestT = Infinity
   let humanT = Infinity
@@ -233,8 +245,11 @@ function pickBallWinner(state: MatchState, team: TeamId): number | null {
     // The current presser keeps the job unless someone is clearly faster (no flicker between two).
     if (p.aiState === 'press' || p.aiState === 'chase') t -= 0.3
     if (preferGoalSide && dist(p.pos, ownGoal) > dist(target, ownGoal) - 0.5) t += 1.0
-    // Near our goal the fixo does not leave a man he is marking in front of goal to press the ball.
-    if (p.role === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id)) t += 0.8
+    // Near our goal the fixo does not leave a man he is marking in front of goal to press the ball
+    // (unless he is the last man: then he must).
+    if (p.id === lastMan) t -= 1.0
+    else if (p.role === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id))
+      t += 0.8
     if (p.id === state.controlledId) {
       humanT = t
       continue
@@ -275,10 +290,15 @@ function offBallDecision(
       p.aiState = 'chase'
       p.aiTarget = { ...ball.pos }
     } else if (owner) {
-      // Press goal-side of the carrier.
+      // Press goal-side of the carrier. Far from our goal the press is measured: stand off about 3 m,
+      // on the inside, closing the way through the middle instead of diving in high up the court.
       p.aiState = 'press'
       const ownGoal = { x: 0, y: -dir * COURT.halfLength }
-      p.aiTarget = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 0.7)
+      const toGoal = normalize(sub(ownGoal, owner.pos))
+      if (dist(owner.pos, ownGoal) > PRESS_ENGAGE_DISTANCE) {
+        const off = addScaled(owner.pos, toGoal, 3)
+        p.aiTarget = { x: off.x * 0.75, y: off.y }
+      } else p.aiTarget = addScaled(owner.pos, toGoal, 0.7)
     }
     return
   }
@@ -318,7 +338,9 @@ function markingPosition(state: MatchState, p: PlayerState, pressing: (number | 
   // Tighter the closer he is to goal and to the ball; looser far away (still goal-side).
   const tight = clamp(1 + (dist(a.pos, ownGoal) - 8) / 14 + (dist(a.pos, ball) - 6) / 20, 1, 2.2)
   const goalSide = addScaled(a.pos, normalize(sub(ownGoal, a.pos)), tight)
-  let mark = addScaled(goalSide, normalize(sub(ball, goalSide)), 0.3)
+  // Inside shoulder: cover the middle side of the man (and a touch towards the ball).
+  const inside = { x: -Math.sign(a.pos.x) * Math.min(0.8, Math.abs(a.pos.x) * 0.3), y: 0 }
+  let mark = addScaled({ x: goalSide.x + inside.x, y: goalSide.y }, normalize(sub(ball, goalSide)), 0.15)
   // Help side: a man far from the ball is marked loosely, sagging towards the middle in front of goal
   // so the defender can cover a carrier who gets through.
   const away = clamp((dist(a.pos, ball) - 7) / 10, 0, 0.45)
@@ -625,7 +647,10 @@ export function passInterception(state: MatchState, p: PlayerState): Vec2 | null
 
 function steer(state: MatchState, p: PlayerState): void {
   const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
-  if (p.aiState === 'press' && owner && owner.team !== p.team && dist(owner.pos, p.pos) < 2.2) {
+  const engage =
+    owner !== null &&
+    dist(owner.pos, { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }) <= PRESS_ENGAGE_DISTANCE
+  if (p.aiState === 'press' && owner && owner.team !== p.team && engage && dist(owner.pos, p.pos) < 2.2) {
     // Close to the carrier: track him every tick and step in on the ball (where it is going), so a
     // dribbler has to beat him rather than just walk round a static marker.
     const to = sub(state.ball.pos, p.pos)

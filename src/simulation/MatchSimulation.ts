@@ -558,7 +558,7 @@ export class MatchSimulation implements AIActions {
       const rel = sub(b.pos, owner.pos)
       const ahead = rel.x * fwd.x + rel.y * fwd.y
       if (owner.dribbleTouchTimer <= 0 && ahead < CONTROL.touchReach) {
-        const extra = attr(a.dribbling, 3.4, 2.3)
+        const extra = attr(a.dribbling, 1.7, 1.1)
         const dir = fromAngle(owner.facing + this.rng.gaussian() * attr(a.ballControl, 0.1, 0.03))
         b.vel = { x: dir.x * (speed + extra), y: dir.y * (speed + extra) }
         owner.dribbleTouchTimer = CONTROL.touchInterval

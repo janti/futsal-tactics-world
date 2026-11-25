@@ -158,8 +158,8 @@ export const CONTROL = {
   /** Distance from player centre at which a free ball can be controlled. */
   pickupRadius: 0.52,
   /** Dribble: ball offset in front of the player at rest and per m/s of speed. */
-  dribbleOffset: 0.4,
-  dribbleOffsetPerSpeed: 0.05,
+  dribbleOffset: 0.34,
+  dribbleOffsetPerSpeed: 0.025,
   soleOffset: 0.26,
   /** Control is lost if the ball drifts further than this from its owner. */
   loseDistance: 1.3,
@@ -176,11 +176,11 @@ export const CONTROL = {
   /** An opponent's shot faster than this (relative) rebounds off an outfield player (a block). */
   blockControlSpeed: 6,
   /** Next touch only when the ball is back within this distance in front of the feet. */
-  touchReach: 0.62,
+  touchReach: 0.5,
   /** Minimum time between sprint touches (s). */
-  touchInterval: 0.28,
+  touchInterval: 0.24,
   /** Between touches the ball rolls at this fraction of the runner's speed, so he catches it up. */
-  touchRollRatio: 0.86,
+  touchRollRatio: 0.93,
   /** A knocked-ahead ball is lost beyond this distance. */
   touchLoseDistance: 2.3,
   /** Opponents win a ball that is away from the dribbler's feet much more easily. */

@@ -345,3 +345,75 @@ describe('counter-attack defending', () => {
     expect(goalSide).toBeGreaterThanOrEqual(2)
   })
 })
+
+/** Hold the given team-1 players in place and keep the ball with player 7 for `seconds`. */
+function hold(sim: MatchSimulation, spots: Record<number, Vec2>, seconds: number, each?: () => void) {
+  const s = sim.state
+  for (let i = 0; i < TICK_RATE * seconds; i++) {
+    for (const [id, pos] of Object.entries(spots)) {
+      const q = sim.player(Number(id))
+      q.pos = { ...pos }
+      q.vel = { x: 0, y: 0 }
+    }
+    const c = sim.player(7)
+    s.ball.ownerId = 7
+    s.ball.mode = 'controlled'
+    s.ball.pos = { x: c.pos.x, y: c.pos.y - 0.4 }
+    s.possessionTeam = 1
+    each?.()
+    sim.step()
+  }
+}
+
+describe('2 v 1 against the fixo', () => {
+  it('the last defender leaves his man and steps out to the carrier', () => {
+    const { sim, s } = openPlay(4, { x: 2, y: -9 })
+    // Team 0 defends y = -20; everybody except the fixo is caught upfield.
+    for (const id of [2, 3, 4]) sim.player(id).pos = { x: (id - 3) * 3, y: -2 }
+    sim.player(1).pos = { x: -2.5, y: -14.5 }
+    let stepped = false
+    hold(
+      sim,
+      {
+        7: { x: 2, y: -9 },
+        8: { x: -3, y: -13 },
+        2: { x: 0, y: -2 },
+        3: { x: 3, y: -2 },
+        4: { x: -3, y: -2 },
+      },
+      1.5,
+      () => {
+        if (sim.player(1).aiState === 'press') stepped = true
+      },
+    )
+    expect(stepped).toBe(true)
+    expect(d(sim.player(1).pos, sim.player(7).pos)).toBeLessThan(
+      d({ x: -2.5, y: -14.5 }, { x: 2, y: -9 }) - 2,
+    )
+    expect(s.phase).toBe('play')
+  })
+})
+
+describe('measured press and the middle', () => {
+  it('far from our goal the presser stands off on the inside instead of diving in', () => {
+    const { sim } = openPlay(2, { x: 6, y: 6 })
+    hold(sim, { 7: { x: 6, y: 6 } }, 2)
+    const presser = sim.state.players.find((q) => q.team === 0 && q.aiState === 'press')!
+    expect(presser).toBeDefined()
+    expect(d(presser.pos, sim.player(7).pos)).toBeGreaterThan(2)
+    expect(Math.abs(presser.pos.x)).toBeLessThan(6) // inside the carrier, towards the middle
+    expect(presser.pos.y).toBeLessThan(6) // goal-side
+  })
+
+  it('a marker covers the inside (middle) side of a wide man', () => {
+    const { sim, s } = openPlay(3, { x: 3, y: -5 })
+    // Team 1's ala (8) is wide on the right of the court (x = 8) ahead of the ball.
+    hold(sim, { 7: { x: 3, y: -5 }, 8: { x: 8, y: -10 } }, 2.5)
+    const marker = s.players
+      .filter((q) => q.team === 0 && q.role !== 'GK' && q.aiState === 'cover')
+      .reduce((a, q) => (d(q.pos, sim.player(8).pos) < d(a.pos, sim.player(8).pos) ? q : a))
+    expect(d(marker.pos, sim.player(8).pos)).toBeLessThan(3)
+    expect(marker.pos.x).toBeLessThan(8) // on the middle side
+    expect(marker.pos.y).toBeLessThan(-10) // and goal-side
+  })
+})

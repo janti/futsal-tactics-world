@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
 import { MatchSimulation } from '../../src/simulation/MatchSimulation'
 import { passInterception } from '../../src/ai/BasicAI'
-import { CONTROL, TICK_RATE } from '../../src/simulation/SimulationConfig'
+import { TICK_RATE } from '../../src/simulation/SimulationConfig'
 
 /** Human team 0 in open play: player 2 has the ball at (0, -12); everyone else is parked far away. */
 function openPlay(seed = 5) {
@@ -43,9 +43,10 @@ describe('touch-based dribbling', () => {
       }
     }
     expect(s.ball.ownerId).toBe(2)
-    expect(maxAhead).toBeGreaterThan(0.85)
-    expect(maxAhead).toBeLessThan(CONTROL.touchLoseDistance)
-    expect(maxAhead - minAhead).toBeGreaterThan(0.3) // touch, roll, catch up, touch...
+    // Close to the feet even at a sprint (well under a metre), but visibly touched ahead and caught up.
+    expect(maxAhead).toBeGreaterThan(0.55)
+    expect(maxAhead).toBeLessThan(0.95)
+    expect(maxAhead - minAhead).toBeGreaterThan(0.15) // touch, roll, catch up, touch...
   })
 
   it('normal running keeps the ball close to the feet', () => {
@@ -56,7 +57,7 @@ describe('touch-based dribbling', () => {
       if (i > 30) maxAhead = Math.max(maxAhead, Math.hypot(s.ball.pos.x - p.pos.x, s.ball.pos.y - p.pos.y))
     }
     expect(s.ball.ownerId).toBe(2)
-    expect(maxAhead).toBeLessThan(0.8)
+    expect(maxAhead).toBeLessThan(0.65)
   })
 })
 

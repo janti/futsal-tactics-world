@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Dribbling: the ball stays closer to the feet (about 0.35–0.5 m at running pace; at a sprint it is
+  touched 0.45–0.75 m ahead instead of up to about 1.2 m).
+- 2 v 1 near our goal: the only outfield defender goal-side of the carrier (typically the fixo) steps
+  out to the ball and leaves his man.
+- Measured press: far from our goal (more than 22 m) the presser stands off about 3 m on the inside,
+  closing the way through the middle, instead of diving in high up the court. The defensive pivot sits
+  further off the ball and centrally.
+- Markers stand on the inside (middle) shoulder of their man, goal-side.
+- Measured AI vs AI (6 x 3 min): the middle between ball and goal is covered 87 % of the time (was
+  81 %), 84 % pass completion, 85 shots, 7 goals (was 119 shots, 16 goals).
+
 - Supporting players get free and offer passes: they look for a spot in rings round their shape
   position (and a run towards the ball) that is open for a pass, away from their marker, at a good
   passing distance and not crowding a teammate, and they sprint there. Measured AI vs AI: the carrier

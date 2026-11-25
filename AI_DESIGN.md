@@ -28,6 +28,11 @@ the full system will be built on:
 - **Marking details**: markers detour round opponents to reach their goal-side spot; a man within 9 m
   of goal is followed outside the zone; the fixo does not press when he has a man near goal; the
   current presser keeps the role unless another is 0.3 s faster.
+- **Measured press**: beyond 22 m from our goal the presser contains (3 m off, on the inside) and only
+  engages (close ball tracking) nearer goal. The diamond's pivot sits 4 m off the ball, centrally.
+- **Inside shoulder**: markers shift towards the middle of the court from the goal-side spot.
+- **Outnumbered**: within 18 m of goal, if only one outfield defender is goal-side of the carrier, he
+  becomes the presser (the fixo leaves his man).
 - **Attacking pivot**: rotates every 4.5 s between the middle, the ball-side wing and the far side.
 - **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): roles fixed
   once per restart — short man (starts ~7 m off, comes to ~3 m behind the ball after 0.5 s), pivot

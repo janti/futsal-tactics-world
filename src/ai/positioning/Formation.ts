@@ -55,10 +55,12 @@ export function diamondAnchor(role: PlayerRole, attackDir: AttackDir, ball: Vec2
   if (role === 'GK') return baseAnchor('GK', 'defend', attackDir)
   const b = worldToTeam(ball, attackDir, COURT.halfWidth, COURT.halfLength)
   const step = 0.11
-  const top = clamp(b.depth - 0.07, 0.2, 0.8)
+  // The pivot sits a little off the ball and in the middle (closing the central lane) rather than
+  // chasing high up the court.
+  const top = clamp(b.depth - 0.1, 0.2, 0.68)
   const lat = clamp(b.lateral * 0.55, -0.45, 0.45)
   let rel: TeamRelative
-  if (role === 'PIVOT') rel = { lateral: lat * 1.2, depth: top }
+  if (role === 'PIVOT') rel = { lateral: lat * 0.5, depth: top }
   else if (role === 'FIXO') rel = { lateral: lat * 0.6, depth: Math.max(0.06, top - 2 * step) }
   else
     rel = {
