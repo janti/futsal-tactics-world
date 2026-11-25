@@ -570,6 +570,7 @@ export class MatchSimulation implements AIActions {
     b.isShot = false
     b.spin = 0
     p.aiHoldTimer = 0
+    p.aiChallengeTimer = 0
     p.action = 'receive'
     p.actionTime = 0
     if (wasPass && passer !== null)
@@ -1314,6 +1315,8 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiDecisionTimer: (id % 6) / 60,
         aiHoldTimer: 0,
         aiBreakawayCorner: 0,
+        aiChallengeTimer: 0,
+        aiChallengeSide: 0,
         aiState: '',
       })
     }

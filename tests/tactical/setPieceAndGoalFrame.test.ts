@@ -13,7 +13,8 @@ function aiSim(seed: number) {
 describe('kick-in and corner takers stand behind the ball', () => {
   it('when ready, the taker is outside the court with the ball in front of him on the line', () => {
     let checked = 0
-    for (const seed of [1, 2, 3, 5, 7]) {
+    // Kick-ins and corners are fairly rare in AI vs AI play: sample enough matches.
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
       const sim = aiSim(seed)
       const s = sim.state
       for (let i = 0; i < TICK_RATE * 200 && checked < 12; i++) {
@@ -169,7 +170,8 @@ describe('the taker stays behind the ball as the aim changes', () => {
 
   it('AI takers line up behind the ball towards their receiver and kick it that way', () => {
     let checked = 0
-    for (const seed of [1, 2, 3, 5, 7]) {
+    // Kick-ins and corners are fairly rare in AI vs AI play: sample enough matches.
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
       const sim = aiSim(seed)
       const s = sim.state
       let lastTo: { x: number; y: number } | null = null

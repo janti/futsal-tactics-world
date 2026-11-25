@@ -261,6 +261,17 @@ export function interceptPoint(state: MatchState, p: PlayerState): Vec2 {
 }
 
 function steer(state: MatchState, p: PlayerState): void {
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (p.aiState === 'press' && owner && owner.team !== p.team && dist(owner.pos, p.pos) < 2.2) {
+    // Close to the carrier: track him every tick and step in on the ball (where it is going), so a
+    // dribbler has to beat him rather than just walk round a static marker.
+    const to = sub(state.ball.pos, p.pos)
+    const k = attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.55, 0.8)
+    p.moveIntent = len(to) > 0.05 ? { x: normalize(to).x * k, y: normalize(to).y * k } : { x: 0, y: 0 }
+    p.sprint = false
+    p.faceTarget = state.ball.pos
+    return
+  }
   const d = dist(p.aiTarget, p.pos)
   const urgent = p.aiState === 'chase' || (p.aiState === 'press' && d > 2.5) || d > 5
   walkTo(p, p.aiTarget, urgent)
@@ -324,6 +335,22 @@ function carrierBehaviour(
   }
   p.aiBreakawayCorner = 0
 
+  // 1v1 dribble challenge in progress: burst past the defender on the chosen side.
+  if (p.aiChallengeTimer > 0) {
+    p.aiChallengeTimer -= dt
+    if (challengeBehaviour(state, p, nearest)) {
+      if (decide && p.aiHoldTimer > 0.25) {
+        const toGoalNow = dist(p.pos, goal)
+        if (toGoalNow < 9 && shootingLane(state, p, goal.y) > 0.3) {
+          actions.shoot(p, sub(goal, p.pos), toGoalNow < 7.5 ? 0.3 : 0.45)
+          p.aiChallengeTimer = 0
+        }
+      }
+      return
+    }
+    p.aiChallengeTimer = -1
+  }
+
   let heading = normalize(sub(goal, p.pos))
   const open = spaceAhead(state, p, heading, 3.5)
   if (nearest && nd < 3) {
@@ -375,7 +402,19 @@ function carrierBehaviour(
     return
   }
 
-  // 2) Otherwise keep the ball moving: carry it while there is space, then circulate to a safe option.
+  // 2) Take the defender on (wing or middle; never the last man).
+  if (startChallenge(state, p, nearest, rng)) return
+
+  // 3) Play forward: a pass to a teammate ahead with an open lane, once the carry stalls.
+  if (!open || pressure > 0.35 || p.aiHoldTimer > attr(a.vision, 0.9, 0.5)) {
+    const ahead = progressivePass(state, p)
+    if (ahead) {
+      actions.pass(p, sub(ahead.pos, p.pos), false, ahead)
+      return
+    }
+  }
+
+  // 4) Otherwise keep the ball moving: carry it while there is space, then circulate (back / across).
   const circulateAfter = open ? attr(a.creativity, 1.6, 2.4) : attr(a.decisions, 1.0, 0.55)
   if (pressure > 0.45 || p.aiHoldTimer > circulateAfter) {
     const safe = safePassOption(state, p, pressure, rng)
@@ -402,7 +441,8 @@ export function isBreakaway(state: MatchState, p: PlayerState, goal: Vec2): bool
   for (const o of state.players) {
     if (o.team === p.team || o.role === 'GK') continue
     const ahead = (o.pos.y - p.pos.y) * dir
-    if (ahead < 0.6) continue
+    // Behind him, or level but out to the side: not in the way (a duel at his shoulder still is).
+    if (ahead < -0.3 || (ahead < 0.6 && Math.abs(o.pos.x - p.pos.x) > 1.5)) continue
     const { point } = closestOnSegment(p.pos, goal, o.pos)
     if (dist(point, o.pos) < 2.6) return false
   }
@@ -447,12 +487,110 @@ function breakawayBehaviour(
   if (!decide || p.aiHoldTimer < 0.2) return
   const shootAt = attr(a.composure, 8.5, 7)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
-  const forced = chaser < 1.6 || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
+  const forced = (chaser < 1.6 && toGoal < 11) || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
   if (!angleOk || (toGoal > shootAt && !forced)) return
   // Corner choice as lateral input (planShot aims at the corner on that side).
   const power = rng.chance(attr(a.finishing, 0.55, 0.85)) ? 0.3 : 0.45
   actions.shoot(p, { x: p.aiBreakawayCorner, y: dir * 0.4 }, power)
   p.aiBreakawayCorner = 0
+}
+
+/** The deepest outfield player of his team (the last man): he does not take players on. */
+export function isLastMan(state: MatchState, p: PlayerState): boolean {
+  const dir = state.teams[p.team].attackDir
+  for (const t of state.players)
+    if (t.team === p.team && t.role !== 'GK' && t.id !== p.id && t.pos.y * dir < p.pos.y * dir) return false
+  return true
+}
+
+/**
+ * Start a 1v1 dribble challenge: one defender close in front, no cover behind him, and the carrier
+ * is not the last man. Better dribblers try it more often. On the wing he either cuts inside or goes
+ * down the line; in the middle he goes past on the side away from the defender.
+ */
+function startChallenge(
+  state: MatchState,
+  p: PlayerState,
+  defender: PlayerState | null,
+  rng: SeededRandom,
+): boolean {
+  if (!defender || defender.role === 'GK' || isLastMan(state, p)) return false
+  const dir = state.teams[p.team].attackDir
+  if (p.pos.y * dir < -8) return false // not deep in his own half
+  const ahead = (defender.pos.y - p.pos.y) * dir
+  const lateral = defender.pos.x - p.pos.x
+  if (ahead < 0.4 || ahead > 4.5 || Math.abs(lateral) > 2.5) return false
+  // Cover: another defender just behind the first one closes the gap.
+  const beyond = { x: defender.pos.x, y: defender.pos.y + dir * 2.5 }
+  for (const o of state.players)
+    if (o.team !== p.team && o.id !== defender.id && o.role !== 'GK' && dist(o.pos, beyond) < 3) return false
+  // One decision per possession (the first time a defender stands in front of him).
+  if (p.aiChallengeTimer < 0) return false
+  const a = p.profile.attributes
+  if (!rng.chance(attr(a.dribbling, 0.3, 0.75))) {
+    p.aiChallengeTimer = -1
+    return false
+  }
+  const edge = COURT.halfWidth - 1.6
+  let side: number
+  if (Math.abs(p.pos.x) > 5) {
+    // Wing: cut inside, or down the line when there is room.
+    const lineSide = Math.sign(p.pos.x)
+    side = Math.abs(p.pos.x) < edge && rng.chance(0.5) ? lineSide : -lineSide
+  } else {
+    side = Math.abs(lateral) > 0.3 ? -Math.sign(lateral) : rng.chance(0.5) ? 1 : -1
+  }
+  p.aiChallengeSide = side
+  p.aiChallengeTimer = attr(a.agility, 1.0, 1.4)
+  return true
+}
+
+/** Steer the challenge; returns false once it is over (defender beaten or no longer in the way). */
+function challengeBehaviour(state: MatchState, p: PlayerState, defender: PlayerState | null): boolean {
+  if (!defender) return false
+  const dir = state.teams[p.team].attackDir
+  const ahead = (defender.pos.y - p.pos.y) * dir
+  if (ahead < -0.8 || dist(defender.pos, p.pos) > 5) return false // beaten / gone
+  // Do not run out of the court.
+  if (Math.abs(p.pos.x) > COURT.halfWidth - 0.9 && Math.sign(p.pos.x) === p.aiChallengeSide)
+    p.aiChallengeSide = -p.aiChallengeSide
+  // Sideways burst while the defender is in front, then turn upfield past him.
+  const sideWeight = ahead > 0 ? 1.15 : 0.5
+  const m = normalize({ x: p.aiChallengeSide * sideWeight, y: dir })
+  p.moveIntent = { x: m.x, y: m.y }
+  p.sprint = true
+  p.sole = false
+  p.aiState = 'challenge'
+  return true
+}
+
+/** Progressive pass: an outfield teammate clearly ahead with an open lane and space (no keeper). */
+function progressivePass(state: MatchState, p: PlayerState): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  let best: PlayerState | null = null
+  let bestScore = 0
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+    const progress = (t.pos.y - p.pos.y) * dir
+    if (progress < 2.5) continue
+    const d = dist(t.pos, p.pos)
+    if (d > 18) continue
+    const lane = laneOpenness(state, p.team, p.pos, t.pos)
+    if (lane < 0.9) continue
+    let space = Infinity
+    for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
+    if (space < 1.6) continue
+    const score =
+      progress * 0.12 +
+      scoringValue(state, p.team, t.pos) * 1.5 +
+      Math.min(lane, 3) * 0.3 +
+      Math.min(space, 4) * 0.2
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+    }
+  }
+  return best
 }
 
 /** No opponent within `range` metres in a 60-degree cone ahead of the player. */

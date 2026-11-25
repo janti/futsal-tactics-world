@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- AI takes defenders on 1v1 (wing: cut inside or down the line; middle: past the side away from the
+  defender); the last man never does. Better dribblers try it more often.
+- AI plays forward: a pass to a teammate clearly ahead with an open lane is preferred once the carry
+  stalls; only otherwise is the ball circulated back or across.
+- A pressing defender close to the carrier now tracks the ball every tick instead of a static spot.
+
 - AI breakaways: a computer player through on goal with no defender between him and the keeper now
   takes the ball in close and finishes with a low shot into the far or near corner instead of
   shooting from distance or passing. Measured: 23/40 goals, the rest saved (5 caught).

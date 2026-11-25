@@ -103,6 +103,9 @@ export interface PlayerState {
   aiHoldTimer: number
   /** Corner chosen for the current breakaway finish (-1 / 1 sim x side, 0 = none). */
   aiBreakawayCorner: number
+  /** 1v1 dribble challenge in progress: time left and the side (sim x sign) he goes past on. */
+  aiChallengeTimer: number
+  aiChallengeSide: number
   aiState: string
 }
 

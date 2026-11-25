@@ -20,6 +20,15 @@ the full system will be built on:
   7–8.5 m (earlier if a chaser or the rushing keeper gets close) with a low shot into the far corner
   (60 %) or near corner; mostly a placed shot, sometimes a firmer one the keeper can hold. Measured:
   about 55–60 % goals, the rest saved or caught (`tests/tactical/breakaway.test.ts`).
+- **1v1 challenge**: with one defender close in front and no cover behind him, the carrier (never
+  the team's deepest outfield player, not deep in his own half) decides once per possession whether to
+  take him on (chance by dribbling, 30–75 %). Wing: cut inside or down the line; middle: past the
+  side away from the defender, sprinting. A pressing defender within 2.2 m tracks the ball every tick
+  (speed by tackling/agility). Measured: 20/30 duels challenged, 17 beaten
+  (`tests/tactical/challenge.test.ts`).
+- **Play forward**: after a direct pass to a scoring position and a possible challenge, a pass to an
+  outfield teammate at least 2.5 m ahead with an open lane and space is preferred once the carry
+  stalls; only then is the ball circulated back or across.
 - **Carrier (direct, then circulate)**:
   1. shoots inside an attribute-based range (9.5–12.5 m; rare long shots only up to 15 m) when the angle and a shooting lane to a corner allow
      (the lane ignores the goalkeeper);
