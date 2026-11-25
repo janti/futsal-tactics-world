@@ -31,8 +31,9 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 
 ### Goalkeeper hands
 
-- Hands only inside the own penalty area and only for a ball last touched by an opponent (shots,
-  saves, loose balls). Such a ball cannot be challenged. A back pass from a teammate must be played
+- Hands only inside the own penalty area, and not for a ball deliberately kicked to the keeper by a
+  teammate (back pass, kick-in). Shots, saves, the rebound of his own parry and deflections off
+  teammates may be handled. Such a ball cannot be challenged. A back pass from a teammate must be played
   with the feet. A human keeper holding the ball gets a 4-second countdown, after which the AI throws (arcade
   simplification of the four-second rule; no indirect free kick yet).
 

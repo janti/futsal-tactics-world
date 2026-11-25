@@ -25,6 +25,7 @@ function keeperWithBall(seed = 31) {
   s.ball.vel = { x: 0, y: -5 }
   s.ball.lastTouchTeam = 1
   s.ball.lastTouchId = 9
+  s.ball.lastKickerId = 9
   s.ball.intendedReceiverId = null
   for (let i = 0; i < 90 && s.ball.ownerId !== 0; i++) sim.step()
   expect(s.ball.ownerId).toBe(0)

@@ -39,9 +39,13 @@ function shootAtKeeper(
   s.ball.vel = { x: ((target.x - from.x) / d) * speed, y: ((target.y - from.y) / d) * speed }
   s.ball.lastTouchTeam = 1
   s.ball.lastTouchId = 9
+  s.ball.lastKickerId = 9
   s.ball.kickPos = { ...from }
   s.ball.kickTime = s.time
   s.ball.isShot = true
+  s.ball.shotLongRange = false
+  s.ball.shotPlaced = false
+  s.ball.shotScreen = 0
   s.ball.intendedReceiverId = null
   s.ball.keeperRetouchId = null
 }
@@ -65,9 +69,8 @@ describe('goalkeeper saves: catch or steer the ball away', () => {
       )
       for (let i = 0; i < 60; i++) {
         sim.step()
-        const save = sim
-          .drainEvents()
-          .find((e): e is Extract<MatchEvent, { type: 'Save' }> => e.type === 'Save')
+        const evs = sim.drainEvents()
+        const save = evs.find((e): e is Extract<MatchEvent, { type: 'Save' }> => e.type === 'Save')
         if (!save) continue
         if (save.caught) {
           catches++
@@ -106,6 +109,42 @@ describe('goalkeeper saves: catch or steer the ball away', () => {
   })
 })
 
+describe('saves and rebounds go into the hands', () => {
+  function looseBallToKeeper(lastTouchId: number, lastTouchTeam: 0 | 1, lastKickerId: number | null) {
+    const { sim, s, gk } = openPlay(10, null)
+    gk.pos = { x: 0, y: -18.3 }
+    gk.vel = { x: 0, y: 0 }
+    gk.touchCooldown = 0
+    s.ball.ownerId = null
+    s.ball.mode = 'free'
+    s.ball.inHands = false
+    s.ball.pos = { x: 0, y: -16 }
+    s.ball.z = 0
+    s.ball.vel = { x: 0, y: -2.5 }
+    s.ball.lastTouchId = lastTouchId
+    s.ball.lastTouchTeam = lastTouchTeam
+    s.ball.lastKickerId = lastKickerId
+    s.ball.intendedReceiverId = null
+    s.ball.keeperRetouchId = null
+    s.ball.isShot = false
+    for (let i = 0; i < 90 && s.ball.ownerId !== 0; i++) sim.step()
+    expect(s.ball.ownerId).toBe(0)
+    return s
+  }
+
+  it('the rebound of his own parry is gathered into the hands', () => {
+    expect(looseBallToKeeper(0, 0, null).ball.inHands).toBe(true)
+  })
+
+  it('a ball that deflected off a teammate (not a deliberate pass) may be handled', () => {
+    expect(looseBallToKeeper(1, 0, null).ball.inHands).toBe(true)
+  })
+
+  it('a deliberate pass from a teammate may not be handled', () => {
+    expect(looseBallToKeeper(1, 0, 1).ball.inHands).toBe(false)
+  })
+})
+
 describe('back pass: the keeper plays like an outfield player (with the keeper rules)', () => {
   function backPass(seed: number, humanTeam: 0 | null) {
     const ctx = openPlay(seed, humanTeam)
@@ -123,6 +162,7 @@ describe('back pass: the keeper plays like an outfield player (with the keeper r
     s.ball.vel = { x: 0, y: -5 }
     s.ball.lastTouchTeam = 0
     s.ball.lastTouchId = 1
+    s.ball.lastKickerId = 1 // deliberate pass by a teammate
     s.ball.intendedReceiverId = 0
     s.ball.keeperRetouchId = null
     for (let i = 0; i < 90 && s.ball.ownerId !== 0; i++) sim.step()
@@ -179,6 +219,22 @@ describe('back pass: the keeper plays like an outfield player (with the keeper r
     sim.step([{ type: 'Pass', dir: { x: 1, y: 1 }, through: false }])
     expect(s.ball.ownerId).toBeNull()
     expect(s.ball.lastTouchId).toBe(0)
+  })
+
+  it('opponents go for the ball when the keeper has it at his feet, and can win it', () => {
+    const { sim, s } = backPass(6, 0)
+    // An opponent a few metres away; the human keeper just stands on the ball.
+    const opp = sim.player(9)
+    opp.pos = { x: 1.5, y: -12 }
+    let won = false
+    let closest = Infinity
+    for (let i = 0; i < TICK_RATE * 3.5 && !won; i++) {
+      sim.step()
+      closest = Math.min(closest, Math.hypot(opp.pos.x - s.ball.pos.x, opp.pos.y - s.ball.pos.y))
+      won = s.ball.lastTouchTeam === 1
+    }
+    expect(closest).toBeLessThan(0.7)
+    expect(won).toBe(true)
   })
 
   it('four-second rule also applies with the ball at the feet (human keeper)', () => {

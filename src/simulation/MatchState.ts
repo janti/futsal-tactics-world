@@ -151,6 +151,11 @@ export interface BallState {
   /** The current shot is a quick low placed shot (a tap): the keeper cannot hold it. */
   shotPlaced: boolean
   /**
+   * Player whose deliberate kick (pass, shot, kick-in...) last played the ball, or null after a
+   * deflection, save or block. A keeper may not handle a ball deliberately kicked to him by a teammate.
+   */
+  lastKickerId: number | null
+  /**
    * Set-piece taker who may not touch the ball again until another player has touched it
    * (no double touch after a kick-in, corner or kick-off).
    */

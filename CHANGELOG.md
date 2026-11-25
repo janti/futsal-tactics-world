@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Keeper with the ball at his feet (back pass): the nearest opponent now goes straight for the ball
+  and can win it.
+- Saves end in the hands: the keeper catches more shots, and the rebound of his own parry or a ball
+  deflected off a teammate may be picked up with the hands; only a teammate's deliberate kick forbids
+  them. He then distributes with a throw, which opponents cannot challenge.
+- Fixed: a shot could reach the keeper's hands through an ordinary first touch, bypassing the save
+  rules (so even placed shots were held); shots straight at the keeper now always get a save attempt.
+- Fixed: players could get stuck walking into a goal net (a corner taker inside the goal stalled the
+  match). Players now route out through the goal mouth or round the goal.
+- Keeper throws: bigger arc (vertical launch 2.6–8.8 m/s).
+
 - Restarts are aimed: at kick-offs, kick-ins and corners the taker always stands behind the ball
   along the aim direction, so the ball stays in front of him. Aiming with the direction keys walks him
   round the ball (it stays on the line or the centre spot) and he faces the aim. Kick-ins and corners

@@ -27,6 +27,7 @@ function rollToKeeper(sim: MatchSimulation, fromId: number) {
   s.ball.vel = { x: 0, y: 5 }
   s.ball.lastTouchId = from.id
   s.ball.lastTouchTeam = from.team
+  s.ball.lastKickerId = from.id // a deliberate kick (pass or shot)
   s.ball.intendedReceiverId = from.team === 1 ? 5 : null
   for (let i = 0; i < 90 && s.ball.ownerId !== 5; i++) sim.step()
   expect(s.ball.ownerId).toBe(5)

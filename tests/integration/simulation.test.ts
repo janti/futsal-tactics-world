@@ -398,7 +398,8 @@ describe('kick-ins and set pieces', () => {
   it('AI takers kick (never dribble) their kick-ins within the time limit', () => {
     let kickIns = 0
     let maxReady = 0
-    for (const seed of [5, 6, 7, 8]) {
+    for (const seed of [5, 6, 7, 8, 1, 2, 3, 4, 9, 10, 11, 12]) {
+      if (kickIns >= 4) break
       const sim = newSim(seed, null)
       let readyTicks = 0
       for (let i = 0; i < TICK_RATE * 180; i++) {

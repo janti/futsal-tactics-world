@@ -21,6 +21,7 @@ import {
   playerRadius,
   resolveGoalCollisions,
   resolvePlayerCollisions,
+  routeAroundGoals,
   updatePlayerMovement,
 } from '../physics/PlayerPhysics'
 import { planShot } from '../physics/ShootingPhysics'
@@ -368,6 +369,7 @@ export class MatchSimulation implements AIActions {
     b.kickPos = { ...b.pos }
     b.kickTime = this.state.time
     b.shotPlaced = false
+    b.lastKickerId = p.id
     p.touchCooldown = PLAYER.kickCooldown
     p.action = fromHands ? 'throw' : action
     p.actionTime = 0
@@ -399,7 +401,7 @@ export class MatchSimulation implements AIActions {
     }
     // The taker walks around the ball to stand behind it along the aim; the ball stays on the line.
     const target = restartTakerSpot(this.state, r)
-    const to = sub(target, taker.pos)
+    const to = sub(routeAroundGoals(taker.pos, target), taker.pos)
     const d = len(to)
     // A calm step round the ball (walking pace), not a dribble.
     taker.moveIntent =
@@ -543,8 +545,13 @@ export class MatchSimulation implements AIActions {
     const passer = b.lastTouchId
     const wasPass = b.intendedReceiverId !== null && b.lastTouchTeam === p.team && passer !== p.id
     // A keeper may use the hands only in their own penalty area and not from a teammate's pass.
-    const lastByOpponent = b.lastTouchTeam !== null && b.lastTouchTeam !== p.team
-    b.inHands = p.role === 'GK' && lastByOpponent && this.inOwnPenaltyArea(p, b.pos)
+    // Hands are allowed in the own area unless a teammate deliberately kicked the ball to him (back
+    // pass, kick-in...). Saves, his own parries, rebounds and deflections may all be picked up.
+    const teammateKick =
+      b.lastKickerId !== null && b.lastKickerId !== p.id && this.player(b.lastKickerId).team === p.team
+    b.inHands =
+      p.role === 'GK' && !teammateKick && b.lastTouchTeam !== null && this.inOwnPenaltyArea(p, b.pos)
+    b.lastKickerId = null
     b.handsTimer = 0
     if (b.inHands) {
       // Gathered into the hands at once (no frame with the ball on the floor).
@@ -674,11 +681,14 @@ export class MatchSimulation implements AIActions {
       // Second-possession rule: a keeper who released the ball in the own half may not play it again
       // there before an opponent has touched it (only an involuntary rebound off the body).
       const retouchBanned = p.id === b.keeperRetouchId && this.inOwnHalf(p)
+      // An opponent's shot reaches the keeper only through the save logic above (catch, parry or
+      // block): never via an ordinary first touch, which would bypass the catch rules.
+      const keeperFacingShot = p.role === 'GK' && b.isShot && b.lastTouchTeam !== p.team
 
       const bodyR = playerRadius(p) + BALL.radius
       const rel = Math.hypot(b.vel.x - p.vel.x, b.vel.y - p.vel.y)
       const pickupR = p.role === 'GK' ? 0.62 : CONTROL.pickupRadius
-      if (!retouchBanned && d < pickupR && b.z < PLAYER.ballContactHeight) {
+      if (!retouchBanned && !keeperFacingShot && d < pickupR && b.z < PLAYER.ballContactHeight) {
         const a = p.profile.attributes
         if (rel <= CONTROL.cleanControlSpeed) {
           this.giveBall(p)
@@ -721,6 +731,7 @@ export class MatchSimulation implements AIActions {
     }
     const intercepted = b.lastTouchTeam !== p.team
     this.updateKeeperRetouch(p)
+    b.lastKickerId = null
     b.blockedTouchId = null
     b.lastTouchId = p.id
     b.lastTouchTeam = p.team
@@ -748,7 +759,8 @@ export class MatchSimulation implements AIActions {
     const approaching = rvx * toGkX + rvy * toGkY > 0
     if (approaching && rv > 1e-6) {
       const closest = Math.abs(rvx * toGkY - rvy * toGkX) / rv
-      if (closest < d - 0.08) return false
+      // ...but at the latest when the ball reaches his body (a shot straight at him).
+      if (closest < d - 0.08 && d > playerRadius(gk) + BALL.radius + 0.15) return false
     }
     const a = gk.profile.attributes
     const reachFrac = d / reach
@@ -792,9 +804,9 @@ export class MatchSimulation implements AIActions {
       (clearLongShot
         ? // Seen all the way: caught unless it is at full stretch or very high.
           b.z < 1.9 && d < PLAYER.goalkeeperReach
-        : speed < attr(a.handling, 13, 19) + (flight > 15 ? 3 : 0) &&
-          b.z < 1.7 &&
-          d < PLAYER.goalkeeperReach * 0.8)
+        : speed < attr(a.handling, 15, 21) + (flight > 15 ? 3 : 0) &&
+          b.z < 1.8 &&
+          d < PLAYER.goalkeeperReach * 0.85)
     this.emit({ type: 'Save', tick: this.state.tick, playerId: gk.id, caught: catchable })
     if (catchable) {
       gk.touchCooldown = 0
@@ -824,6 +836,7 @@ export class MatchSimulation implements AIActions {
     const n = normalize(b.vel)
     const sep = playerRadius(gk) + BALL.radius + 0.02
     b.pos = { x: gk.pos.x + n.x * sep, y: gk.pos.y + n.y * sep }
+    b.lastKickerId = null
     b.blockedTouchId = null
     b.lastTouchId = gk.id
     b.lastTouchTeam = gk.team
@@ -997,7 +1010,7 @@ export class MatchSimulation implements AIActions {
     // Human taker with no input walks to the ball automatically.
     const takerSpot = restartTakerSpot(s, r)
     if (taker.id === s.controlledId && len(taker.moveIntent) < 0.1 && dist(taker.pos, takerSpot) > 0.15) {
-      const to = sub(takerSpot, taker.pos)
+      const to = sub(routeAroundGoals(taker.pos, takerSpot), taker.pos)
       const n = normalize(to)
       const m = clamp(len(to) / 1.2, 0.3, 1)
       taker.moveIntent = { x: n.x * m, y: n.y * m }
@@ -1082,6 +1095,7 @@ export class MatchSimulation implements AIActions {
     b.spin = 0
     b.inHands = false
     b.keeperRetouchId = null
+    b.lastKickerId = null
   }
 
   /** Is this player legally placed for the pending kick-off? */
@@ -1116,7 +1130,7 @@ export class MatchSimulation implements AIActions {
     if (len(p.moveIntent) > 0.1 && r.timer < RESTART.kickoffGrace) return
     const dir = s.teams[p.team].attackDir
     const target = baseAnchor(p.role, p.team === r.team ? 'kickoffOwn' : 'kickoffOpp', dir)
-    const n = normalize(sub(target, p.pos))
+    const n = normalize(sub(routeAroundGoals(p.pos, target), p.pos))
     p.moveIntent = n
     p.sprint = true
   }
@@ -1342,6 +1356,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
       shotScreen: 0,
       shotLongRange: false,
       shotPlaced: false,
+      lastKickerId: null,
     },
     humanTeam: setup.humanTeam,
     controlledId:

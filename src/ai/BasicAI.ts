@@ -10,7 +10,7 @@
 import { attr, clamp } from '../core/math/scalar'
 import type { SeededRandom } from '../core/random/SeededRandom'
 import { addScaled, closestOnSegment, dist, len, normalize, sub, type Vec2 } from '../core/math/vec2'
-import { estimateTimeToReach } from '../physics/PlayerPhysics'
+import { estimateTimeToReach, routeAroundGoals } from '../physics/PlayerPhysics'
 import { laneOpenness, predictPassTarget, pressureOn } from '../physics/PassingPhysics'
 import { rollingLaunchSpeed } from '../physics/BallPhysics'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
@@ -175,6 +175,10 @@ function offBallDecision(state: MatchState, p: PlayerState, winnerId: number | n
     if (ball.mode === 'free') {
       p.aiState = 'chase'
       p.aiTarget = interceptPoint(state, p)
+    } else if (owner && owner.role === 'GK') {
+      // A keeper playing with his feet (he may not pick it up): go straight for the ball to win it.
+      p.aiState = 'chase'
+      p.aiTarget = { ...ball.pos }
     } else if (owner) {
       // Press goal-side of the carrier.
       p.aiState = 'press'
@@ -268,6 +272,13 @@ function steer(state: MatchState, p: PlayerState): void {
 
 /** Arrival steering: full intent far away, easing in within 1.5 m, idle inside 0.15 m. */
 function walkTo(p: PlayerState, target: Vec2, sprint: boolean): void {
+  // Never try to walk through a goal: head for the detour point first.
+  const waypoint = routeAroundGoals(p.pos, target)
+  if (waypoint !== target) {
+    p.moveIntent = normalize(sub(waypoint, p.pos))
+    p.sprint = sprint
+    return
+  }
   const to = sub(target, p.pos)
   const d = len(to)
   if (d < 0.15) {

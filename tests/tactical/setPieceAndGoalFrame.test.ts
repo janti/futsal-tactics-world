@@ -194,3 +194,38 @@ describe('the taker stays behind the ball as the aim changes', () => {
     expect(checked).toBeGreaterThan(3)
   })
 })
+
+describe('players find their way round the goals', () => {
+  it('a player standing inside the goal walks out through the mouth to a corner, not into the side net', async () => {
+    const { routeAroundGoals } = await import('../../src/physics/PlayerPhysics')
+    const s = createInitialState({ seed: 3, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: null })
+    const p = s.players[1]!
+    p.pos = { x: -1.0, y: -(COURT.halfLength + 0.4) } // inside the -y goal
+    p.vel = { x: 0, y: 0 }
+    const target = { x: -10.3, y: -20.3 } // corner taker spot
+    for (let i = 0; i < TICK_RATE * 6; i++) {
+      const wp = routeAroundGoals(p.pos, target)
+      const dx = wp.x - p.pos.x
+      const dy = wp.y - p.pos.y
+      const d = Math.hypot(dx, dy)
+      p.moveIntent = d > 0.1 ? { x: dx / d, y: dy / d } : { x: 0, y: 0 }
+      updatePlayerMovement(p, false, 1 / TICK_RATE)
+      resolveGoalCollisions([p])
+    }
+    expect(Math.hypot(p.pos.x - target.x, p.pos.y - target.y)).toBeLessThan(0.5)
+  })
+
+  it('AI vs AI: no restart is left waiting for its taker (no stalls)', () => {
+    for (const seed of [7, 11, 13]) {
+      const sim = aiSim(seed)
+      const s = sim.state
+      let longest = 0
+      for (let i = 0; i < TICK_RATE * 240; i++) {
+        sim.step()
+        const r = s.restart
+        if (r && !r.ready) longest = Math.max(longest, r.timer)
+      }
+      expect(longest).toBeLessThan(10)
+    }
+  })
+})

@@ -28,6 +28,7 @@ function ball(partial: Partial<BallState> = {}): BallState {
     shotScreen: 0,
     shotLongRange: false,
     shotPlaced: false,
+    lastKickerId: null,
     ...partial,
   }
 }

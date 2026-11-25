@@ -146,9 +146,9 @@ export const THROW = {
   /** Above this power the throw is overarm (in the air); below it is bowled along the floor. */
   overarmPower: 0.35,
   /** Vertical launch speed range for overarm throws: a longer press gives a higher arc. */
-  minVz: 1.6,
-  maxVz: 6.8,
-  arcCurve: 1.3,
+  minVz: 2.6,
+  maxVz: 8.8,
+  arcCurve: 1.1,
   releaseHeight: 1.3,
   /** Angular error (radians) from the throwing attribute (worst..best). */
   error: [0.09, 0.015] as const,

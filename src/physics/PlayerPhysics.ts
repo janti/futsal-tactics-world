@@ -180,3 +180,62 @@ export function resolveGoalCollisions(players: PlayerState[]): void {
     }
   }
 }
+
+/** Is a point inside the footprint of either goal (between the goal line and the back net)? */
+function inGoalBox(x: number, y: number, margin: number): 1 | -1 | 0 {
+  if (Math.abs(x) > POST_X + margin) return 0
+  const ay = Math.abs(y)
+  if (ay < COURT.halfLength - margin * 0.2 || ay > POST_Y + COURT.goalDepth + margin) return 0
+  return y > 0 ? 1 : -1
+}
+
+function segmentHitsGoal(ax: number, ay: number, bx: number, by: number, margin: number): boolean {
+  const n = 24
+  for (let i = 1; i < n; i++) {
+    const t = i / n
+    if (inGoalBox(ax + (bx - ax) * t, ay + (by - ay) * t, margin)) return true
+  }
+  return false
+}
+
+/**
+ * Next point to walk towards so a player does not try to walk through a goal: from inside the goal he
+ * leaves through the open mouth; otherwise, if the straight line crosses a goal, he goes round its
+ * nearest corner. Returns the target itself when the way is clear.
+ */
+export function routeAroundGoals(from: Vec2, target: Vec2): Vec2 {
+  const margin = 0.45
+  const inside = inGoalBox(from.x, from.y, 0)
+  if (inside && !inGoalBox(target.x, target.y, 0)) {
+    // Out through the mouth (towards the court) first.
+    const exitY = inside * (COURT.halfLength - 0.6)
+    if (Math.abs(from.y) > COURT.halfLength - 0.3)
+      return { x: Math.max(-POST_X + 0.4, Math.min(POST_X - 0.4, from.x)), y: exitY }
+    return target
+  }
+  if (!segmentHitsGoal(from.x, from.y, target.x, target.y, 0.2)) return target
+  const end =
+    target.y > 0 || from.y > 0
+      ? Math.abs(target.y) > Math.abs(from.y)
+        ? Math.sign(target.y)
+        : Math.sign(from.y)
+      : -1
+  const back = POST_Y + COURT.goalDepth
+  const corners: Vec2[] = [
+    { x: POST_X + margin + 0.3, y: end * (back + margin) },
+    { x: -(POST_X + margin + 0.3), y: end * (back + margin) },
+    { x: POST_X + margin + 0.3, y: end * (COURT.halfLength - margin) },
+    { x: -(POST_X + margin + 0.3), y: end * (COURT.halfLength - margin) },
+  ]
+  let best = target
+  let bestLen = Infinity
+  for (const c of corners) {
+    if (segmentHitsGoal(from.x, from.y, c.x, c.y, 0.2)) continue
+    const l = Math.hypot(c.x - from.x, c.y - from.y) + Math.hypot(target.x - c.x, target.y - c.y)
+    if (l < bestLen) {
+      bestLen = l
+      best = c
+    }
+  }
+  return best
+}
