@@ -47,6 +47,28 @@ export function baseAnchor(role: PlayerRole, mode: ShapeMode, attackDir: AttackD
 }
 
 /**
+ * Defensive diamond that moves with the ball (team-relative): the pivot at the top just goal-side of
+ * the ball, the alas either side a step deeper and the fixo at the bottom. The block is high and
+ * compact (about 4.4 m between the lines) and slides across towards the ball side.
+ */
+export function diamondAnchor(role: PlayerRole, attackDir: AttackDir, ball: Vec2): Vec2 {
+  if (role === 'GK') return baseAnchor('GK', 'defend', attackDir)
+  const b = worldToTeam(ball, attackDir, COURT.halfWidth, COURT.halfLength)
+  const step = 0.11
+  const top = clamp(b.depth - 0.07, 0.2, 0.8)
+  const lat = clamp(b.lateral * 0.55, -0.45, 0.45)
+  let rel: TeamRelative
+  if (role === 'PIVOT') rel = { lateral: lat * 1.2, depth: top }
+  else if (role === 'FIXO') rel = { lateral: lat * 0.6, depth: Math.max(0.06, top - 2 * step) }
+  else
+    rel = {
+      lateral: clamp(lat + (role === 'ALA_L' ? -0.48 : 0.48), -0.85, 0.85),
+      depth: Math.max(0.12, top - step),
+    }
+  return teamToWorld(rel, attackDir, COURT.halfWidth, COURT.halfLength)
+}
+
+/**
  * Ball-oriented anchor: the block slides with the ball along the length and partly across the width.
  * Defending shapes shift less in depth and stay compact around the centre.
  */

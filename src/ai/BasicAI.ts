@@ -15,12 +15,20 @@ import { laneOpenness, predictPassTarget, pressureOn } from '../physics/PassingP
 import { rollingLaunchSpeed } from '../physics/BallPhysics'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
 import { COURT, PASS, PLAYER, RESTART, SCREEN, THROW } from '../simulation/SimulationConfig'
-import { baseAnchor, dynamicAnchor } from './positioning/Formation'
+import { baseAnchor, diamondAnchor, dynamicAnchor } from './positioning/Formation'
 import { clampRestartAim, restartTakerSpot } from '../simulation/RestartGeometry'
 import { DIFFICULTY, type DifficultyParams } from '../simulation/Difficulty'
 
 export interface AIActions {
-  pass(p: PlayerState, dir: Vec2, through: boolean, receiver: PlayerState | null): void
+  /** `arrival`: wanted ball speed at the receiver (default: a normal pass). */
+  pass(
+    p: PlayerState,
+    dir: Vec2,
+    through: boolean,
+    receiver: PlayerState | null,
+    power?: number,
+    arrival?: number,
+  ): void
   shoot(p: PlayerState, dir: Vec2, power: number): void
   /** Goalkeeper throw from the hands (same throw a human keeper makes). */
   throwBall(p: PlayerState, dir: Vec2, power: number): void
@@ -35,7 +43,12 @@ function difficultyFor(state: MatchState, team: TeamId): DifficultyParams {
 
 export function updateAI(state: MatchState, actions: AIActions, rng: SeededRandom, dt: number): void {
   const chasers: [number | null, number | null] = [pickBallWinner(state, 0), pickBallWinner(state, 1)]
+  const helpers: [number | null, number | null] = [
+    pickHelper(state, 0, chasers[0]),
+    pickHelper(state, 1, chasers[1]),
+  ]
   for (const p of state.players) {
+    p.aiSetPieceTimer = Math.max(0, p.aiSetPieceTimer - dt)
     if (p.id === state.controlledId) continue
     p.aiDecisionTimer -= dt
     const decide = p.aiDecisionTimer <= 0
@@ -67,10 +80,10 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
       continue
     }
     // Ball-winner role changes take effect immediately so two players never chase together.
-    const isWinner = chasers[p.team] === p.id
+    const isWinner = chasers[p.team] === p.id || helpers[p.team] === p.id
     const staleChase = (p.aiState === 'chase' || p.aiState === 'press') !== isWinner
     if (decide || staleChase || p.aiState === '' || p.aiState === 'carry')
-      offBallDecision(state, p, chasers[p.team])
+      offBallDecision(state, p, chasers[p.team], helpers[p.team])
     steer(state, p)
   }
 }
@@ -102,14 +115,39 @@ function restartBehaviour(
       // Kick-in / corner / kick-off: the ball must be kicked, never dribbled. Pick a pass in time.
       p.moveIntent = { x: 0, y: 0 }
       p.aiHoldTimer += dt
-      const best = bestPassOption(state, p, rng)
+      let best = bestPassOption(state, p, rng)
+      // Set-piece routine: the easy pass to the shooter coming short behind the ball.
+      const routine = setPieceRoutine(state, p.team)
+      let shooter: PlayerState | null = null
+      if (routine) {
+        const first = [...routine.entries()][0]
+        if (first) {
+          const cand = state.players[first[0]]!
+          if (dist(cand.pos, first[1]) < 1.5 && laneOpenness(state, p.team, r.spot, cand.pos) > 0.6) {
+            shooter = cand
+            best = { player: cand, score: 0 }
+          }
+        }
+      }
       if (best) {
-        // Aim at the receiver: the taker steps round the ball to stand behind it on that line.
-        r.aimDir = clampRestartAim(state, r, sub(best.player.pos, r.spot))
+        // Aim where the receiver will meet the ball: the taker steps round the ball to stand behind
+        // it on that line.
+        const meet = predictPassTarget(p, best.player, false, state.teams[p.team].attackDir)
+        r.aimDir = clampRestartAim(state, r, sub(meet, r.spot))
         p.faceTarget = best.player.pos
       }
-      const wait = r.type === 'kickoff' ? 0.5 : 0.9
-      if (best && p.aiHoldTimer >= wait) actions.pass(p, r.aimDir, false, best.player)
+      const wait = r.type === 'kickoff' ? 0.5 : shooter ? 1.3 : 0.9
+      // Kick only once he stands behind the ball on the aim line (he walks round it when re-aiming).
+      // Never let the four-second limit run out: after 2.6 s the ball goes regardless.
+      const hurry = r.readyTimer > 2.6
+      const inPlace = dist(p.pos, restartTakerSpot(state, r)) < 0.15
+      if (best && ((p.aiHoldTimer >= wait && inPlace) || hurry)) {
+        if (shooter) {
+          // The routine ball is played firmly so it reaches the shooter before a marker can read it.
+          shooter.aiSetPieceTimer = 2.5
+          actions.pass(p, r.aimDir, false, shooter, undefined, PASS.setPieceArrival)
+        } else actions.pass(p, r.aimDir, false, best.player)
+      }
       return
     }
     // Walk to the taker's spot behind the ball (the ball ends up in front of him on the line).
@@ -125,6 +163,10 @@ function restartBehaviour(
     const mode = r.team === p.team ? 'attack' : 'defend'
     const dir = state.teams[p.team].attackDir
     target = dynamicAnchor(p.role, mode, dir, r.spot)
+    const routineSpot = p.role !== 'GK' ? setPieceRoutine(state, r.team)?.get(p.id) : undefined
+    if (routineSpot && r.team === p.team) target = routineSpot
+    else if (r.team !== p.team && p.role !== 'GK' && (r.type === 'kickIn' || r.type === 'corner'))
+      target = markingPosition(state, p, [])
     if (r.team !== p.team && p.role === 'GK' && r.type === 'freeKick') {
       // Free kick near goal: the keeper stays on his line between the posts.
       target = { x: clamp(r.spot.x * 0.3, -1, 1), y: -dir * (COURT.halfLength - 0.4) }
@@ -183,10 +225,23 @@ function pickBallWinner(state: MatchState, team: TeamId): number | null {
   return best.id
 }
 
-function offBallDecision(state: MatchState, p: PlayerState, winnerId: number | null): void {
+function offBallDecision(
+  state: MatchState,
+  p: PlayerState,
+  winnerId: number | null,
+  helperId: number | null,
+): void {
   const ball = state.ball
   const dir = state.teams[p.team].attackDir
   const owner = ball.ownerId !== null ? state.players[ball.ownerId]! : null
+  if (helperId === p.id && owner) {
+    // Cover defender: the carrier got past the first defender (or nobody is goal-side of him) near
+    // goal; the next defender steps across to close him down.
+    p.aiState = 'press'
+    const ownGoal = { x: 0, y: -dir * COURT.halfLength }
+    p.aiTarget = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 0.9)
+    return
+  }
   if (winnerId === p.id) {
     if (ball.mode === 'free') {
       p.aiState = 'chase'
@@ -218,8 +273,144 @@ function offBallDecision(state: MatchState, p: PlayerState, winnerId: number | n
     p.aiTarget = supportPosition(state, p, anchor)
   } else {
     p.aiState = 'cover'
-    p.aiTarget = coverPosition(state, p, anchor)
+    p.aiTarget = markingPosition(state, p, [winnerId, helperId])
   }
+}
+
+/**
+ * Defending: every defender outside the press has one opponent to mark, chosen so that each
+ * opponent is picked up by the defender whose diamond position is nearest (one-to-one). He stands
+ * goal-side of his man, a little towards the ball, without leaving his zone of the diamond.
+ */
+function markingPosition(state: MatchState, p: PlayerState, pressing: (number | null)[]): Vec2 {
+  const dir = state.teams[p.team].attackDir
+  const ball = state.ball.pos
+  const anchor = diamondAnchor(p.role, dir, ball)
+  const man = markingAssignment(state, p.team, pressing).get(p.id)
+  if (man === undefined) return anchor
+  const a = state.players[man]!
+  const ownGoal = { x: 0, y: -dir * COURT.halfLength }
+  // Tighter the closer he is to goal and to the ball; looser far away (still goal-side).
+  const tight = clamp(1 + (dist(a.pos, ownGoal) - 8) / 14 + (dist(a.pos, ball) - 6) / 20, 1, 2.2)
+  const goalSide = addScaled(a.pos, normalize(sub(ownGoal, a.pos)), tight)
+  let mark = addScaled(goalSide, normalize(sub(ball, goalSide)), 0.3)
+  // Help side: a man far from the ball is marked loosely, sagging towards the middle in front of goal
+  // so the defender can cover a carrier who gets through.
+  const away = clamp((dist(a.pos, ball) - 7) / 10, 0, 0.45)
+  const middle = { x: a.pos.x * 0.3, y: (a.pos.y + ownGoal.y) / 2 }
+  mark = { x: mark.x + (middle.x - mark.x) * away, y: mark.y + (middle.y - mark.y) * away }
+  const off = sub(mark, anchor)
+  // The fixo guards the middle and leaves his zone least.
+  const zone = p.role === 'FIXO' ? 4 : p.role === 'PIVOT' ? 6.5 : 5.5
+  const l = len(off)
+  return l > zone ? addScaled(anchor, off, zone / l) : mark
+}
+
+/** One-to-one marking assignment for a defending team: defender id -> opponent id. */
+export function markingAssignment(
+  state: MatchState,
+  team: TeamId,
+  pressing: (number | null)[],
+): Map<number, number> {
+  const dir = state.teams[team].attackDir
+  const ball = state.ball.pos
+  const defenders = state.players.filter(
+    (d) => d.team === team && d.role !== 'GK' && d.id !== state.controlledId && !pressing.includes(d.id),
+  )
+  const attackers = state.players.filter(
+    (o) => o.team !== team && o.role !== 'GK' && o.id !== state.ball.ownerId,
+  )
+  const anchors = defenders.map((d) => diamondAnchor(d.role, dir, ball))
+  // Brute force over assignments (at most 4 x 4 = 24 permutations): minimum total distance.
+  let best: number[] = []
+  let bestCost = Infinity
+  const used = new Array<boolean>(attackers.length).fill(false)
+  const pick: number[] = []
+  const n = Math.min(defenders.length, attackers.length)
+  const rec = (i: number, cost: number) => {
+    if (cost >= bestCost) return
+    if (i === n) {
+      bestCost = cost
+      best = [...pick]
+      return
+    }
+    for (let j = 0; j < attackers.length; j++) {
+      if (used[j]) continue
+      used[j] = true
+      pick.push(j)
+      rec(i + 1, cost + dist(anchors[i]!, attackers[j]!.pos))
+      pick.pop()
+      used[j] = false
+    }
+  }
+  rec(0, 0)
+  const out = new Map<number, number>()
+  best.forEach((j, i) => out.set(defenders[i]!.id, attackers[j]!.id))
+  return out
+}
+
+/**
+ * Cover defender: when an opponent carries the ball within 16 m of goal and the first defender is
+ * beaten (not goal-side of him, or more than 3.5 m away), the next defender who can get goal-side of
+ * the carrier fastest goes to help.
+ */
+export function pickHelper(state: MatchState, team: TeamId, winnerId: number | null): number | null {
+  if (state.phase !== 'play') return null
+  const ball = state.ball
+  const owner = ball.ownerId !== null ? state.players[ball.ownerId]! : null
+  if (!owner || owner.team === team || ball.inHands || owner.role === 'GK') return null
+  const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
+  const carrierToGoal = dist(owner.pos, ownGoal)
+  if (carrierToGoal > 20) return null
+  if (winnerId !== null) {
+    const w = state.players[winnerId]!
+    const goalSide = dist(w.pos, ownGoal) < carrierToGoal - 0.3
+    if (goalSide && dist(w.pos, owner.pos) < 3.5) return null
+  }
+  const spot = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 1.5)
+  let best: PlayerState | null = null
+  let bestT = Infinity
+  for (const d of state.players) {
+    if (d.team !== team || d.role === 'GK' || d.id === winnerId || d.id === state.controlledId) continue
+    const t = estimateTimeToReach(d, spot)
+    if (t < bestT) {
+      bestT = t
+      best = d
+    }
+  }
+  return best ? best.id : null
+}
+
+/**
+ * Attacking kick-in (in the attacking half) or corner: the standard routine. One player comes short
+ * behind the ball for an easy pass he can shoot first time, one attacks the back post and the fourth
+ * stays back on the halfway line as cover. Returns each non-taker's spot.
+ */
+export function setPieceRoutine(state: MatchState, team: TeamId): Map<number, Vec2> | null {
+  const r = state.restart
+  if (!r || r.team !== team || (r.type !== 'kickIn' && r.type !== 'corner')) return null
+  const dir = state.teams[team].attackDir
+  if (r.type === 'kickIn' && r.spot.y * dir < 2) return null
+  const goalY = dir * COURT.halfLength
+  const side = Math.sign(r.spot.x) || 1
+  const spotDepth = Math.abs(goalY - r.spot.y)
+  const shooterDepth = clamp(spotDepth + 3, 8.5, 13)
+  const spots: Vec2[] = [
+    { x: side * clamp(Math.abs(r.spot.x) * 0.35, 1.5, 4), y: goalY - dir * shooterDepth }, // shooter
+    { x: -side * 1.6, y: goalY - dir * 1.3 }, // back post
+    { x: side * -1.5, y: -dir * 1 }, // safety at halfway
+  ]
+  const others = state.players.filter((p) => p.team === team && p.role !== 'GK' && p.id !== r.takerId)
+  const out = new Map<number, Vec2>()
+  const free = [...others]
+  for (const spot of spots) {
+    if (!free.length) break
+    let bi = 0
+    for (let i = 1; i < free.length; i++) if (dist(free[i]!.pos, spot) < dist(free[bi]!.pos, spot)) bi = i
+    out.set(free[bi]!.id, spot)
+    free.splice(bi, 1)
+  }
+  return out
 }
 
 /** Move off the anchor towards a spot with an open passing lane to the ball. */
@@ -233,38 +424,27 @@ function supportPosition(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 
     { x: -1.5, y: 0 },
     { x: 0, y: 1.5 },
     { x: 0, y: -1.5 },
+    { x: 3, y: 0 },
+    { x: -3, y: 0 },
+    { x: 0, y: 3 },
+    { x: 0, y: -3 },
   ]
   for (const o of offsets) {
     const c = { x: clamp(anchor.x + o.x, -9.3, 9.3), y: clamp(anchor.y + o.y, -19, 19) }
     const lane = clamp(laneOpenness(state, p.team, ballPos, c), 0, 3)
     const d = dist(c, ballPos)
     const spacing = d < 3 ? -2 : 0
-    const score = lane - dist(c, anchor) * 0.25 + spacing
+    // Get free from the marker: distance to the nearest opponent counts.
+    let free = Infinity
+    for (const o of state.players)
+      if (o.team !== p.team && o.role !== 'GK') free = Math.min(free, dist(o.pos, c))
+    const score = lane - dist(c, anchor) * 0.25 + spacing + Math.min(free, 3.5) * 0.45
     if (score > bestScore) {
       bestScore = score
       best = c
     }
   }
   return best
-}
-
-/** Goal-side cover: shift the anchor towards the most dangerous nearby opponent. */
-function coverPosition(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 {
-  const dir = state.teams[p.team].attackDir
-  const ownGoal = { x: 0, y: -dir * COURT.halfLength }
-  let threat: PlayerState | null = null
-  let bestD = 5
-  for (const o of state.players) {
-    if (o.team === p.team || o.role === 'GK' || o.id === state.ball.ownerId) continue
-    const d = dist(o.pos, anchor)
-    if (d < bestD) {
-      bestD = d
-      threat = o
-    }
-  }
-  if (!threat) return anchor
-  const goalSide = addScaled(threat.pos, normalize(sub(ownGoal, threat.pos)), 1.2)
-  return { x: anchor.x * 0.5 + goalSide.x * 0.5, y: anchor.y * 0.5 + goalSide.y * 0.5 }
 }
 
 /** Earliest point on the ball's path the player can reach (sampled prediction). */
@@ -325,7 +505,7 @@ function steer(state: MatchState, p: PlayerState): void {
     // Close to the carrier: track him every tick and step in on the ball (where it is going), so a
     // dribbler has to beat him rather than just walk round a static marker.
     const to = sub(state.ball.pos, p.pos)
-    const k = attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.65, 0.9)
+    const k = attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.78, 0.98)
     p.moveIntent = len(to) > 0.05 ? { x: normalize(to).x * k, y: normalize(to).y * k } : { x: 0, y: 0 }
     p.sprint = false
     p.faceTarget = state.ball.pos
@@ -375,6 +555,16 @@ function carrierBehaviour(
   const goal = { x: 0, y: dir * COURT.halfLength }
   p.aiHoldTimer += dt
   p.aiState = 'carry'
+
+  // Set-piece shooter: the routine's easy pass is struck first time.
+  if (decide && p.aiSetPieceTimer > 0 && dist(p.pos, goal) < 14.5) {
+    const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
+    if (angleOk) {
+      p.aiSetPieceTimer = 0
+      actions.shoot(p, sub(goal, p.pos), 0.55)
+      return
+    }
+  }
 
   // Dribble towards goal, veering away from the nearest opponent.
   let nearest: PlayerState | null = null
@@ -435,6 +625,7 @@ function carrierBehaviour(
   const a = p.profile.attributes
   const toGoal = dist(p.pos, goal)
   const pressure = pressureOn(state, p)
+
   const minHold = state.ball.lastTouchTeam === p.team && p.aiHoldTimer < 0.3 ? 0.25 : 0.3
 
   if (p.aiHoldTimer < minHold) return
@@ -589,7 +780,7 @@ function startChallenge(
   // One decision per possession (the first time a defender stands in front of him).
   if (p.aiChallengeTimer < 0) return false
   const a = p.profile.attributes
-  if (!rng.chance(attr(a.dribbling, 0.3, 0.75))) {
+  if (!rng.chance(attr(a.dribbling, 0.22, 0.6))) {
     p.aiChallengeTimer = -1
     return false
   }

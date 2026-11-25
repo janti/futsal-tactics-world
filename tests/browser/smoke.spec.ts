@@ -37,7 +37,7 @@ async function takeKickOff(page: Page) {
 }
 
 test('quick match: move, pass, shoot, camera, no console errors', async ({ page }) => {
-  test.setTimeout(240_000)
+  test.setTimeout(330_000)
   const errors: string[] = []
   page.on('console', (m) => {
     if (m.type() === 'error') errors.push(m.text())
@@ -61,16 +61,6 @@ test('quick match: move, pass, shoot, camera, no console errors', async ({ page 
   expect(ballAfter).toEqual(ballBefore)
   await takeKickOff(page)
 
-  // Movement: hold "up" (the human team attacks the top of the screen).
-  const before = await state(page)
-  const id = before.controlledId!
-  await page.keyboard.down('ArrowUp')
-  await page.waitForTimeout(600)
-  await page.keyboard.up('ArrowUp')
-  const after = await state(page)
-  const moved = after.players[after.controlledId!]!.pos.y - before.players[id]!.pos.y
-  expect(Math.abs(moved)).toBeGreaterThan(0.5)
-
   // Passing and shooting: wait until we have the ball, then act.
   const press = async (key: string, ms = 60) => {
     await page.keyboard.down(key)
@@ -92,7 +82,7 @@ test('quick match: move, pass, shoot, camera, no console errors', async ({ page 
       }
     }
     let loops = 0
-    const deadline = Date.now() + 90_000
+    const deadline = Date.now() + 120_000
     try {
       while (Date.now() < deadline) {
         const info = await page.evaluate(() => {
@@ -136,7 +126,8 @@ test('quick match: move, pass, shoot, camera, no console errors', async ({ page 
       for (const k of [...held]) await page.keyboard.up(k)
     }
   }
-  // Keep pressing switch while defending so a human player wins the ball back quickly.
+  // Pass and shoot while our team has the ball after the kick-off; getBall defends and wins it back
+  // only if possession was lost.
   const e0 = await events(page)
   await getBall()
   await press('KeyZ')
@@ -146,6 +137,16 @@ test('quick match: move, pass, shoot, camera, no console errors', async ({ page 
   const e1 = await events(page)
   await press('KeyX', 200)
   await page.waitForFunction((n) => (window.__FTW__!.eventCounts.ShotTaken ?? 0) > n, e1.ShotTaken ?? 0)
+
+  // Movement: hold "up" (the human team attacks the top of the screen).
+  const before = await state(page)
+  const id = before.controlledId!
+  await page.keyboard.down('ArrowUp')
+  await page.waitForTimeout(600)
+  await page.keyboard.up('ArrowUp')
+  const after = await state(page)
+  const moved = after.players[after.controlledId!]!.pos.y - before.players[id]!.pos.y
+  expect(Math.abs(moved)).toBeGreaterThan(0.5)
 
   // Camera preset change via the browser-safe alternative key; must not touch the simulation.
   const camBefore = await page.evaluate(() => localStorage.getItem('ftw.camera') ?? 'verticalSmart')

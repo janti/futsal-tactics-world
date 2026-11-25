@@ -109,6 +109,8 @@ export interface PlayerState {
   aiChallengeSide: number
   /** Time until the next sprint-dribble touch is possible. */
   dribbleTouchTimer: number
+  /** Set-piece shooter: time left to strike the routine pass first time. */
+  aiSetPieceTimer: number
   aiState: string
 }
 

@@ -13,7 +13,17 @@ the full system will be built on:
   (`ai/positioning/Formation.ts`).
 - **Support**: attackers sample small offsets around their anchor and pick the one with the most
   open passing lane to the ball while keeping ≥ 3 m spacing.
-- **Cover**: defenders blend their anchor with a goal-side position against the nearest threat.
+- **Defensive diamond + marking**: the defending block is a diamond that moves with the ball
+  (`diamondAnchor`: pivot on top just goal-side of the ball, alas a line deeper on either side, fixo at
+  the bottom; high and compact). Defenders outside the press get one opponent each
+  (`markingAssignment`: one-to-one, minimum total distance from their diamond places) and stand
+  goal-side of him (1–2.2 m: tighter near goal and ball), sagging to the middle when he is far from the
+  ball, never more than their zone radius from the diamond (fixo 4 m, alas 5.5 m, pivot 6.5 m).
+- **Cover defender** (`pickHelper`): carrier within 20 m of goal and the first defender beaten (not
+  goal-side or > 3.5 m away) → the defender who gets goal-side of the carrier fastest also presses.
+- **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): shooter
+  behind the ball at 8.5–13 m from goal (firm pass, first-time shot), back-post runner, safety player at
+  halfway.
 - **Pressing**: the presser approaches goal-side of the carrier and slows down when close (jockey).
 - **Breakaway (through on goal)**: when no outfield defender is goal-side of the carrier near his
   line to goal, he runs the ball in (sprinting if chased), never passes, and finishes from about

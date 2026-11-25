@@ -160,6 +160,7 @@ export function planPass(
   forcedReceiver: PlayerState | null = null,
   assist: PassAssistMode = 'assisted',
   power?: number,
+  arrivalSpeed?: number,
 ): PassPlan {
   const attackDir = state.teams[passer.team].attackDir
   const a = passer.profile.attributes
@@ -179,7 +180,7 @@ export function planPass(
   const coneCos = assist === 'semi' ? PASS.semiAssistConeCos : PASS.assistConeCos
   const receiver = forcedReceiver ?? chooseReceiver(state, passer, dir, coneCos)
   let target: Vec2
-  let arrival: number = through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed
+  let arrival: number = arrivalSpeed ?? (through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed)
   if (receiver) {
     target = predictPassTarget(passer, receiver, through, attackDir)
   } else {

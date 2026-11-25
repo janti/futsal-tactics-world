@@ -173,6 +173,8 @@ export const CONTROL = {
   inputBufferTime: 0.13,
   /** Sprint dribbling is touch-based: above this speed the ball is knocked ahead in touches. */
   touchDribbleSpeed: 5.2,
+  /** An opponent's shot faster than this (relative) rebounds off an outfield player (a block). */
+  blockControlSpeed: 6,
   /** Next touch only when the ball is back within this distance in front of the feet. */
   touchReach: 0.62,
   /** Minimum time between sprint touches (s). */
@@ -188,9 +190,11 @@ export const CONTROL = {
 } as const
 
 export const PASS = {
-  arrivalSpeed: 5,
+  arrivalSpeed: 6.5,
   throughArrivalSpeed: 6.5,
-  minSpeed: 6,
+  /** Kick-in / corner routine: the ball to the shooter arrives this fast. */
+  setPieceArrival: 10,
+  minSpeed: 7.5,
   maxSpeed: 19,
   maxAngleErrorRad: 0.07,
   assistConeCos: Math.cos((65 * Math.PI) / 180),

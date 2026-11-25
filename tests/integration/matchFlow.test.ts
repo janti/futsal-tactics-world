@@ -8,6 +8,8 @@ function runAiMatch(seed: number, seconds: number) {
   const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: null })
   const counts: Record<string, number> = {}
   let maxPressers = 0
+  /** Pressers while the carrier is far from goal (a cover defender only helps near goal). */
+  let maxPressersFar = 0
   const all: MatchEvent[] = []
   for (let i = 0; i < seconds * TICK_RATE; i++) {
     sim.step()
@@ -20,9 +22,13 @@ function runAiMatch(seed: number, seconds: number) {
         (p) => p.team === team && (p.aiState === 'press' || p.aiState === 'chase'),
       ).length
       maxPressers = Math.max(maxPressers, n)
+      const owner = sim.state.ball.ownerId !== null ? sim.state.players[sim.state.ball.ownerId]! : null
+      const ownGoalY = -sim.state.teams[team]!.attackDir * COURT.halfLength
+      if (owner && Math.hypot(owner.pos.x, owner.pos.y - ownGoalY) > 21)
+        maxPressersFar = Math.max(maxPressersFar, n)
     }
   }
-  return { sim, counts, maxPressers, all }
+  return { sim, counts, maxPressers, maxPressersFar, all }
 }
 
 describe('AI vs AI match flow (headless)', () => {
@@ -40,9 +46,10 @@ describe('AI vs AI match flow (headless)', () => {
     expect(Number.isFinite(sim.state.ball.pos.x)).toBe(true)
   })
 
-  it('never sends more than one player per team to the ball (anti-ball-chasing)', () => {
-    const { maxPressers } = runAiMatch(11, 120)
-    expect(maxPressers).toBeLessThanOrEqual(1)
+  it('never sends more than one player per team to the ball (anti-ball-chasing); a cover defender helps only within 20 m of goal', () => {
+    const { maxPressers, maxPressersFar } = runAiMatch(11, 120)
+    expect(maxPressersFar).toBeLessThanOrEqual(1)
+    expect(maxPressers).toBeLessThanOrEqual(2)
   })
 
   it('scores goals across several seeds', () => {

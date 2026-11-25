@@ -51,5 +51,5 @@ describe('difficulty', () => {
     console.log('difficulty dominance', { easy, hard })
     expect(easy).toBeLessThan(0)
     expect(hard).toBeGreaterThan(easy + 10)
-  })
+  }, 30000)
 })

@@ -225,12 +225,19 @@ export class MatchSimulation implements AIActions {
 
   // ---------------------------------------------------------------- actions (also used by AI)
 
-  pass(p: PlayerState, dir: Vec2, through: boolean, receiver: PlayerState | null, power?: number): void {
+  pass(
+    p: PlayerState,
+    dir: Vec2,
+    through: boolean,
+    receiver: PlayerState | null,
+    power?: number,
+    arrival?: number,
+  ): void {
     const s = this.state
     if (s.ball.ownerId !== p.id) return
     // Passing assistance applies to the human player only; the AI always passes assisted.
     const assist = p.id === s.controlledId && p.team === s.humanTeam ? s.control.passAssist : 'assisted'
-    const plan = planPass(s, p, dir, through, this.rng, receiver, assist, power)
+    const plan = planPass(s, p, dir, through, this.rng, receiver, assist, power, arrival)
     this.kick(p, plan.velocity, 0, 0, 'pass')
     s.ball.intendedReceiverId = plan.receiverId
     s.ball.isShot = false
@@ -775,6 +782,20 @@ export class MatchSimulation implements AIActions {
       const bodyR = playerRadius(p) + BALL.radius
       const rel = Math.hypot(b.vel.x - p.vel.x, b.vel.y - p.vel.y)
       const pickupR = p.role === 'GK' ? 0.62 : CONTROL.pickupRadius
+      // An opponent's shot hitting an outfield defender is a block: it rebounds off him (leg or
+      // body), it is not brought under control. Only a weak, slow shot can be stopped.
+      if (
+        p.role !== 'GK' &&
+        b.isShot &&
+        b.lastTouchTeam !== p.team &&
+        rel > CONTROL.blockControlSpeed &&
+        d < pickupR &&
+        b.z < PLAYER.ballContactHeight
+      ) {
+        const n = d > 1e-6 ? { x: dx / d, y: dy / d } : normalize({ x: -b.vel.x, y: -b.vel.y })
+        this.deflect(p, b, n.x, n.y)
+        return true
+      }
       if (!retouchBanned && !keeperFacingShot && d < pickupR && b.z < PLAYER.ballContactHeight) {
         const a = p.profile.attributes
         if (rel <= CONTROL.cleanControlSpeed) {
@@ -1473,6 +1494,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiChallengeTimer: 0,
         aiChallengeSide: 0,
         dribbleTouchTimer: 0,
+        aiSetPieceTimer: 0,
         aiState: '',
       })
     }

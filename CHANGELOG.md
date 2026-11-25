@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Defending reworked: the defending team plays a high, compact diamond (pivot on top just goal-side
+  of the ball, alas either side, fixo at the bottom, about 4.4 m between the lines) that moves with
+  the ball. Every defender outside the press marks one opponent (one-to-one, the opponent nearest his
+  place in the diamond), goal-side and tighter near goal and near the ball; a man far from the ball is
+  marked loosely from the middle (help side). The fixo leaves the middle least.
+- Cover defender: when a carrier gets past his defender within 20 m of goal (or nobody is goal-side of
+  him), the next defender comes across to close him down.
+- Kick-in and corner routine: an easy pass back to a player behind the ball who shoots first time,
+  one player attacks the back post and the fourth stays as cover at halfway. The routine pass is
+  played firmly; the taker always kicks in time (no four-second violations). Defenders mark at kick-ins
+  and corners.
+- Shots hitting an outfield defender now rebound off him (block) instead of being controlled; only a
+  weak shot can be stopped.
+- Passes are crisper (arrive at 6.5 m/s instead of 5); attackers move away from their markers to get
+  free. AI dribble challenges are a little rarer and harder (measured 12/18 beaten).
+- Measured AI vs AI (3 x 3 min): 79 % pass completion, 39 shots, 8 goals.
+
 ### Milestone 3 — gameplay physics and controls
 
 - Touch-based dribbling: at a sprint the ball is knocked ahead, rolls a little slower than the runner
