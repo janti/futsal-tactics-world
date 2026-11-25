@@ -15,8 +15,13 @@ the full system will be built on:
   open passing lane to the ball while keeping ≥ 3 m spacing.
 - **Cover**: defenders blend their anchor with a goal-side position against the nearest threat.
 - **Pressing**: the presser approaches goal-side of the carrier and slows down when close (jockey).
+- **Breakaway (through on goal)**: when no outfield defender is goal-side of the carrier near his
+  line to goal, he runs the ball in (sprinting if chased), never passes, and finishes from about
+  7–8.5 m (earlier if a chaser or the rushing keeper gets close) with a low shot into the far corner
+  (60 %) or near corner; mostly a placed shot, sometimes a firmer one the keeper can hold. Measured:
+  about 55–60 % goals, the rest saved or caught (`tests/tactical/breakaway.test.ts`).
 - **Carrier (direct, then circulate)**:
-  1. shoots inside an attribute-based range when the angle and a shooting lane to a corner allow
+  1. shoots inside an attribute-based range (9.5–12.5 m; rare long shots only up to 15 m) when the angle and a shooting lane to a corner allow
      (the lane ignores the goalkeeper);
   2. plays a forward pass at once if a teammate is free in a scoring position (open lane, ≥ 1.2 m
      space, clearly more dangerous than the carrier; through pass for runners with space);

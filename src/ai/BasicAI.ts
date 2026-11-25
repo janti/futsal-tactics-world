@@ -316,6 +316,14 @@ function carrierBehaviour(
       nearest = o
     }
   }
+  // Through on goal: no outfield defender between the carrier and the goal. Take the ball in close
+  // and finish past the keeper instead of shooting from distance or passing.
+  if (isBreakaway(state, p, goal)) {
+    breakawayBehaviour(state, p, goal, actions, rng, decide)
+    return
+  }
+  p.aiBreakawayCorner = 0
+
   let heading = normalize(sub(goal, p.pos))
   const open = spaceAhead(state, p, heading, 3.5)
   if (nearest && nd < 3) {
@@ -344,7 +352,7 @@ function carrierBehaviour(
 
   // Shoot when in range with a reasonably open lane.
   const lane = shootingLane(state, p, goal.y)
-  const shootRange = attr(a.finishing, 11, 15)
+  const shootRange = attr(a.finishing, 9.5, 12.5)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
   if (angleOk && toGoal < shootRange && (lane > 0.3 || toGoal < 8)) {
     const chance = clamp(0.35 + (shootRange - toGoal) / shootRange + attr(a.decisions, 0, 0.2), 0, 0.95)
@@ -354,7 +362,7 @@ function carrierBehaviour(
       actions.shoot(p, sub(goal, p.pos), power)
       return
     }
-  } else if (angleOk && toGoal < 19 && lane > 0.8 && rng.chance(attr(a.shotPower, 0.04, 0.12))) {
+  } else if (angleOk && toGoal < 15 && lane > 1.2 && rng.chance(attr(a.shotPower, 0.008, 0.025))) {
     // Occasional long-range attempt through an open lane.
     actions.shoot(p, sub(goal, p.pos), 0.7)
     return
@@ -381,6 +389,70 @@ function carrierBehaviour(
       actions.pass(p, sub(fallback.player.pos, p.pos), false, fallback.player)
     }
   }
+}
+
+/**
+ * Breakaway: no outfield opponent goal-side of the carrier near the line to goal (a defender level
+ * with him or chasing from behind does not count). Only in the attacking half.
+ */
+export function isBreakaway(state: MatchState, p: PlayerState, goal: Vec2): boolean {
+  const dir = state.teams[p.team].attackDir
+  const toGoal = dist(p.pos, goal)
+  if (toGoal > COURT.halfLength || toGoal < 2) return false
+  for (const o of state.players) {
+    if (o.team === p.team || o.role === 'GK') continue
+    const ahead = (o.pos.y - p.pos.y) * dir
+    if (ahead < 0.6) continue
+    const { point } = closestOnSegment(p.pos, goal, o.pos)
+    if (dist(point, o.pos) < 2.6) return false
+  }
+  return true
+}
+
+/**
+ * One-on-one with the keeper: run at goal and, once close (or when a defender or the keeper closes
+ * in), finish with a placed low shot into the near or far corner. Mostly placed (keeper can at best
+ * parry), sometimes struck firmer (he may hold it).
+ */
+function breakawayBehaviour(
+  state: MatchState,
+  p: PlayerState,
+  goal: Vec2,
+  actions: AIActions,
+  rng: SeededRandom,
+  decide: boolean,
+): void {
+  const a = p.profile.attributes
+  const dir = state.teams[p.team].attackDir
+  // Pick the corner once per breakaway: far corner (across the keeper) or near corner.
+  if (p.aiBreakawayCorner === 0) {
+    const nearSide = Math.abs(p.pos.x) > 0.8 ? Math.sign(p.pos.x) : rng.chance(0.5) ? 1 : -1
+    p.aiBreakawayCorner = rng.chance(0.6) ? -nearSide : nearSide
+  }
+  // Run towards a point in front of goal, slightly off-centre so the angle stays open.
+  const target = { x: clamp(p.pos.x * 0.6, -3, 3), y: goal.y - dir * 5.5 }
+  const heading = normalize(sub(target, p.pos))
+  p.moveIntent = { x: heading.x * 0.9, y: heading.y * 0.9 }
+  let chaser = Infinity
+  let keeperDist = Infinity
+  for (const o of state.players) {
+    if (o.team === p.team) continue
+    const d = dist(o.pos, p.pos)
+    if (o.role === 'GK') keeperDist = d
+    else chaser = Math.min(chaser, d)
+  }
+  const toGoal = dist(p.pos, goal)
+  p.sprint = toGoal > 11 && chaser < 4
+  p.sole = false
+  if (!decide || p.aiHoldTimer < 0.2) return
+  const shootAt = attr(a.composure, 8.5, 7)
+  const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
+  const forced = chaser < 1.6 || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
+  if (!angleOk || (toGoal > shootAt && !forced)) return
+  // Corner choice as lateral input (planShot aims at the corner on that side).
+  const power = rng.chance(attr(a.finishing, 0.55, 0.85)) ? 0.3 : 0.45
+  actions.shoot(p, { x: p.aiBreakawayCorner, y: dir * 0.4 }, power)
+  p.aiBreakawayCorner = 0
 }
 
 /** No opponent within `range` metres in a 60-degree cone ahead of the player. */

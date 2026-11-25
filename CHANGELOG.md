@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- AI breakaways: a computer player through on goal with no defender between him and the keeper now
+  takes the ball in close and finishes with a low shot into the far or near corner instead of
+  shooting from distance or passing. Measured: 23/40 goals, the rest saved (5 caught).
+- The AI shoots from closer in (9.5–12.5 m instead of 11–15 m) and long-range attempts are rare.
+- Fixed: the extra difficulty of a placed corner shot for the keeper was applied after the save roll
+  and had no effect; the further he has to stretch, the less likely the save.
+
 - Human keeper holding the ball: the direction keys now only aim (he turns on the spot towards the
   aim, like while charging a throw) instead of walking and turning sideways with the ball in his hands.
 - Goal clearance: the keeper gathers the ball facing the court with the ball in his hands in front

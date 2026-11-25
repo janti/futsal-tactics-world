@@ -101,6 +101,8 @@ export interface PlayerState {
   aiTarget: Vec2
   aiDecisionTimer: number
   aiHoldTimer: number
+  /** Corner chosen for the current breakaway finish (-1 / 1 sim x side, 0 = none). */
+  aiBreakawayCorner: number
   aiState: string
 }
 

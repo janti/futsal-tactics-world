@@ -792,11 +792,12 @@ export class MatchSimulation implements AIActions {
     gk.touchCooldown = 0.35 // one attempt
     gk.action = 'save'
     gk.actionTime = 0
+    // A placed low shot into the corner (a tap): reaching it is harder (the further he has to
+    // stretch, the less likely) and it cannot be held.
+    if (b.isShot && b.shotPlaced && !longShot) p = clamp(p - 0.3 * reachFrac, 0.05, 0.995)
     if (!this.rng.chance(p)) return false
     // Catch when the ball is manageable and the keeper may use the hands (own penalty area);
     // otherwise parry it wide, away from goal.
-    // A placed low shot into the corner (a tap): reaching it is harder and it cannot be held.
-    if (b.isShot && b.shotPlaced) p = clamp(p - 0.12 * reachFrac, 0.05, 0.995)
     const clearLongShot = longShot && b.shotScreen < 0.25
     const catchable =
       !(b.isShot && b.shotPlaced) &&
@@ -1312,6 +1313,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiTarget: { x: 0, y: 0 },
         aiDecisionTimer: (id % 6) / 60,
         aiHoldTimer: 0,
+        aiBreakawayCorner: 0,
         aiState: '',
       })
     }
