@@ -91,6 +91,16 @@ describe('controllable goalkeeper throw', () => {
     expect(sim.drainEvents().some((e) => e.type === 'KeeperThrow')).toBe(true)
   })
 
+  it('the keeper can walk with the ball in his hands inside the penalty area', () => {
+    const { sim, gk, s } = keeperWithBall()
+    const x0 = gk.pos.x
+    for (let i = 0; i < TICK_RATE; i++)
+      sim.step([{ type: 'Move', dir: { x: 1, y: 0 }, sprint: false, sole: false }])
+    expect(gk.pos.x - x0).toBeGreaterThan(1.5)
+    expect(s.ball.ownerId).toBe(0)
+    expect(s.ball.inHands).toBe(true)
+  })
+
   it('the keeper cannot carry the ball out of the penalty area', () => {
     const { sim, gk } = keeperWithBall()
     for (let i = 0; i < TICK_RATE * 2; i++)

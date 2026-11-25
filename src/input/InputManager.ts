@@ -151,8 +151,9 @@ export class InputManager {
         this.throwTicks = 0
       }
     } else {
-      // With the ball in the hands the direction keys only aim (the keeper turns on the spot).
-      commands.push({ type: 'Move', dir, sprint: false, sole: false, aimOnly: true })
+      // Not charging: the keeper may walk with the ball in his hands inside his penalty area
+      // (after a save and at goal clearances). While charging a throw the keys only aim.
+      commands.push({ type: 'Move', dir, sprint: this.held.has('sprint'), sole: false })
       if (this.throwTicks > 0) {
         commands.push({
           type: 'Throw',

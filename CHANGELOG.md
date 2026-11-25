@@ -9,8 +9,8 @@
 - Fixed: the extra difficulty of a placed corner shot for the keeper was applied after the save roll
   and had no effect; the further he has to stretch, the less likely the save.
 
-- Human keeper holding the ball: the direction keys now only aim (he turns on the spot towards the
-  aim, like while charging a throw) instead of walking and turning sideways with the ball in his hands.
+- Human keeper holding the ball walks with it inside his penalty area again (after saves and at goal
+  clearances); only while a throw is being charged do the direction keys just aim.
 - Goal clearance: the keeper gathers the ball facing the court with the ball in his hands in front
   of him (he used to keep facing his own goal after walking back to the ball).
 
