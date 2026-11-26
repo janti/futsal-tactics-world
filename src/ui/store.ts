@@ -7,7 +7,13 @@ import {
 } from '../input/InputMapping'
 import { isDifficulty, type Difficulty } from '../simulation/Difficulty'
 import { create } from 'zustand'
-import type { CameraPresetId } from '../camera/CameraSettings'
+import {
+  CAMERA_PRESET_ORDER,
+  sanitizeCustomCamera,
+  type CameraPresetId,
+  type CameraSettings,
+} from '../camera/CameraSettings'
+import { isGraphicsPreset, type GraphicsPreset } from '../rendering/ThreeRenderer'
 import type { Lang, TranslationKey } from '../localization/i18n'
 import type { MatchPhase, RestartType } from '../simulation/MatchState'
 import { HALF_LENGTH_OPTIONS, type HalfLengthMinutes, type TeamStats } from '../simulation/MatchRules'
@@ -85,6 +91,13 @@ export interface UiState {
   quickMatch: QuickMatchSetup
   /** Keyboard bindings (persisted). */
   keyBindings: KeyBindings
+  /** Camera Lab: the player's custom camera (persisted) and whether the lab panel is open. */
+  customCamera: CameraSettings
+  cameraLabOpen: boolean
+  /** Radar / minimap on screen (persisted). */
+  showRadar: boolean
+  /** Graphics quality (persisted; applied when a match starts). */
+  graphics: GraphicsPreset
   /** Result of the finished match (end screen), or null. */
   result: MatchResult | null
   matchKey: number
@@ -101,6 +114,10 @@ export interface UiState {
   setKeepAttackingUp(v: boolean): void
   setPlayerScale(v: number): void
   setQuickMatch(q: Partial<QuickMatchSetup>): void
+  setCustomCamera(c: Partial<CameraSettings>): void
+  toggleCameraLab(): void
+  setShowRadar(v: boolean): void
+  setGraphics(g: GraphicsPreset): void
   setKeyBinding(action: InputAction, code: string): void
   resetKeyBindings(): void
   openSetup(): void
@@ -115,6 +132,37 @@ const CONTROLS_KEY = 'ftw.controls'
 const PRESENTATION_KEY = 'ftw.keepAttackingUp'
 const PLAYER_SCALE_KEY = 'ftw.playerScale'
 const KEYS_KEY = 'ftw.keys'
+const CUSTOM_CAMERA_KEY = 'ftw.customCamera'
+const RADAR_KEY = 'ftw.radar'
+const GRAPHICS_KEY = 'ftw.graphics'
+
+function loadCustomCamera(): CameraSettings {
+  try {
+    const raw = localStorage.getItem(CUSTOM_CAMERA_KEY)
+    if (raw) return sanitizeCustomCamera(JSON.parse(raw))
+  } catch {
+    /* storage unavailable or invalid JSON */
+  }
+  return sanitizeCustomCamera(null)
+}
+
+function loadRadar(): boolean {
+  try {
+    return localStorage.getItem(RADAR_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function loadGraphics(): GraphicsPreset {
+  try {
+    const v = localStorage.getItem(GRAPHICS_KEY)
+    if (isGraphicsPreset(v)) return v
+  } catch {
+    /* storage unavailable */
+  }
+  return 'high'
+}
 
 function loadKeyBindings(): KeyBindings {
   try {
@@ -215,13 +263,7 @@ function loadLang(): Lang {
 function loadCamera(): CameraPresetId {
   try {
     const v = localStorage.getItem(CAMERA_KEY)
-    if (
-      v === 'verticalSmart' ||
-      v === 'verticalClassic' ||
-      v === 'verticalFullCourt' ||
-      v === 'verticalCloseAction'
-    )
-      return v
+    if ((CAMERA_PRESET_ORDER as (string | null)[]).includes(v)) return v as CameraPresetId
   } catch {
     /* storage unavailable */
   }
@@ -239,6 +281,10 @@ export const useUi = create<UiState>((set) => ({
   playerScale: loadPlayerScale(),
   quickMatch: loadQuickMatch(),
   keyBindings: loadKeyBindings(),
+  customCamera: loadCustomCamera(),
+  cameraLabOpen: false,
+  showRadar: loadRadar(),
+  graphics: loadGraphics(),
   result: null,
   matchKey: 0,
   hud: {
@@ -273,7 +319,7 @@ export const useUi = create<UiState>((set) => ({
   startMatch: () =>
     set((s) => ({ screen: 'match', paused: false, matchKey: s.matchKey + 1, flash: null, result: null })),
   restartMatch: () => set((s) => ({ paused: false, matchKey: s.matchKey + 1, flash: null, result: null })),
-  quitToTitle: () => set({ screen: 'title', paused: false, flash: null, result: null }),
+  quitToTitle: () => set({ screen: 'title', paused: false, flash: null, result: null, cameraLabOpen: false }),
   setPaused: (paused) => set({ paused }),
   toggleHelp: () => set((s) => ({ showHelp: !s.showHelp })),
   setCameraPreset: (cameraPreset) => {
@@ -308,6 +354,21 @@ export const useUi = create<UiState>((set) => ({
       save(QUICK_KEY, JSON.stringify(quickMatch))
       return { quickMatch }
     }),
+  setCustomCamera: (c) =>
+    set((s) => {
+      const customCamera = sanitizeCustomCamera({ ...s.customCamera, ...c })
+      save(CUSTOM_CAMERA_KEY, JSON.stringify(customCamera))
+      return { customCamera }
+    }),
+  toggleCameraLab: () => set((s) => ({ cameraLabOpen: !s.cameraLabOpen })),
+  setShowRadar: (showRadar) => {
+    save(RADAR_KEY, String(showRadar))
+    set({ showRadar })
+  },
+  setGraphics: (graphics) => {
+    save(GRAPHICS_KEY, graphics)
+    set({ graphics })
+  },
   setKeyBinding: (action, code) =>
     set((s) => {
       const keyBindings = rebind(s.keyBindings, action, code)

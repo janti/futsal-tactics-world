@@ -91,3 +91,67 @@ describe('camera controller', () => {
     expect(a.visibleRange().minY).toBeCloseTo(b.visibleRange().minY, 3)
   })
 })
+
+describe('horizontal cameras', () => {
+  it('the side view shows the length across the screen and always fits the court width (foreshortened)', () => {
+    for (const aspect of [21 / 9, 16 / 9, 4 / 3, 1]) {
+      const f = computeFrustum(aspect, 30, 62, 1.4, 'horizontal')
+      const s = Math.sin((62 * Math.PI) / 180)
+      expect(f.height).toBeGreaterThanOrEqual((COURT.width + 2.8) * s - 1e-9)
+      expect(f.width / f.height).toBeCloseTo(aspect)
+      expect(f.visibleLength).toBeCloseTo(f.width)
+      expect(f.visibleLength).toBeGreaterThanOrEqual(30 - 1e-9)
+    }
+  })
+
+  it('your team attacks to the right: screen right is your attacking direction, screen up the far touch line', () => {
+    for (const up of [1, -1] as const) {
+      const cam = new CameraController('horizontalTactical')
+      cam.upSign = up
+      cam.snap(focus(0))
+      const b = cam.getBasis()
+      expect(b.right.x).toBeCloseTo(0, 5)
+      expect(b.right.y).toBeCloseTo(up, 5)
+      expect(b.up.x).toBeCloseTo(up, 5)
+      // Input "right" moves the player towards the opponents' goal.
+      const d = screenToSimDirection({ x: 1, y: 0 }, b)
+      expect(d.y * up).toBeGreaterThan(0.99)
+    }
+  })
+
+  it('tracks the ball along the length and the full-court side view stays fixed', () => {
+    const cam = new CameraController('horizontalTactical')
+    cam.snap(focus(10))
+    expect(cam.camera.position.z).toBeGreaterThan(5)
+    const fixed = new CameraController('horizontalFullCourt')
+    fixed.snap(focus(10))
+    expect(fixed.camera.position.z).toBeCloseTo(0, 5)
+  })
+})
+
+describe('custom camera (Camera Lab)', () => {
+  it('stored values are validated and clamped to the lab ranges', async () => {
+    const { sanitizeCustomCamera, CAMERA_LAB_RANGES, CAMERA_PRESETS } =
+      await import('../../src/camera/CameraSettings')
+    const c = sanitizeCustomCamera({
+      elevationDeg: 200,
+      visibleLength: 'x',
+      orientation: 'horizontal',
+      fixed: true,
+    })
+    expect(c.elevationDeg).toBe(CAMERA_LAB_RANGES.elevationDeg[1])
+    expect(c.visibleLength).toBe(CAMERA_PRESETS.custom.visibleLength)
+    expect(c.orientation).toBe('horizontal')
+    expect(c.fixed).toBe(true)
+    expect(sanitizeCustomCamera(null)).toEqual(CAMERA_PRESETS.custom)
+  })
+
+  it('explicit settings drive the camera (orientation and length)', async () => {
+    const { CAMERA_PRESETS } = await import('../../src/camera/CameraSettings')
+    const cam = new CameraController('verticalSmart')
+    cam.setSettings({ ...CAMERA_PRESETS.custom, orientation: 'horizontal', visibleLength: 40 })
+    cam.snap(focus(0))
+    expect(cam.getBasis().right.y).toBeCloseTo(1, 5)
+    expect(cam.visibleRange().maxY - cam.visibleRange().minY).toBeGreaterThanOrEqual(40 - 1e-6)
+  })
+})

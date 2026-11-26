@@ -2,6 +2,7 @@ import { CAMERA_PRESET_ORDER, type CameraPresetId } from '../camera/CameraSettin
 import { TEAM_LIBRARY } from '../data/teams'
 import { InputManager } from '../input/InputManager'
 import { ThreeRenderer, graphicsFromUrl } from '../rendering/ThreeRenderer'
+import { Radar } from '../rendering/Radar'
 import type { MatchEvent } from '../simulation/Events'
 import { MatchSimulation } from '../simulation/MatchSimulation'
 import { copySnapshot, createSnapshot, writeSnapshot, type MatchSnapshot } from '../simulation/MatchSnapshot'
@@ -48,6 +49,7 @@ export class GameSession {
   private unsubscribe: () => void
   /** Commands from the UI (e.g. settings changes), injected into the next simulation tick. */
   private pendingCommands: Command[] = []
+  private readonly radar: Radar
 
   constructor(container: HTMLElement, seed: number) {
     const setup = useUi.getState().quickMatch
@@ -60,16 +62,23 @@ export class GameSession {
       rules: { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
       difficulty: setup.difficulty,
     })
-    this.renderer = new ThreeRenderer(container, this.sim.state, graphicsFromUrl(window.location.search))
+    this.renderer = new ThreeRenderer(
+      container,
+      this.sim.state,
+      graphicsFromUrl(window.location.search, useUi.getState().graphics),
+    )
+    this.radar = new Radar(container)
     this.input = new InputManager(window, useUi.getState().keyBindings)
     this.prev = createSnapshot(this.sim.state)
     this.curr = createSnapshot(this.sim.state)
 
     const ui = useUi.getState()
-    this.renderer.setCameraPreset(ui.cameraPreset)
+    this.applyCamera()
+    this.radar.setVisible(ui.showRadar)
     this.renderer.keepHumanAttackingUp = ui.keepAttackingUp
     this.renderer.setPlayerScale(ui.playerScale)
     const [home, away] = this.sim.state.teams
+    this.radar.setTeamColors(hex(home.primaryColor), hex(away.primaryColor))
     ui.setHud({
       homeName: home.name,
       awayName: away.name,
@@ -82,7 +91,8 @@ export class GameSession {
       half: 1,
     })
     this.unsubscribe = useUi.subscribe((s, p) => {
-      if (s.cameraPreset !== p.cameraPreset) this.renderer.setCameraPreset(s.cameraPreset)
+      if (s.cameraPreset !== p.cameraPreset || s.customCamera !== p.customCamera) this.applyCamera()
+      if (s.showRadar !== p.showRadar) this.radar.setVisible(s.showRadar)
       if (s.keepAttackingUp !== p.keepAttackingUp) this.renderer.keepHumanAttackingUp = s.keepAttackingUp
       if (s.playerScale !== p.playerScale) this.renderer.setPlayerScale(s.playerScale)
       if (s.paused !== p.paused) this.input.reset()
@@ -105,6 +115,7 @@ export class GameSession {
     this.unsubscribe()
     this.input.dispose()
     this.renderer.dispose()
+    this.radar.dispose()
     if (window.__FTW__ === this.debug) delete window.__FTW__
   }
 
@@ -144,6 +155,15 @@ export class GameSession {
       this.humanKeeperHolding() ? this.input.shotCharge : null,
     )
 
+    const cam = this.renderer.cameraController
+    const range = cam.visibleRange()
+    this.radar.draw(this.curr, {
+      upSign: cam.upSign,
+      orientation: cam.settings.orientation,
+      visibleMinY: range.minY,
+      visibleMaxY: range.maxY,
+    })
+
     this.hudTimer += dt
     if (this.hudTimer >= 0.1) {
       this.hudTimer = 0
@@ -151,6 +171,13 @@ export class GameSession {
     }
     this.debug.frameTimeMs = performance.now() - t0
     this.debug.drawCalls = this.renderer.drawCalls
+  }
+
+  /** Camera preset, or the Camera Lab's custom settings. */
+  private applyCamera(): void {
+    const ui = useUi.getState()
+    if (ui.cameraPreset === 'custom') this.renderer.setCameraSettings(ui.customCamera)
+    else this.renderer.setCameraPreset(ui.cameraPreset)
   }
 
   /** The human-controlled keeper has the ball (hands or feet) in the own half: four-second rule. */
@@ -172,6 +199,7 @@ export class GameSession {
     for (const a of this.input.takeUiPresses()) {
       if (a === 'pause') ui.setPaused(!ui.paused)
       else if (a === 'help') ui.toggleHelp()
+      else if (a === 'cameraLab') ui.toggleCameraLab()
       else if (a === 'camera') {
         const i = CAMERA_PRESET_ORDER.indexOf(ui.cameraPreset)
         const next: CameraPresetId = CAMERA_PRESET_ORDER[(i + 1) % CAMERA_PRESET_ORDER.length]!

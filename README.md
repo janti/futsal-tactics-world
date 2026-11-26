@@ -12,7 +12,7 @@ marks man-to-man and runs set-piece routines.
 ![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-179%20sim%20%2B%206%20browser-2ea44f)
+![Tests](https://img.shields.io/badge/tests-184%20sim%20%2B%207%20browser-2ea44f)
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 
 <img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
@@ -79,7 +79,8 @@ marks man-to-man and runs set-piece routines.
   difficulty levels that change the opponent's decision quality.
 - Two halves with ends switched (your team keeps attacking up the screen), full-time result screen with
   shots, possession, passes, saves, corners and kick-ins.
-- Vertical 78° orthographic camera, procedural players with a keyframed run cycle, goal nets that bulge,
+- Vertical 78° orthographic camera plus horizontal side views and a **Camera Lab** to tune your own
+  camera live; a radar minimap; procedural players with a keyframed run cycle, goal nets that bulge,
   a ball that keeps flying into the advertising boards when it goes out.
 - Finnish and English UI. Keyboard and gamepad, including menu navigation. Rebindable keys.
 
@@ -113,6 +114,7 @@ Production build: `npm run build`, then `npm run preview`. Add `?gfx=low`, `?gfx
 | Sprint                                               | Shift             | RT                 |
 | Sole control · shield · jockey                       | Space             | LT                 |
 | Camera preset                                        | F5 or 5           | —                  |
+| Camera Lab                                           | 6                 | —                  |
 | Pause                                                | Esc or P          | Start              |
 | Show controls                                        | H                 | —                  |
 
@@ -127,14 +129,17 @@ Production build: `npm run build`, then `npm run preview`. Add `?gfx=low`, `?gfx
 
 Available on the title screen and in the pause menu, applied immediately and remembered:
 
-| Setting                                              | Options                                           |
-| ---------------------------------------------------- | ------------------------------------------------- |
-| Player selection when defending                      | Nearest player (automatic) · assisted · manual    |
-| Passing assistance                                   | Assisted · semi-assisted · manual (charged power) |
-| Keyboard controls                                    | Rebind any game action; reset to defaults         |
-| Player size                                          | 100 % (true scale) · 106 % · 112 %                |
-| Keep my team attacking up the screen after half-time | On · off                                          |
-| Language                                             | Suomi · English                                   |
+| Setting                                              | Options                                                                                                     |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Player selection when defending                      | Nearest player (automatic) · assisted · manual                                                              |
+| Passing assistance                                   | Assisted · semi-assisted · manual (charged power)                                                           |
+| Keyboard controls                                    | Rebind any game action; reset to defaults                                                                   |
+| Player size                                          | 100 % (true scale) · 106 % · 112 %                                                                          |
+| Camera                                               | Vertical Smart · Classic · Full Court · Close Action · Horizontal Tactical · Horizontal Full Court · Custom |
+| Radar (minimap)                                      | On · off                                                                                                    |
+| Graphics quality                                     | Low · medium · high                                                                                         |
+| Keep my team attacking up the screen after half-time | On · off                                                                                                    |
+| Language                                             | Suomi · English                                                                                             |
 
 ## How it works
 
@@ -161,8 +166,8 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.m
 ## Quality
 
 ```bash
-npm test             # 179 unit, integration and tactical tests (headless simulation)
-npm run test:e2e     # 6 Playwright browser tests (first time: npx playwright install chromium)
+npm test             # 184 unit, integration and tactical tests (headless simulation)
+npm run test:e2e     # 7 Playwright browser tests (first time: npx playwright install chromium)
 npm run typecheck    # strict TypeScript
 npm run lint         # Oxlint
 npm run format       # Prettier
@@ -185,8 +190,8 @@ Tactical tests check behaviour against numbers, for example:
 | 1   | Playable 3D prototype                                                                 | ✅ Done |
 | 2   | Complete basic arcade match                                                           | ✅ Done |
 | 3   | Gameplay physics and controls polish                                                  | ✅ Done |
-| 4   | Camera and visual identity (all camera presets, Camera Lab, radar, graphics settings) | Next    |
-| 5   | Tactical AI foundation (utility AI, spatial reasoning)                                | Planned |
+| 4   | Camera and visual identity (all camera presets, Camera Lab, radar, graphics settings) | ✅ Done |
+| 5   | Tactical AI foundation (utility AI, spatial reasoning)                                | Next    |
 | 6   | Advanced futsal tactics (formations, rotations, pressing triggers, Tactical Lab)      | Planned |
 | 7   | Rules and tactical editor (fouls, cards, substitutions, timeouts, flying keeper)      | Planned |
 | 8   | Presentation and analysis (audio, crowd, replays, statistics)                         | Planned |

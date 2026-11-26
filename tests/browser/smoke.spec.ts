@@ -298,3 +298,41 @@ test('settings: passing assistance, rebound keys and difficulty reach the match'
   await page.reload()
   await expect(page.getByTestId('setting-pass-assist')).toHaveValue('manual')
 })
+
+test('camera and visuals: radar, horizontal camera, Camera Lab and graphics setting', async ({ page }) => {
+  await page.goto('/?gfx=low')
+  await expect(page.getByTestId('setting-radar')).toBeChecked()
+  await page.getByTestId('setting-graphics').selectOption('medium')
+  await page.getByTestId('quick-match').click()
+  await page.getByTestId('start-match').click()
+  await page.waitForFunction(() => window.__FTW__?.getState().restart?.ready === true, undefined, {
+    timeout: 15_000,
+  })
+  await expect(page.getByTestId('radar')).toBeVisible()
+
+  // Horizontal camera from the pause menu: the radar turns landscape.
+  await page.keyboard.press('Escape')
+  await page.getByTestId('pause-menu').getByTestId('setting-camera').selectOption('horizontalTactical')
+  await page.getByTestId('pause-menu').getByTestId('setting-radar').uncheck()
+  await page.keyboard.press('Escape') // closes the menu even with the checkbox focused
+  await expect(page.getByTestId('pause-menu')).toBeHidden()
+  await expect(page.getByTestId('radar')).toBeHidden()
+  await page.keyboard.press('Escape')
+  await page.getByTestId('pause-menu').getByTestId('setting-radar').check()
+  await page.keyboard.press('Escape')
+  await page.waitForTimeout(200)
+  const box = await page.getByTestId('radar').boundingBox()
+  expect(box!.width).toBeGreaterThan(box!.height)
+
+  // Camera Lab with key 6: moving a slider switches to the custom camera and is remembered.
+  await page.keyboard.press('Digit6')
+  await expect(page.getByTestId('camera-lab')).toBeVisible()
+  await page.getByTestId('lab-orientation-vertical').click()
+  await page.getByTestId('lab-visibleLength').fill('35')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ftw.camera'))).toBe('custom')
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ftw.customCamera') ?? '{}'))
+  expect(stored.visibleLength).toBe(35)
+  await page.keyboard.press('Digit6')
+  await expect(page.getByTestId('camera-lab')).toBeHidden()
+  expect(await page.evaluate(() => localStorage.getItem('ftw.graphics'))).toBe('medium')
+})

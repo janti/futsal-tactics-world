@@ -6,8 +6,8 @@
 | 1   | Playable 3D prototype (court, goals, procedural players, ball physics, 78° camera, keyboard, pass, shoot, goals, animations)    | ✅ Done |
 | 2   | Complete basic arcade match (match clock + halves, full restarts, match end, Quick Match menu with team/length choice)          | ✅ Done |
 | 3   | Gameplay physics and controls polish (touch-based dribbling, shielding, interceptions, gamepad completeness, assistance levels) | ✅ Done |
-| 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)               | Next    |
-| 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                       |         |
+| 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)               | ✅ Done |
+| 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                       | Next    |
 | 6   | Advanced futsal tactics (all formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay)   |         |
 | 7   | Rules and tactical editor (versioned rules engine, fouls, cards, substitutions, stamina, timeouts, flying GK, AI coach)         |         |
 | 8   | Presentation and analysis (arenas, audio, crowd, replays, statistics, analysis, coach/spectator/training modes)                 |         |
@@ -32,6 +32,12 @@
   `tests/unit/dribbling.test.ts`, `passAssist.test.ts`, `bindings.test.ts`,
   `tests/tactical/difficulty.test.ts`, `keeperThrow.test.ts`, browser tests "gamepad…" and
   "settings…").
+
+- **M4**: horizontal camera presets (tactical side view and full court), the playable Camera Lab
+  (custom camera tuned live while playing, persisted), radar/minimap oriented like the main view with
+  the camera window, graphics quality and camera choice in the settings, a polished hall (stepped
+  stands with seat rows and aisles, end stands, substitutes and timekeepers' table, readable boards)
+  — met (automated: `tests/unit/camera.test.ts`, browser test "camera and visuals…").
 
 ## Dependencies between milestones
 

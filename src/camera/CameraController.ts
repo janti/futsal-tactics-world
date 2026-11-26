@@ -24,7 +24,10 @@ export interface CameraFocus {
 export class CameraController {
   readonly camera: OrthographicCamera
   settings: CameraSettings
-  /** Sim y direction shown at the top of the screen. */
+  /**
+   * The human team's attacking direction (sim y) as presented: towards the top of the screen in the
+   * vertical views, towards the right in the horizontal ones.
+   */
   upSign: AttackDir = 1
   private aspect = 16 / 9
   private targetY = 0
@@ -43,6 +46,11 @@ export class CameraController {
 
   setPreset(id: CameraPresetId): void {
     this.settings = { ...CAMERA_PRESETS[id] }
+  }
+
+  /** Use explicit settings (the Camera Lab's custom camera). */
+  setSettings(settings: CameraSettings): void {
+    this.settings = { ...settings }
   }
 
   setAspect(aspect: number): void {
@@ -77,7 +85,7 @@ export class CameraController {
 
   private desiredY(f: CameraFocus): number {
     const s = this.settings
-    const frustum = computeFrustum(this.aspect, this.visibleLength, s.elevationDeg, s.sideMargin)
+    const frustum = this.frustum()
     if (s.fixed) return 0
     let y = f.ballY + f.ballVy * s.lookAhead + f.possessionDir * s.attackBias
     // Keep the controlled player on screen whenever physically possible.
@@ -92,9 +100,13 @@ export class CameraController {
     return clampTargetY(y, frustum.visibleLength)
   }
 
-  private applyProjection(): void {
+  private frustum() {
     const s = this.settings
-    const f = computeFrustum(this.aspect, this.visibleLength, s.elevationDeg, s.sideMargin)
+    return computeFrustum(this.aspect, this.visibleLength, s.elevationDeg, s.sideMargin, s.orientation)
+  }
+
+  private applyProjection(): void {
+    const f = this.frustum()
     this.camera.left = -f.width / 2
     this.camera.right = f.width / 2
     this.camera.top = f.height / 2
@@ -108,7 +120,11 @@ export class CameraController {
     // Three.js: X = sim x, Y = height, Z = sim y. Camera sits "below" the screen-up direction.
     const tx = 0
     const tz = this.targetY
-    this.camera.position.set(tx, Math.sin(e) * distance, tz - this.upSign * Math.cos(e) * distance)
+    if (this.settings.orientation === 'horizontal') {
+      // Side view from a touch line: looking along +X the screen right is +Z (sim +y), so the camera
+      // stands on the -X side when the human attacks +y (and on +X otherwise) — attack to the right.
+      this.camera.position.set(-this.upSign * Math.cos(e) * distance, Math.sin(e) * distance, tz)
+    } else this.camera.position.set(tx, Math.sin(e) * distance, tz - this.upSign * Math.cos(e) * distance)
     this.camera.up.set(0, 1, 0)
     this.camera.lookAt(tx, 0, tz)
     this.camera.updateMatrixWorld()
@@ -117,12 +133,7 @@ export class CameraController {
 
   /** Court bounds currently visible (for tests / radar viewport). */
   visibleRange(): { minY: number; maxY: number; width: number } {
-    const f = computeFrustum(
-      this.aspect,
-      this.visibleLength,
-      this.settings.elevationDeg,
-      this.settings.sideMargin,
-    )
+    const f = this.frustum()
     return {
       minY: this.targetY - f.visibleLength / 2,
       maxY: this.targetY + f.visibleLength / 2,

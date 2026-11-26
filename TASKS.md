@@ -66,9 +66,20 @@
       four-second limit on the free kick itself)
 - [x] 163 unit/integration/tactical tests, 6 Playwright browser tests
 
-## Current / next (Milestone 4: camera and visual identity)
+### Milestone 4
 
-- [ ] All camera presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall
+- [x] Horizontal camera presets (Horizontal Tactical, Horizontal Full Court); camera choice in settings
+- [x] Camera Lab: custom camera tuned live while playing (key 6 / pause menu), persisted
+- [x] Radar / minimap with the camera window, oriented like the main view; on/off setting
+- [x] Graphics quality setting (low / medium / high; URL `?gfx=` still overrides)
+- [x] Hall polish: stepped stands with team-coloured seat rows, aisles and rails, end stands behind
+      the goals, substitutes and timekeepers' table, board slogans that fit
+- [x] Fixed: Esc did not close the pause menu while a setting had the keyboard focus
+- [x] 184 unit/integration/tactical tests, 7 Playwright browser tests
+
+## Current / next (Milestone 5: tactical AI foundation)
+
+- [ ] Utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage
 
 ## Known bugs / issues
 

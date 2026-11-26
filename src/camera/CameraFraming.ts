@@ -1,5 +1,6 @@
 import { clamp } from '../core/math/scalar'
 import { COURT } from '../simulation/SimulationConfig'
+import type { CameraOrientation } from './CameraSettings'
 
 export interface Frustum {
   /** Orthographic view width/height in world units (metres on the view plane). */
@@ -20,8 +21,21 @@ export function computeFrustum(
   visibleLength: number,
   elevationDeg: number,
   sideMargin: number,
+  orientation: CameraOrientation = 'vertical',
 ): Frustum {
   const s = Math.sin((elevationDeg * Math.PI) / 180)
+  if (orientation === 'horizontal') {
+    // Side view: the length runs across the screen unforeshortened; the court width is seen in depth
+    // (foreshortened by sin(e)) and must fit, otherwise the view grows and shows more length.
+    const minHeight = (COURT.width + sideMargin * 2) * s
+    let width = visibleLength
+    let height = width / aspect
+    if (height < minHeight) {
+      height = minHeight
+      width = height * aspect
+    }
+    return { width, height, visibleLength: width }
+  }
   const minWidth = COURT.width + sideMargin * 2
   let height = visibleLength * s
   let width = height * aspect

@@ -1,6 +1,6 @@
 import { ACESFilmicToneMapping, Color, Fog, Scene, SRGBColorSpace, WebGLRenderer } from 'three'
 import { CameraController, focusFromSnapshot, presentationUpSign } from '../camera/CameraController'
-import type { CameraPresetId } from '../camera/CameraSettings'
+import type { CameraPresetId, CameraSettings } from '../camera/CameraSettings'
 import type { MatchSnapshot } from '../simulation/MatchSnapshot'
 import type { MatchState } from '../simulation/MatchState'
 import { BallRenderer } from './BallRenderer'
@@ -26,10 +26,16 @@ export const GRAPHICS_PRESETS = {
 export type GraphicsPreset = keyof typeof GRAPHICS_PRESETS
 export const DEFAULT_GRAPHICS: GraphicsOptions = GRAPHICS_PRESETS.high
 
-/** Graphics preset from the `?gfx=low|medium|high` URL parameter (full settings UI arrives in Milestone 4). */
-export function graphicsFromUrl(search: string): GraphicsOptions {
+export const GRAPHICS_PRESET_ORDER: GraphicsPreset[] = ['low', 'medium', 'high']
+
+export function isGraphicsPreset(v: unknown): v is GraphicsPreset {
+  return v === 'low' || v === 'medium' || v === 'high'
+}
+
+/** Graphics options: the `?gfx=low|medium|high` URL parameter overrides the chosen setting. */
+export function graphicsFromUrl(search: string, fallback: GraphicsPreset = 'high'): GraphicsOptions {
   const v = new URLSearchParams(search).get('gfx')
-  return v === 'low' || v === 'medium' || v === 'high' ? GRAPHICS_PRESETS[v] : DEFAULT_GRAPHICS
+  return GRAPHICS_PRESETS[isGraphicsPreset(v) ? v : fallback]
 }
 
 /**
@@ -90,6 +96,10 @@ export class ThreeRenderer {
 
   setCameraPreset(id: CameraPresetId): void {
     this.cameraController.setPreset(id)
+  }
+
+  setCameraSettings(settings: CameraSettings): void {
+    this.cameraController.setSettings(settings)
   }
 
   resize(): void {

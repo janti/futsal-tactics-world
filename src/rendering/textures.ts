@@ -205,11 +205,20 @@ export function createAdTexture(lines: string[], bg: string, fg: string): Textur
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, 1024, 64)
   ctx.fillStyle = fg
-  ctx.font = 'bold 40px "Segoe UI", "Helvetica Neue", Arial, sans-serif'
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'center'
   const step = 1024 / lines.length
-  lines.forEach((l, i) => ctx.fillText(l, step * (i + 0.5), 34))
+  lines.forEach((l, i) => {
+    // Shrink long slogans to fit their slot (no overlapping text on the boards).
+    let size = 40
+    do {
+      ctx.font = `bold ${size}px "Segoe UI", "Helvetica Neue", Arial, sans-serif`
+      size -= 2
+    } while (size > 14 && ctx.measureText(l).width > step * 0.86)
+    ctx.fillText(l, step * (i + 0.5), 34)
+    // Separator between slogans.
+    if (i > 0) ctx.fillRect(step * i - 1, 14, 2, 36)
+  })
   const t = finish(c)
   t.wrapS = RepeatWrapping
   return t

@@ -252,13 +252,18 @@ export class InputManager {
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
-    // Leave keyboard navigation of menu form controls (e.g. settings selects) alone.
-    if (isFormControl(e.target)) return
     const action = this.codeToAction.get(e.code)
     if (!action) return
+    // Leave keyboard navigation of menu form controls (settings selects, Camera Lab sliders) alone —
+    // except the pause and Camera Lab keys, which must still close their panel when a control has
+    // the focus.
+    if (isFormControl(e.target) && action !== 'pause' && action !== 'cameraLab') return
     // Keep arrows/space from scrolling and F5 from reloading during play.
     e.preventDefault()
-    if (!e.repeat && (action === 'pause' || action === 'camera' || action === 'help'))
+    if (
+      !e.repeat &&
+      (action === 'pause' || action === 'camera' || action === 'cameraLab' || action === 'help')
+    )
       this.uiPresses.push(action)
     if (!e.repeat) this.tapped.add(action)
     this.keys.add(e.code)

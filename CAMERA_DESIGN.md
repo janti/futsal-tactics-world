@@ -22,14 +22,35 @@
 | Vertical Classic      | 88°       | 26 m           | basic, no look-ahead/bias |
 | Vertical Full Court   | 86°       | 44 m           | fixed                     |
 | Vertical Close Action | 70°       | 22 m           | predictive                |
+| Horizontal Tactical   | 62°       | 30 m (across)  | predictive                |
+| Horizontal Full Court | 58°       | 44 m (across)  | fixed                     |
+| Custom (Camera Lab)   | 45–90°    | 16–48 m        | as tuned                  |
+
+### Horizontal views
+
+The camera stands on a touch line and looks across the court: the length runs across the screen
+(unforeshortened) and your team attacks to the right; the court width is seen in depth (foreshortened
+by sin(elevation)) and always fits, otherwise the view grows. Input stays screen-relative through the
+camera basis (screen right = your attacking direction).
+
+### Camera Lab
+
+Key 6 or the pause menu opens a panel beside the running match: orientation, fixed/tracking,
+elevation, visible length, look-ahead, attack bias, smoothing, dead zone and side margin. Any change
+switches to the custom camera; values are validated, clamped and stored in localStorage.
+
+### Radar
+
+A 2D canvas minimap (top right) shows the court, players, ball, your controlled player and the part of
+the court the camera shows. It is oriented like the main view (portrait for vertical cameras,
+landscape for horizontal ones) and can be switched off in the settings.
 
 At half-time the teams switch ends. By default the presentation rotates 180° during the break so the
 human team keeps attacking up the screen (`presentationUpSign`; input follows automatically because it
 uses the camera basis). With the setting off the view stays fixed (traditional alternating
 directions).
 
-Horizontal Tactical, the radar and the playable Camera Lab are Milestone 4. Camera changes never affect simulation results (the simulation does not import the
-camera).
+Camera changes never affect simulation results (the simulation does not import the camera).
 
 ## Coordinate conversion and screen mapping
 
@@ -40,5 +61,5 @@ both ends and against `Vector3.project`.
 
 ## Known limitation
 
-At 27 m visible length on a 16:9 screen the players are fairly small; the Camera Lab (M4) will make
-this tunable live. Player visual scale is 112 % (collision size unchanged).
+At 27 m visible length on a 16:9 screen the players are fairly small; the Camera Lab makes this
+tunable live. Player visual scale is 112 % (collision size unchanged).

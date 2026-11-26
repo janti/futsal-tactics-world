@@ -2,6 +2,9 @@ import { useEffect, useRef } from 'react'
 import { GameSession } from './GameSession'
 import { GamepadMenu } from '../input/GamepadMenu'
 import { KeyBindingsPanel } from '../ui/menus/KeyBindingsPanel'
+import { CameraLab } from '../ui/menus/CameraLab'
+import { CAMERA_PRESET_ORDER, type CameraPresetId } from '../camera/CameraSettings'
+import { GRAPHICS_PRESET_ORDER, type GraphicsPreset } from '../rendering/ThreeRenderer'
 import { Hud, ControlsPanel } from '../ui/hud/Hud'
 import { MatchEnd } from '../ui/hud/MatchEnd'
 import { QuickMatchSetupScreen } from '../ui/menus/QuickMatchSetup'
@@ -47,6 +50,12 @@ function SettingsPanel() {
   const playerScale = useUi((s) => s.playerScale)
   const setPlayerScale = useUi((s) => s.setPlayerScale)
   const setKeepUp = useUi((s) => s.setKeepAttackingUp)
+  const camera = useUi((s) => s.cameraPreset)
+  const setCamera = useUi((s) => s.setCameraPreset)
+  const showRadar = useUi((s) => s.showRadar)
+  const setShowRadar = useUi((s) => s.setShowRadar)
+  const graphics = useUi((s) => s.graphics)
+  const setGraphics = useUi((s) => s.setGraphics)
   return (
     <div className="settings-panel">
       <h3>{t('settings.title')}</h3>
@@ -104,6 +113,44 @@ function SettingsPanel() {
           <option value={1.12}>{t('settings.playerScale.default')}</option>
         </select>
       </label>
+      <label className="setting-row">
+        <span>{t('settings.camera')}</span>
+        <select
+          data-testid="setting-camera"
+          value={camera}
+          onChange={(e) => setCamera(e.target.value as CameraPresetId)}
+        >
+          {CAMERA_PRESET_ORDER.map((c) => (
+            <option key={c} value={c}>
+              {t(`camera.${c}` as TranslationKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="setup-check">
+        <input
+          type="checkbox"
+          data-testid="setting-radar"
+          checked={showRadar}
+          onChange={(e) => setShowRadar(e.target.checked)}
+        />
+        <span>{t('settings.radar')}</span>
+      </label>
+      <label className="setting-row">
+        <span>{t('settings.graphics')}</span>
+        <select
+          data-testid="setting-graphics"
+          value={graphics}
+          onChange={(e) => setGraphics(e.target.value as GraphicsPreset)}
+        >
+          {GRAPHICS_PRESET_ORDER.map((g) => (
+            <option key={g} value={g}>
+              {t(`settings.graphics.${g}` as TranslationKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="setting-help">{t('settings.graphics.help')}</p>
     </div>
   )
 }
@@ -140,6 +187,7 @@ function MatchScreen() {
   const matchKey = useUi((s) => s.matchKey)
   const paused = useUi((s) => s.paused)
   const result = useUi((s) => s.result)
+  const labOpen = useUi((s) => s.cameraLabOpen)
 
   useEffect(() => {
     const el = containerRef.current
@@ -152,6 +200,7 @@ function MatchScreen() {
     <div className="match-screen">
       <div className="viewport" ref={containerRef} />
       <Hud />
+      {labOpen && !result && <CameraLab />}
       {result ? <MatchEnd /> : paused && <PauseMenu />}
     </div>
   )
@@ -162,6 +211,11 @@ function PauseMenu() {
   const setPaused = useUi((s) => s.setPaused)
   const restartMatch = useUi((s) => s.restartMatch)
   const quit = useUi((s) => s.quitToTitle)
+  const labOpen = useUi((s) => s.cameraLabOpen)
+  const toggleLab = useUi((s) => s.toggleCameraLab)
+  const openLab = () => {
+    if (!labOpen) toggleLab()
+  }
   return (
     <div className="pause-overlay" data-testid="pause-menu" data-menu>
       <div className="pause-card">
@@ -170,6 +224,15 @@ function PauseMenu() {
           {t('menu.resume')}
         </button>
         <button onClick={restartMatch}>{t('menu.restart')}</button>
+        <button
+          data-testid="open-camera-lab"
+          onClick={() => {
+            openLab()
+            setPaused(false)
+          }}
+        >
+          {t('menu.cameraLab')}
+        </button>
         <button onClick={quit}>{t('menu.quit')}</button>
         <LanguageSwitch />
         <SettingsPanel />

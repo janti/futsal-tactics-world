@@ -116,6 +116,7 @@ export function ControlsPanel() {
     [k('sole'), 'controls.sole'],
     ['F5 / 5', 'controls.camera'],
     ['Esc / P', 'controls.pause'],
+    ['6', 'controls.cameraLab'],
   ]
   return (
     <div className="controls-panel">

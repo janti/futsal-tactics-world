@@ -507,3 +507,59 @@ button.primary:focus-visible {
   color: var(--amber);
   border-color: var(--amber);
 }
+
+.radar {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  border: 1px solid rgba(233, 238, 245, 0.18);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.camera-lab {
+  position: absolute;
+  top: 120px;
+  right: 14px;
+  width: 290px;
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+  background: rgba(16, 25, 35, 0.94);
+  border-top: 3px solid var(--amber);
+  padding: 10px 14px 14px;
+  font-size: 0.85rem;
+  z-index: 5;
+}
+.camera-lab header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.camera-lab h3 {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text2);
+}
+.camera-lab header button {
+  padding: 2px 8px;
+}
+.lab-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.lab-slider {
+  display: block;
+  margin: 8px 0;
+}
+.lab-slider span {
+  display: flex;
+  justify-content: space-between;
+}
+.lab-slider input {
+  width: 100%;
+}

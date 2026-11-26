@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Milestone 4 — camera and visual identity
+
+- Horizontal cameras: Horizontal Tactical (broadcast-style side view that follows the play) and
+  Horizontal Full Court. Your team attacks to the right; controls stay screen-relative.
+- Camera Lab: tune your own camera while playing (key 6 or the pause menu) — view orientation, fixed
+  or tracking, elevation, visible length, look-ahead, attack bias, smoothing, dead zone, side margin.
+  Remembered between sessions.
+- Radar / minimap in the top right corner with the camera window; oriented like the main view.
+  Can be switched off in the settings.
+- Settings: camera choice, radar on/off and graphics quality (low / medium / high, applied when a
+  match starts; the `?gfx=` URL parameter still overrides).
+- Hall: stepped stands with home and away seat rows, aisles with stairs and front rails, stands
+  behind both goals, substitutes in bibs on the benches, a timekeepers' table at halfway; the
+  advertising board slogans no longer overlap.
+- Fixed: Esc did not close the pause menu (and key 6 the Camera Lab) while a setting or slider had
+  the keyboard focus.
+
 - Dribbling: the ball stays closer to the feet (about 0.35–0.5 m at running pace; at a sprint it is
   touched 0.45–0.75 m ahead instead of up to about 1.2 m).
 - 2 v 1 near our goal: the only outfield defender goal-side of the carrier (typically the fixo) steps
