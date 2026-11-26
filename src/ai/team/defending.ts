@@ -1,6 +1,6 @@
 /** Team defending: ball winner, cover defender, diamond marking, 2 v 1, transitions. */
 import { clamp } from '../../core/math/scalar'
-import { addScaled, dist, len, normalize, sub, type Vec2 } from '../../core/math/vec2'
+import { addScaled, closestOnSegment, dist, len, normalize, sub, type Vec2 } from '../../core/math/vec2'
 import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
@@ -80,10 +80,19 @@ export function markingPosition(state: MatchState, p: PlayerState, pressing: (nu
   const a = state.players[man]!
   const ownGoal = { x: 0, y: -dir * COURT.halfLength }
   const height = state.teams[p.team].tactics.pressing
+  // Their pivot (their furthest man up) is marked tight wherever the ball is: the pass into him is the
+  // one to stop (diamond; the box marks as usual).
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  const isPivot =
+    state.teams[p.team].tactics.formation !== '2-2' &&
+    owner !== null &&
+    owner.team !== p.team &&
+    opponentPivot(state, p.team, owner)?.id === a.id
   // Tighter the closer he is to goal and to the ball; looser far away (still goal-side). A high press
   // marks tight everywhere.
-  const tight =
-    height === 'high'
+  const tight = isPivot
+    ? 1.1
+    : height === 'high'
       ? clamp(0.8 + (dist(a.pos, ball) - 6) / 30, 0.8, 1.4)
       : clamp(1 + (dist(a.pos, ownGoal) - 8) / 14 + (dist(a.pos, ball) - 6) / 20, 1, 2.2)
   const goalSide = addScaled(a.pos, normalize(sub(ownGoal, a.pos)), tight)
@@ -92,9 +101,10 @@ export function markingPosition(state: MatchState, p: PlayerState, pressing: (nu
   let mark = addScaled({ x: goalSide.x + inside.x, y: goalSide.y }, normalize(sub(ball, goalSide)), 0.15)
   // Help side: a man far from the ball is marked loosely, sagging towards the middle in front of goal
   // so the defender can cover a carrier who gets through.
-  const away = clamp((dist(a.pos, ball) - 7) / 10, 0, height === 'high' ? 0.2 : 0.45)
+  const away = isPivot ? 0 : clamp((dist(a.pos, ball) - 7) / 10, 0, height === 'high' ? 0.2 : 0.45)
   const middle = { x: a.pos.x * 0.3, y: (a.pos.y + ownGoal.y) / 2 }
   mark = { x: mark.x + (middle.x - mark.x) * away, y: mark.y + (middle.y - mark.y) * away }
+  mark = denyPivotLane(state, p, a, mark)
   // A man in front of our goal is followed even outside the zone.
   if (dist(a.pos, ownGoal) < 9) return mark
   const off = sub(mark, anchor)
@@ -117,6 +127,54 @@ export function markingPosition(state: MatchState, p: PlayerState, pressing: (nu
     if (-ownSide * pos.x > 2) return { x: -ownSide * 2, y: pos.y }
   }
   return pos
+}
+
+/**
+ * Diamond defence: shut the pass into their pivot (their most advanced player) while marking. The
+ * pivot's own marker fronts him a little on the ball side; the others, unless their man is the
+ * carrier's immediate option, lean off their man into the line from the ball to the pivot — the
+ * defensive pivot (top of the diamond) most. They stay within reach of their man, so when the ball
+ * is moved across the line has to be shut again, and in that moment the pass into the pivot (in the
+ * middle or out on the wing) can open.
+ */
+/** Their pivot: the opponent (not the carrier) nearest our goal, clearly ahead of the ball; or null. */
+export function opponentPivot(state: MatchState, team: TeamId, owner: PlayerState): PlayerState | null {
+  const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
+  let pivot: PlayerState | null = null
+  for (const o of state.players) {
+    if (o.team === team || o.role === 'GK' || o.id === owner.id) continue
+    if (!pivot || dist(o.pos, ownGoal) < dist(pivot.pos, ownGoal)) pivot = o
+  }
+  if (!pivot || dist(owner.pos, ownGoal) - dist(pivot.pos, ownGoal) < 4) return null
+  return pivot
+}
+
+function denyPivotLane(state: MatchState, p: PlayerState, man: PlayerState, mark: Vec2): Vec2 {
+  if (state.teams[p.team].tactics.formation === '2-2') return mark
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!owner || owner.team === p.team || owner.role === 'GK') return mark
+  const pivot = opponentPivot(state, p.team, owner)
+  if (!pivot) return mark
+  if (man.id === pivot.id) {
+    // Front him a little on the ball side (still goal-side of him).
+    return addScaled(mark, normalize(sub(owner.pos, man.pos)), 0.45)
+  }
+  // His own man close to the ball is the carrier's first option: mark him, do not leave him.
+  if (dist(man.pos, owner.pos) < 3) return mark
+  const { point, t } = closestOnSegment(owner.pos, pivot.pos, mark)
+  if (t < 0.15 || t > 0.85) return mark
+  const gap = dist(point, mark)
+  if (gap < 0.05 || gap > 7) return mark
+  const weight = p.role === 'PIVOT' ? 1 : 0.75
+  // A man of his ahead of the ball (between it and our goal) and close to it is a threat himself:
+  // only a small lean off him then.
+  const ownGoal = { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }
+  const threat = dist(man.pos, ownGoal) < dist(owner.pos, ownGoal) && dist(man.pos, owner.pos) < 8.5
+  let out = addScaled(mark, normalize(sub(point, mark)), Math.min(threat ? 0.8 : 1.8, gap * 0.6) * weight)
+  // Never so far off that his man is free: within 3.5 m of him.
+  const fromMan = dist(out, man.pos)
+  if (fromMan > 3.5) out = addScaled(man.pos, normalize(sub(out, man.pos)), 3.5)
+  return out
 }
 
 /**

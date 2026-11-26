@@ -5,7 +5,13 @@ import { COURT } from '../../simulation/SimulationConfig'
 import { dynamicAnchor } from '../positioning/Formation'
 import { attackingRole } from '../team/roles'
 import { KEEPER_BALL_ALA_DROP, pressEngageDistance } from '../common'
-import { carrierBackToGoal, markingPosition, twoVersusOne, twoVersusOneSpot } from '../team/defending'
+import {
+  carrierBackToGoal,
+  markingPosition,
+  opponentPivot,
+  twoVersusOne,
+  twoVersusOneSpot,
+} from '../team/defending'
 import {
   runInBehind,
   followUpTarget,
@@ -62,8 +68,16 @@ export function offBallDecision(
       }
       if (dist(owner.pos, ownGoal) > pressEngageDistance(state, p.team)) {
         // A low block stands off further (it waits for the carrier to come to it).
-        const off = addScaled(owner.pos, toGoal, state.teams[p.team].tactics.pressing === 'low' ? 4.5 : 3)
+        const standOff = state.teams[p.team].tactics.pressing === 'low' ? 4.5 : 3
+        const off = addScaled(owner.pos, toGoal, standOff)
         p.aiTarget = { x: off.x * 0.75, y: off.y }
+        // Cover shadow: come at him from the side of their pivot, so the body blocks the pass into
+        // the pivot (blended with the goal-side spot: the way to goal stays covered too).
+        const pivot = opponentPivot(state, p.team, owner)
+        if (pivot) {
+          const shadow = addScaled(owner.pos, normalize(sub(pivot.pos, owner.pos)), standOff * 0.85)
+          p.aiTarget = { x: (p.aiTarget.x + shadow.x * 4) / 5, y: (p.aiTarget.y + shadow.y * 4) / 5 }
+        }
       } else p.aiTarget = addScaled(owner.pos, toGoal, 0.7)
     }
     return

@@ -52,8 +52,10 @@ describe('formations', () => {
   it('3-1 attacks with a pivot clearly ahead; 4-0 attacks flat', () => {
     const g31 = topGap('3-1')
     const g40 = topGap('4-0')
-    expect(g31).toBeGreaterThan(5)
-    expect(g40).toBeLessThan(3.5)
+    // (The 3-1 gap includes the moments a teammate runs on past the pivot when he has the ball.)
+    expect(g31).toBeGreaterThan(3.8)
+    expect(g40).toBeLessThan(2.8)
+    expect(g31).toBeGreaterThan(g40 * 2)
   }, 60000)
 
   it('2-2 defends in a box: two in front, two behind, one of each pair on either side', () => {

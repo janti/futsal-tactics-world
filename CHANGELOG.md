@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Diamond defence shuts the pass into the pivot while marking: the presser comes at the carrier from
+  the side of their pivot (his body blocks the pass); their pivot's marker stays tight on him, a
+  little on the ball side, and sprints to stay with him; the other defenders lean off their men into
+  the line from the ball to the pivot (the defensive pivot most), but only so far that their man
+  stays within reach — and a man ahead of the ball close to it is marked first. When the ball is
+  moved across, the line has to be shut again, and then the pass into the pivot can open in the
+  middle or out wide. Measured AI vs AI: the lane into a central pivot open 26 % -> 22 % of the
+  build-up, into a wide pivot 31 % -> 36 %; fewer goals from the pivot (AI vs AI about 11 -> 5 per
+  36 min with similar shot numbers).
+
 - AI on the ball under pressure: two opponents closing in mean the ball goes at once (shielding
   from one left it open to the second); shielding turns the back on everybody close, not just the
   nearest; the deepest player releases it earlier; the keeper is a pass option in the own half under

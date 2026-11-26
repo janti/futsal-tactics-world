@@ -5,12 +5,20 @@ import { routeAroundGoals } from '../physics/PlayerPhysics'
 import type { MatchState, PlayerState } from '../simulation/MatchState'
 import { COURT } from '../simulation/SimulationConfig'
 import { outsideClearanceArea, pressEngageDistance } from './common'
+import { opponentPivot } from './team/defending'
 
 export function keepDistance(target: Vec2, from: Vec2, minDist: number): Vec2 {
   const d = dist(target, from)
   if (d >= minDist) return target
   const away = d > 1e-3 ? normalize(sub(target, from)) : { x: 0, y: 1 }
   return addScaled(from, away, minDist)
+}
+
+/** This defender marks their pivot (their furthest man up, ahead of the ball). */
+function marksPivot(state: MatchState, p: PlayerState): boolean {
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!owner || owner.team === p.team || p.aiMarkId === null) return false
+  return opponentPivot(state, p.team, owner)?.id === p.aiMarkId
 }
 
 export function steer(state: MatchState, p: PlayerState): void {
@@ -83,8 +91,9 @@ export function steer(state: MatchState, p: PlayerState): void {
     p.aiState === 'intercept' ||
     p.aiState === 'run' ||
     (p.aiState === 'twoVone' && d > 1.2) ||
-    // A marker left behind by his man (a run, a change of pace) sprints to get back to him.
-    (p.aiState === 'cover' && d > 2) ||
+    // A marker left behind by his man (a run, a change of pace) sprints to get back to him; their
+    // pivot's marker stays right with him (the pass into the pivot is the one to stop).
+    (p.aiState === 'cover' && d > (marksPivot(state, p) ? 0.8 : 2)) ||
     (p.aiState === 'press' && d > 2.5) ||
     d > 5 ||
     recovering ||
