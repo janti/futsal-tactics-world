@@ -606,3 +606,10 @@ button.primary:focus-visible {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.setup-hint {
+  margin: -4px 0 0;
+  font-size: 0.82em;
+  color: var(--text2);
+  max-width: 34em;
+}

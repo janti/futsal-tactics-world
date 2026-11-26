@@ -1,3 +1,4 @@
+import type { TeamTactics } from '../simulation/Tactics'
 import type { PlayerRole } from '../simulation/MatchState'
 
 export type TeamCategory = 'club' | 'men' | 'women'
@@ -22,6 +23,19 @@ export interface TeamDefinition {
   secondaryColor: number
   numberColor: number
   quality: number
+  /** The team's usual tactics (the computer plays them; defaults otherwise). */
+  tactics?: Partial<TeamTactics>
+}
+
+/** Playing styles of the national teams (generic futsal stereotypes, freely adjustable). */
+const NATION_TACTICS: Record<string, Partial<TeamTactics>> = {
+  ESP: { formation: '4-0', pressing: 'high' },
+  POR: { formation: '3-1', pressing: 'high' },
+  BRA: { formation: '4-0', pressing: 'mid' },
+  ARG: { formation: '3-1', pressing: 'mid' },
+  ITA: { formation: '2-2', pressing: 'mid' },
+  IRN: { formation: '3-1', pressing: 'high' },
+  KAZ: { formation: '2-2', pressing: 'low' },
 }
 
 export const TEAM_LIBRARY: TeamDefinition[] = [
@@ -57,6 +71,7 @@ export const TEAM_LIBRARY: TeamDefinition[] = [
     secondaryColor: 0x101923,
     numberColor: 0x101923,
     quality: 62,
+    tactics: { formation: '4-0', pressing: 'high' },
   },
   {
     id: 'ONS',
@@ -68,6 +83,7 @@ export const TEAM_LIBRARY: TeamDefinition[] = [
     secondaryColor: 0xf2f5f8,
     numberColor: 0xffffff,
     quality: 61,
+    tactics: { formation: '2-2', pressing: 'low' },
   },
   ...nationalTeams(),
 ]
@@ -188,6 +204,7 @@ function nationalTeams(): TeamDefinition[] {
         secondaryColor: n.secondary,
         numberColor: n.number,
         quality,
+        ...(NATION_TACTICS[n.code] ? { tactics: NATION_TACTICS[n.code] } : {}),
       })
     }
   }

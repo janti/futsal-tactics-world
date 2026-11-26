@@ -158,8 +158,8 @@ export const THROW = {
   /** Above this power the throw is overarm (in the air); below it is bowled along the floor. */
   overarmPower: 0.35,
   /** Vertical launch speed range for overarm throws: a longer press gives a higher arc. */
-  minVz: 2.6,
-  maxVz: 8.8,
+  minVz: 3.6,
+  maxVz: 10.5,
   arcCurve: 1.1,
   releaseHeight: 1.3,
   /** Angular error (radians) from the throwing attribute (worst..best). */
@@ -176,9 +176,14 @@ export const CONTROL = {
   /** Control is lost if the ball drifts further than this from its owner. */
   loseDistance: 1.3,
   /** Relative speeds below this are always controlled cleanly. */
-  cleanControlSpeed: 8,
+  cleanControlSpeed: 12,
+  /**
+   * An opponent stepping into a pass controls it cleanly only below this speed; a firmer ball
+   * striking him often bounces off (see the first touch).
+   */
+  opponentCleanSpeed: 8.5,
   /** Relative speeds above this cannot be controlled (ball deflects). */
-  maxControlSpeed: 17,
+  maxControlSpeed: 22,
   /** Base steal rate per second for an opponent touching the dribbled ball. */
   stealRate: 3.2,
   tackleStealChance: 0.75,
@@ -202,14 +207,19 @@ export const CONTROL = {
 } as const
 
 export const PASS = {
-  arrivalSpeed: 6.5,
-  /** The human player's assisted passes are played firmer (arrive this fast), harder to step into. */
-  humanArrivalSpeed: 6.9,
+  /** AI passes to feet arrive this fast (firm passes, controlled cleanly by a teammate). */
+  arrivalSpeed: 8,
+  /** The human player's assisted passes: a quick tap arrives this fast at the receiver... */
+  humanArrivalSpeed: 7.5,
+  /** ...and a fully charged pass this fast (always along the floor). */
+  humanMaxArrivalSpeed: 14,
+  /** Holding the pass button this long gives full power. */
+  chargeTime: 0.7,
   throughArrivalSpeed: 6.5,
   /** Kick-in / corner routine: the ball to the shooter arrives this fast. */
   setPieceArrival: 10,
   minSpeed: 7.5,
-  maxSpeed: 19,
+  maxSpeed: 22,
   maxAngleErrorRad: 0.07,
   assistConeCos: Math.cos((65 * Math.PI) / 180),
   /** Semi-assisted passing only picks a teammate within this angle of the input. */
@@ -218,6 +228,21 @@ export const PASS = {
   manualDefaultPower: 0.3,
   manualMaxChargeTime: 0.7,
   throughLead: 3.5,
+} as const
+
+/**
+ * The chip (the through-pass button): a dink lifted with the toe — slow and high, not much power. A
+ * quick tap lifts it just over an opponent's leg a couple of metres away; holding longer lifts it
+ * higher (up to about 5.5 m), and only a little further.
+ */
+export const CHIP = {
+  minApex: 1.3,
+  maxApex: 5.5,
+  minDistance: 3,
+  maxDistance: 13,
+  chargeTime: 0.8,
+  /** Angular error (radians) from the passing attribute (worst..best). */
+  error: [0.08, 0.02] as const,
 } as const
 
 export const SHOT = {

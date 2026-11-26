@@ -106,7 +106,7 @@ export function restartBehaviour(
   } else {
     const mode = r.team === p.team ? 'attack' : 'defend'
     const dir = state.teams[p.team].attackDir
-    target = dynamicAnchor(p.role, mode, dir, r.spot)
+    target = dynamicAnchor(p.role, mode, dir, r.spot, state.teams[p.team].tactics.formation)
     // Goal clearance: the alas start a metre deeper so the keeper has an easier angle out to the wing.
     if (r.type === 'goalClearance' && r.team === p.team && (p.role === 'ALA_L' || p.role === 'ALA_R'))
       target = { x: target.x, y: target.y - dir * GOAL_CLEARANCE_ALA_DROP }

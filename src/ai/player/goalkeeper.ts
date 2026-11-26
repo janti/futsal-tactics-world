@@ -76,7 +76,14 @@ export function goalkeeperBehaviour(
           best = t
         }
       }
-      if (best && ball.inHands) {
+      // A throw beyond a few metres, or one an opponent could cut out along the floor, goes in an arc.
+      const lob =
+        best !== null &&
+        ball.inHands &&
+        (dist(best.pos, p.pos) > 8.5 || passInterceptable(state, p.team, p.pos, best.pos))
+      if (best && lob) {
+        actions.lobThrow(p, best, clamp(2 + dist(best.pos, p.pos) * 0.12, 2.4, 4.2))
+      } else if (best && ball.inHands) {
         // From the hands: the same controlled throw a human keeper makes (aim at where the receiver
         // will be; bowl short throws, throw long ones overarm).
         const target = predictPassTarget(p, best, false, state.teams[p.team].attackDir)

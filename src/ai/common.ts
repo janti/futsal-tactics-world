@@ -4,6 +4,7 @@ import { closestOnSegment, dist, len, sub, type Vec2 } from '../core/math/vec2'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
 import { COURT, POST_X } from '../simulation/SimulationConfig'
 import { baseAnchor } from './positioning/Formation'
+import { PRESSING } from '../simulation/Tactics'
 import { DIFFICULTY, type DifficultyParams } from '../simulation/Difficulty'
 
 export interface AIActions {
@@ -19,6 +20,8 @@ export interface AIActions {
   shoot(p: PlayerState, dir: Vec2, power: number): void
   /** Goalkeeper throw from the hands (same throw a human keeper makes). */
   throwBall(p: PlayerState, dir: Vec2, power: number): void
+  /** Goalkeeper throw in an arc from the hands to a teammate (over the opponents). */
+  lobThrow(p: PlayerState, receiver: PlayerState, apex: number): void
 }
 
 /** Goal clearance: the alas start this much deeper (metres) so the keeper has an easier angle out to the wing. */
@@ -29,8 +32,10 @@ export const KEEPER_BALL_ALA_DROP = 2
 /** Seconds of immediate sprinting back into shape after losing the ball. */
 export const RECOVER_TIME = 1.6
 
-/** Beyond this distance from our goal the presser contains (stands off) instead of engaging. */
-export const PRESS_ENGAGE_DISTANCE = 22
+/** Distance from our goal within which the carrier is pressed tightly (from the team's pressing height). */
+export function pressEngageDistance(state: MatchState, team: TeamId): number {
+  return PRESSING.engageDistance[state.teams[team].tactics.pressing]
+}
 
 /**
  * Goal clearance: players not under human control keep out of the clearing team's penalty area.

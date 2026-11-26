@@ -94,7 +94,12 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
  */
 export function assistControlledPlayer(state: MatchState, p: PlayerState): void {
   const ball = state.ball
-  if (ball.mode === 'free' && ball.intendedReceiverId === p.id && len(ball.vel) > 1.5 && ball.z < 1.2) {
+  if (
+    ball.mode === 'free' &&
+    ball.intendedReceiverId === p.id &&
+    len(ball.vel) > 1.5 &&
+    (ball.z < 1.2 || ball.landing !== null)
+  ) {
     const meet = receivePoint(state, p)
     walkTo(p, meet, dist(meet, p.pos) > 2.5)
     p.faceTarget = ball.pos

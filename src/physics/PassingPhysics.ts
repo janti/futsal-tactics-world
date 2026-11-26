@@ -46,6 +46,7 @@ export function chooseReceiver(
   passer: PlayerState,
   dir: Vec2,
   coneCos: number = PASS.assistConeCos,
+  power?: number,
 ): PlayerState | null {
   const aim = len(dir) > 0.2 ? normalize(dir) : fromAngle(passer.facing)
   let best: PlayerState | null = null
@@ -63,7 +64,10 @@ export function chooseReceiver(
     // An opponent on the line (blocked lane) makes a teammate a poor choice even if he is nearest the
     // input: the assist prefers an open teammate in the same direction.
     const blocked = open < 0.5 ? -1.4 : 0
-    const score = cos * 3 - d / 14 + open * 0.9 + blocked - keeperPenalty
+    // How long the button was held picks between two teammates in the same direction: a tap the
+    // nearer one, a long press the one further away (no power given: the nearer one).
+    const reachPref = power === undefined ? -d / 14 : ((power * 2 - 1) * d) / 9
+    const score = cos * 3 + reachPref + open * 0.9 + blocked - keeperPenalty
     if (score > bestScore) {
       bestScore = score
       best = t
@@ -145,6 +149,28 @@ export function predictPassTarget(
   return clampToCourt(target, through ? 0.8 : 1.2)
 }
 
+/**
+ * Launch velocity for a lofted ball (chip, lobbed throw) from the floor that peaks at `apex` metres
+ * and first lands `landFraction` of the way to `to` (it bounces and rolls on from there). Air drag is
+ * allowed for roughly.
+ */
+export function lobVelocity(
+  from: Vec2,
+  to: Vec2,
+  apex: number,
+  landFraction = 0.85,
+  launchHeight = 0,
+): { x: number; y: number; vz: number } {
+  const d = dist(from, to) * landFraction
+  const vz = Math.sqrt(2 * BALL.gravity * Math.max(0.2, apex - launchHeight))
+  // Time up to the apex and down from it to the floor.
+  const t = vz / BALL.gravity + Math.sqrt((2 * apex) / BALL.gravity)
+  const vh = (d / t) * (1 + BALL.airDrag * (d / t) * 0.6)
+  const n =
+    d > 1e-3 ? { x: (to.x - from.x) / dist(from, to), y: (to.y - from.y) / dist(from, to) } : { x: 0, y: 1 }
+  return { x: n.x * vh, y: n.y * vh, vz }
+}
+
 export function clampToCourt(p: Vec2, margin: number): Vec2 {
   return {
     x: clamp(p.x, -COURT.halfWidth + margin, COURT.halfWidth - margin),
@@ -190,9 +216,14 @@ export function planPass(
     return { receiverId: receiver ? receiver.id : null, target, velocity, speed }
   }
   const coneCos = assist === 'semi' ? PASS.semiAssistConeCos : PASS.assistConeCos
-  const receiver = forcedReceiver ?? chooseReceiver(state, passer, dir, coneCos)
+  const receiver = forcedReceiver ?? chooseReceiver(state, passer, dir, coneCos, power)
   let target: Vec2
-  let arrival: number = arrivalSpeed ?? (through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed)
+  // The human player's charged pass: the longer the press, the firmer it arrives (along the floor).
+  const charged =
+    power !== undefined
+      ? lerp(PASS.humanArrivalSpeed, PASS.humanMaxArrivalSpeed, clamp(power, 0, 1))
+      : undefined
+  let arrival: number = arrivalSpeed ?? charged ?? (through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed)
   if (receiver) {
     target = predictPassTarget(passer, receiver, through, attackDir)
   } else {

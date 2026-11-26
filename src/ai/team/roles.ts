@@ -27,14 +27,18 @@ function assignmentCost(state: MatchState, team: TeamId, roles: Map<number, Play
   const dir = state.teams[team].attackDir
   let cost = 0
   for (const [id, role] of roles)
-    cost += dist(state.players[id]!.pos, dynamicAnchor(role, 'attack', dir, state.ball.pos))
+    cost += dist(
+      state.players[id]!.pos,
+      dynamicAnchor(role, 'attack', dir, state.ball.pos, state.teams[team].tactics.formation),
+    )
   return cost
 }
 
 function bestAssignment(state: MatchState, team: TeamId): Map<number, PlayerRole> {
   const dir = state.teams[team].attackDir
   const players = state.players.filter((p) => p.team === team && p.role !== 'GK')
-  const anchors = ROLES.map((r) => dynamicAnchor(r, 'attack', dir, state.ball.pos))
+  const formation = state.teams[team].tactics.formation
+  const anchors = ROLES.map((r) => dynamicAnchor(r, 'attack', dir, state.ball.pos, formation))
   let best: number[] = []
   let bestCost = Infinity
   const perm: number[] = []

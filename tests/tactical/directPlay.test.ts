@@ -116,8 +116,9 @@ describe('safe passing', () => {
     const to = { x: 6, y: 0 }
     // Nobody near the line: safe.
     expect(passInterceptable(s, 0, from, to)).toBe(false)
-    // An opponent 1.5 m off the middle of the line can step in: not safe.
-    s.players[7]!.pos = { x: 0, y: 1.5 }
+    // An opponent a metre off the middle of the line can step in: not safe (passes are firm, so one
+    // further off is too late).
+    s.players[7]!.pos = { x: 0, y: 1 }
     expect(passInterceptable(s, 0, from, to)).toBe(true)
   })
 })

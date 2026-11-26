@@ -174,3 +174,49 @@ describe('passes to feet and receiving', () => {
     expect(minTowards).toBeGreaterThan(-0.3)
   })
 })
+
+describe('AI carrier near the lines', () => {
+  it('never heads out of the court: a heading over the line is turned back in', async () => {
+    const { keepInCourt } = await import('../../src/ai/player/carrier')
+    const h = keepInCourt({ x: 9.6, y: 0 }, { x: 1, y: 0 })
+    expect(h.x).toBeLessThan(0)
+    const g = keepInCourt({ x: 0, y: 19.7 }, { x: 0.2, y: 0.98 })
+    expect(g.y).toBeLessThan(0)
+    const free = keepInCourt({ x: 0, y: 0 }, { x: 1, y: 0 })
+    expect(free.x).toBeCloseTo(1, 5)
+  })
+
+  it('pinned by the human player by his own goal line he does not take the ball over it', () => {
+    let outs = 0
+    for (const seed of [1, 2, 3, 4]) {
+      const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
+      const s = sim.state
+      for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
+      s.phase = 'play'
+      s.restart = null
+      const own = -s.teams[1].attackDir * 20 // team 1's goal line
+      const carrier = sim.player(8)
+      carrier.pos = { x: 6, y: own - Math.sign(own) * 1.2 }
+      carrier.vel = { x: 0, y: 0 }
+      carrier.facing = Math.sign(own) > 0 ? Math.PI / 2 : -Math.PI / 2
+      s.ball.ownerId = 8
+      s.ball.mode = 'controlled'
+      s.ball.pos = { x: 6, y: own - Math.sign(own) * 0.8 }
+      s.possessionTeam = 1
+      const human = sim.player(s.controlledId!)
+      human.pos = { x: 6, y: own - Math.sign(own) * 2.2 }
+      for (let i = 0; i < TICK_RATE * 4; i++) {
+        // The human leans on him, running at the ball all the time.
+        const to = { x: s.ball.pos.x - human.pos.x, y: s.ball.pos.y - human.pos.y }
+        sim.step([{ type: 'Move', dir: to, sprint: true, sole: false }])
+        const ev = sim.drainEvents()
+        if (ev.some((e) => e.type === 'BallOut' && s.ball.lastTouchTeam === 1)) {
+          outs++
+          break
+        }
+        if (s.ball.ownerId !== 8) break
+      }
+    }
+    expect(outs).toBeLessThanOrEqual(1)
+  })
+})

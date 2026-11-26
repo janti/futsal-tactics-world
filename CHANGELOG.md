@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+- AI on the ball under pressure: two opponents closing in mean the ball goes at once (shielding
+  from one left it open to the second); shielding turns the back on everybody close, not just the
+  nearest; the deepest player releases it earlier; the keeper is a pass option in the own half under
+  moderate pressure whenever the back pass is allowed.
+- Defending a pivot with his back to goal: the defender stays about a metre goal-side of him,
+  mirroring him, instead of stepping onto the ball (which let him spin off) — a plain turn now runs
+  into the defender; a feint one way and a turn the other still often beats him. Measured: plain turn
+  past the defender 12/20 -> 0-2/20, with a feint about 15/20.
+- Supporting the pivot: with space down a wing, the nearest teammate carries his run on deep there
+  (to the edge of the area) while the pivot has the ball, so the pivot can play him in. AI vs AI
+  entries into the final third about 45 -> 82 per 18 min.
+- The chip is a dink with the toe: slow and high, not much power — a tap just over a leg a couple of
+  metres away, a full press up to about 5.5 m high and 11 m long, in the air about two seconds.
+
+- Passing: hold the pass button for power — the pass is always along the floor, a tap soft, a long
+  press firm; with two teammates in the same direction a long press picks the one further away.
+  Passes are firmer in general (AI too). A teammate takes even a firm ground pass cleanly (up to
+  12 m/s); a firm pass that strikes an opponent usually bounces off him instead of sticking.
+- The through-pass button is now the chip (see the dink above for its final shape);
+  the receiver runs to where it comes down. The charge bar shows the power.
+- Keeper distribution in an arc: the AI keeper throws anything beyond a few metres (or a ball an
+  opponent could cut out along the floor) as an arced throw over the opponents; the human keeper's
+  overarm throws go higher.
+- Defending: a second man goes to the ball only in the own half; the pivot follows a dangerous man
+  between the ball and the goal out wide (he keeps the middle otherwise).
+
+- Fixes after playtesting: the AI attacks and shoots again. Last round's "bend away from the human
+  player from 4.5 m" made carriers turn away instead of going forward (shots against the test bot
+  halved); they now bend round an opponent from 3 m and shield only right next to him.
+- AI carriers no longer take the ball over the lines: near a touch line or goal line a heading out of
+  the court (escaping a presser, a challenge down the line) is turned back along it, a shielding
+  carrier faces along the line, and pinned against it he works his way back in. Pinned for two
+  seconds he plays a pass away from the presser (or knocks it out for a kick-in) instead of
+  shielding until the ball goes over — that used to end with the presser pushing him and the ball
+  over his own goal line for a corner.
+- The human player's sprint dribble keeps the ball closer: shorter knocks, a change of direction only
+  turns the ball, and the ball goes between where he faces and where he runs.
+
+### Milestone 6 — advanced futsal tactics (stage 1)
+
+- Team tactics in the match state: formation (3-1, 4-0, 2-2) and pressing height (low block,
+  mid-block, high press). Quick Match lets you choose both for your team (with a short description);
+  computer teams play their own style; a `SetTactics` command changes them during a match.
+- 4-0 attacks flat with no fixed pivot; 2-2 attacks with two pairs and defends in a box.
+- A low block defends round its own area, stands off the carrier and does not follow men out; a high
+  press engages everywhere and marks tight.
+
 - Passes to feet go straight to the receiver: aimed from the ball (in front of the passer's feet)
   rather than from his body, and a moving receiver is led by at most a metre (a square pass no longer
   goes 20-30 degrees up the court in front of him).

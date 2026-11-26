@@ -73,21 +73,26 @@ export function carrierBackToGoal(state: MatchState, owner: PlayerState): boolea
 export function markingPosition(state: MatchState, p: PlayerState, pressing: (number | null)[]): Vec2 {
   const dir = state.teams[p.team].attackDir
   const ball = state.ball.pos
-  const anchor = diamondAnchor(p.role, dir, ball)
+  const anchor = diamondAnchor(p.role, dir, ball, state.teams[p.team].tactics)
   const man = markingAssignment(state, p.team, pressing).get(p.id)
   p.aiMarkId = man ?? null
   if (man === undefined) return anchor
   const a = state.players[man]!
   const ownGoal = { x: 0, y: -dir * COURT.halfLength }
-  // Tighter the closer he is to goal and to the ball; looser far away (still goal-side).
-  const tight = clamp(1 + (dist(a.pos, ownGoal) - 8) / 14 + (dist(a.pos, ball) - 6) / 20, 1, 2.2)
+  const height = state.teams[p.team].tactics.pressing
+  // Tighter the closer he is to goal and to the ball; looser far away (still goal-side). A high press
+  // marks tight everywhere.
+  const tight =
+    height === 'high'
+      ? clamp(0.8 + (dist(a.pos, ball) - 6) / 30, 0.8, 1.4)
+      : clamp(1 + (dist(a.pos, ownGoal) - 8) / 14 + (dist(a.pos, ball) - 6) / 20, 1, 2.2)
   const goalSide = addScaled(a.pos, normalize(sub(ownGoal, a.pos)), tight)
   // Inside shoulder: cover the middle side of the man (and a touch towards the ball).
   const inside = { x: -Math.sign(a.pos.x) * Math.min(0.8, Math.abs(a.pos.x) * 0.3), y: 0 }
   let mark = addScaled({ x: goalSide.x + inside.x, y: goalSide.y }, normalize(sub(ball, goalSide)), 0.15)
   // Help side: a man far from the ball is marked loosely, sagging towards the middle in front of goal
   // so the defender can cover a carrier who gets through.
-  const away = clamp((dist(a.pos, ball) - 7) / 10, 0, 0.45)
+  const away = clamp((dist(a.pos, ball) - 7) / 10, 0, height === 'high' ? 0.2 : 0.45)
   const middle = { x: a.pos.x * 0.3, y: (a.pos.y + ownGoal.y) / 2 }
   mark = { x: mark.x + (middle.x - mark.x) * away, y: mark.y + (middle.y - mark.y) * away }
   // A man in front of our goal is followed even outside the zone.
@@ -96,11 +101,16 @@ export function markingPosition(state: MatchState, p: PlayerState, pressing: (nu
   // The fixo guards the middle and leaves his zone least. A man between the ball and our goal is
   // dangerous: he is followed further out of the zone.
   const ahead = dist(a.pos, ownGoal) < dist(ball, ownGoal)
-  const zone = (p.role === 'FIXO' ? 4 : p.role === 'PIVOT' ? 6.5 : 5.5) + (ahead ? 3 : 0)
+  // A low block does not follow men up the court out of the block; a high press follows them further.
+  const zone =
+    (p.role === 'FIXO' ? 4 : p.role === 'PIVOT' ? 6.5 : 5.5) +
+    (ahead ? 3 : 0) +
+    (height === 'low' ? -2 : height === 'high' ? 3 : 0)
   const l = len(off)
   const pos = l > zone ? addScaled(anchor, off, zone / l) : mark
   // The pivot keeps the middle closed: he does not follow the ball or his man out to the wings.
-  if (p.role === 'PIVOT') return { x: clamp(pos.x, -3.5, 3.5), y: pos.y }
+  // (A man between the ball and our goal is dangerous: him he follows out wide.)
+  if (p.role === 'PIVOT' && !ahead) return { x: clamp(pos.x, -3.5, 3.5), y: pos.y }
   // An ala keeps his side of the diamond: at most a couple of metres over the middle.
   if (p.role === 'ALA_L' || p.role === 'ALA_R') {
     const ownSide = p.role === 'ALA_L' ? dir : -dir
@@ -211,7 +221,7 @@ export function markingAssignment(
   const attackers = state.players.filter(
     (o) => o.team !== team && o.role !== 'GK' && o.id !== state.ball.ownerId,
   )
-  const anchors = defenders.map((d) => diamondAnchor(d.role, dir, ball))
+  const anchors = defenders.map((d) => diamondAnchor(d.role, dir, ball, state.teams[team].tactics))
   // Cost of a pairing: distance from the defender's diamond spot to the man. An ala keeps to his own
   // side (a man on the far side costs extra: he does not run across the court after him), and a
   // pairing that already exists is kept unless another is clearly better (no swapping men to and fro).
@@ -313,9 +323,9 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
   const carrierToGoal = dist(owner.pos, ownGoal)
   const transition = state.defTransition[team]
-  // A second man goes to the ball only in our own end (also in a counter-attack against us: far up
-  // the court the others recover into shape instead).
-  if (carrierToGoal > 28) return null
+  // A second man goes to the ball only in our own half (also in a counter-attack against us: further
+  // up the court the others stay with their men or recover into shape instead).
+  if (carrierToGoal > 20) return null
   if (winnerId !== null) {
     const w = state.players[winnerId]!
     // Level with the carrier still counts (margin, so the help does not flicker on and off).

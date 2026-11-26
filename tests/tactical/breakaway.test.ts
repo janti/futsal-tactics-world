@@ -42,7 +42,12 @@ function breakaway(seed: number, from: Vec2): { outcome: Outcome; shotDist: numb
   for (let i = 0; i < 60 * 8; i++) {
     sim.step()
     for (const e of sim.drainEvents()) {
-      if (e.type === 'ShotTaken') shotDist = Math.hypot(att.pos.x, att.pos.y + 20)
+      if (e.type === 'ShotTaken') {
+        // The breakaway runner's finish, or his teammate's after the square ball (not a teammate's
+        // first-time strike at a loose ball after the runner lost it).
+        const shooter = sim.player(e.playerId)
+        if (shooter.id === 6 || passed) shotDist = Math.hypot(shooter.pos.x, shooter.pos.y + 20)
+      }
       if (e.type === 'PassStarted' && e.playerId === 6) passed = true
       if (e.type === 'GoalScored') return { outcome: 'goal', shotDist, passed }
       if (e.type === 'Save') return { outcome: e.caught ? 'caught' : 'saved', shotDist, passed }
@@ -69,7 +74,7 @@ describe('breakaway (through on goal)', () => {
     const tally: Record<Outcome, number> = { goal: 0, saved: 0, caught: 0, out: 0, other: 0 }
     const dists: number[] = []
     let passes = 0
-    const n = 40
+    const n = 60 // enough samples that the finishing rate is not decided by a couple of seeds
     for (let seed = 1; seed <= n; seed++) {
       const r = breakaway(seed, { x: seed % 3 === 0 ? -3 : seed % 3 === 1 ? 3 : 0, y: -2 })
       tally[r.outcome]++
@@ -78,7 +83,7 @@ describe('breakaway (through on goal)', () => {
     }
     console.log('breakaway', tally, 'mean shot distance', dists.reduce((a, b) => a + b, 0) / dists.length)
     // Through on goal he finishes himself; only rarely, when a recovering defender gets goal-side, he passes.
-    expect(passes).toBeLessThanOrEqual(2)
+    expect(passes).toBeLessThanOrEqual(3)
     expect(dists.length).toBeGreaterThan(n * 0.8)
     for (const d of dists) expect(d).toBeLessThan(10.5)
     // Often a goal (the keeper covering his angle well saves a fair share).

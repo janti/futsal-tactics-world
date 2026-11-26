@@ -214,7 +214,10 @@ export function squareOptionSpot(state: MatchState, p: PlayerState): Vec2 | null
  * teammate comes to a lay-off spot a few metres behind him on the inside (a first-time shot from
  * there) and the next one attacks the far post. The deepest player stays back.
  */
-export function pivotSupportSpot(state: MatchState, p: PlayerState): Vec2 | null {
+export function pivotSupportSpot(
+  state: MatchState,
+  p: PlayerState,
+): { spot: Vec2; kind: 'deep' | 'layoff' | 'farPost' } | null {
   const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
   if (!owner || owner.team !== p.team || owner.id === p.id || owner.role === 'GK' || p.role === 'GK')
     return null
@@ -231,14 +234,31 @@ export function pivotSupportSpot(state: MatchState, p: PlayerState): Vec2 | null
     y: clamp(owner.pos.y - dir * 4, -COURT.halfLength + 3, COURT.halfLength - 3),
   }
   const farPost = { x: -side * 1.8, y: goalY - dir * 2.5 }
-  const helpers = mates.filter((t) => t.id !== deepest)
+  let helpers = mates.filter((t) => t.id !== deepest)
   if (helpers.length === 0) return null
+  // Space on a wing in behind: the nearest helper carries his run on deep down that wing (to the
+  // edge of the area), where the pivot can play him into a scoring position.
+  let deep: { spot: Vec2; runner: PlayerState } | null = null
+  for (const s of [side, -side]) {
+    const spot = { x: s * 6.2, y: goalY - dir * 4.5 }
+    let free = true
+    for (const o of state.players)
+      if (o.team !== p.team && o.role !== 'GK' && dist(o.pos, spot) < 3) free = false
+    if (!free || laneOpenness(state, p.team, owner.pos, spot) < 0.8) continue
+    const runner = helpers.reduce((a, t) => (dist(t.pos, spot) < dist(a.pos, spot) ? t : a))
+    if (!deep || dist(runner.pos, spot) < dist(deep.runner.pos, deep.spot)) deep = { spot, runner }
+  }
+  if (deep) {
+    if (deep.runner.id === p.id) return { spot: deep.spot, kind: 'deep' }
+    helpers = helpers.filter((t) => t.id !== deep!.runner.id)
+    if (helpers.length === 0) return null
+  }
   const first = helpers.reduce((a, t) => (dist(t.pos, layoff) < dist(a.pos, layoff) ? t : a))
-  if (first.id === p.id) return layoff
+  if (first.id === p.id) return { spot: layoff, kind: 'layoff' }
   const rest = helpers.filter((t) => t.id !== first.id)
   if (rest.length === 0) return null
   const second = rest.reduce((a, t) => (dist(t.pos, farPost) < dist(a.pos, farPost) ? t : a))
-  return second.id === p.id ? farPost : null
+  return second.id === p.id ? { spot: farPost, kind: 'farPost' } : null
 }
 
 /**

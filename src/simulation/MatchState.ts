@@ -1,3 +1,4 @@
+import type { TeamTactics } from './Tactics'
 import type { Difficulty } from './Difficulty'
 import type { Vec2 } from '../core/math/vec2'
 import type { ControlOptions } from './ControlOptions'
@@ -131,7 +132,7 @@ export interface PlayerState {
 }
 
 export type BufferedAction =
-  | { kind: 'pass'; through: boolean; dir: Vec2; ttl: number; power?: number }
+  | { kind: 'pass'; through: boolean; dir: Vec2; ttl: number; power?: number; chip?: boolean }
   | { kind: 'shot'; power: number; dir: Vec2; ttl: number }
 
 export type BallMode = 'free' | 'controlled' | 'dead'
@@ -186,6 +187,8 @@ export interface BallState {
    * (no double touch after a kick-in, corner or kick-off).
    */
   blockedTouchId: number | null
+  /** Where the current lofted ball (chip, lobbed throw) comes down, for the receiver; else null. */
+  landing: Vec2 | null
 }
 
 export type RestartType = 'kickoff' | 'kickIn' | 'corner' | 'goalClearance' | 'freeKick'
@@ -229,6 +232,8 @@ export interface TeamState {
   secondaryColor: number
   numberColor: number
   attackDir: AttackDir
+  /** Formation and pressing (Milestone 6); changed with the SetTactics command. */
+  tactics: TeamTactics
 }
 
 export interface MatchState {

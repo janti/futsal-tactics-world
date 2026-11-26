@@ -14,8 +14,9 @@ import { SeededRandom, deriveSeed } from '../core/random/SeededRandom'
 import { add, addScaled, angleOf, dist, fromAngle, len, normalize, sub, type Vec2 } from '../core/math/vec2'
 import { assistControlledPlayer, outsideClearanceArea, updateAI, type AIActions } from '../ai/BasicAI'
 import { baseAnchor } from '../ai/positioning/Formation'
+import { DEFAULT_TACTICS, type TeamTactics } from './Tactics'
 import { checkOutOfPlay, isGoal, stepBall } from '../physics/BallPhysics'
-import { planPass } from '../physics/PassingPhysics'
+import { lobVelocity, planPass } from '../physics/PassingPhysics'
 import {
   estimateTimeToReach,
   playerRadius,
@@ -39,6 +40,7 @@ import {
   DT,
   HANDS,
   PASS,
+  CHIP,
   PLAYER,
   POST_X,
   SIDE_SHOT,
@@ -64,6 +66,8 @@ export interface MatchSetup {
   rules?: Partial<MatchRules>
   /** Strength of the computer opponent (default normal). */
   difficulty?: Difficulty
+  /** Tactics per team [home, away] (defaults: the team's own style, else DEFAULT_TACTICS). */
+  tactics?: [Partial<TeamTactics>?, Partial<TeamTactics>?]
 }
 
 export class MatchSimulation implements AIActions {
@@ -164,6 +168,7 @@ export class MatchSimulation implements AIActions {
     const s = this.state
     for (const c of commands) {
       if (c.type === 'SetControlOptions') s.control = { ...s.control, ...c.options }
+      if (c.type === 'SetTactics') s.teams[c.team].tactics = { ...s.teams[c.team].tactics, ...c.tactics }
     }
     if (s.controlledId === null) return
     const p = this.player(s.controlledId)
@@ -193,14 +198,17 @@ export class MatchSimulation implements AIActions {
           else if (s.ball.ownerId === p.id) this.pass(p, c.dir, false, null)
           break
         case 'Pass':
-          if (s.ball.ownerId === p.id) this.pass(p, c.dir, c.through, null, c.power)
-          else if (this.shouldBuffer(p))
+          if (s.ball.ownerId === p.id) {
+            if (c.chip) this.chip(p, c.dir, c.power ?? 0)
+            else this.pass(p, c.dir, c.through, null, c.power)
+          } else if (this.shouldBuffer(p))
             p.buffered = {
               kind: 'pass',
               through: c.through,
               dir: c.dir,
               ttl: CONTROL.inputBufferTime,
               ...(c.power !== undefined ? { power: c.power } : {}),
+              ...(c.chip ? { chip: true } : {}),
             }
           else this.tackle(p)
           break
@@ -216,6 +224,7 @@ export class MatchSimulation implements AIActions {
           this.manualSwitch(c.dir)
           break
         case 'SetControlOptions':
+        case 'SetTactics':
           break
       }
     }
@@ -244,7 +253,7 @@ export class MatchSimulation implements AIActions {
     // Passing assistance applies to the human player only; the AI always passes assisted.
     const human = p.id === s.controlledId && p.team === s.humanTeam
     const assist = human ? s.control.passAssist : 'assisted'
-    const firm = arrival ?? (human && !through ? PASS.humanArrivalSpeed : undefined)
+    const firm = arrival ?? (human && !through && power === undefined ? PASS.humanArrivalSpeed : undefined)
     const plan = planPass(s, p, dir, through, this.rng, receiver, assist, power, firm)
     this.kick(p, plan.velocity, 0, 0, 'pass')
     s.ball.intendedReceiverId = plan.receiverId
@@ -257,6 +266,78 @@ export class MatchSimulation implements AIActions {
     } else if (s.humanTeam !== null && p.team !== s.humanTeam && s.control.defensiveSwitch === 'assisted') {
       this.assistDefensiveSwitch(plan.target)
     }
+  }
+
+  /** Keeper's arced throw from the hands to a teammate, landing short of him (AI distribution). */
+  lobThrow(p: PlayerState, receiver: PlayerState, apex: number): void {
+    const s = this.state
+    if (s.ball.ownerId !== p.id || !s.ball.inHands) return
+    const target = addScaled(receiver.pos, receiver.vel, 0.5)
+    const v = lobVelocity(s.ball.pos, target, apex, 0.85, THROW.releaseHeight)
+    const err = this.rng.gaussian() * attr(p.profile.attributes.throwing, THROW.error[0], THROW.error[1])
+    const h = fromAngle(Math.atan2(v.y, v.x) + err, Math.hypot(v.x, v.y))
+    this.kick(p, h, v.vz, 0, 'pass')
+    s.ball.intendedReceiverId = receiver.id
+    s.ball.landing = addScaled(s.ball.pos, normalize(h), dist(s.ball.pos, target) * 0.85)
+    s.ball.isShot = false
+    this.emit({ type: 'KeeperThrow', tick: s.tick, playerId: p.id, power: 1, receiverId: receiver.id })
+    this.emit({ type: 'PassStarted', tick: s.tick, playerId: p.id, receiverId: receiver.id, through: false })
+  }
+
+  /**
+   * Chip: a lofted ball over the opponents. `power` (how long the chip key was held) sets the height
+   * and the length — a tap just over a leg a few metres away, a full press up to about halfway from
+   * the own end. With assistance a teammate in that direction at about that range is the target (it
+   * lands short of him so he takes it in his stride); otherwise it goes along the input.
+   */
+  chip(p: PlayerState, dir: Vec2, power: number): void {
+    const s = this.state
+    if (s.ball.ownerId !== p.id) return
+    const pw = clamp(power, 0, 1)
+    const human = p.id === s.controlledId && p.team === s.humanTeam
+    const assist = human ? s.control.passAssist : 'assisted'
+    const aim = len(dir) > 0.2 ? normalize(dir) : fromAngle(p.facing)
+    let length = CHIP.minDistance + (CHIP.maxDistance - CHIP.minDistance) * pw
+    let receiver: PlayerState | null = null
+    if (assist !== 'manual') {
+      const cone = assist === 'semi' ? PASS.semiAssistConeCos : PASS.assistConeCos
+      let best = Infinity
+      for (const t of s.players) {
+        if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+        const to = sub(t.pos, s.ball.pos)
+        const d = len(to)
+        if (d < 2.5 || d > CHIP.maxDistance + 4) continue
+        const cos = (to.x * aim.x + to.y * aim.y) / d
+        if (cos < cone) continue
+        // The teammate whose range best matches the press (and the input direction).
+        const score = Math.abs(d - length) / 4 + (1 - cos) * 3
+        if (score < best) {
+          best = score
+          receiver = t
+        }
+      }
+    }
+    let target = addScaled(s.ball.pos, aim, length)
+    if (receiver) {
+      target = addScaled(receiver.pos, receiver.vel, 0.4)
+      length = dist(s.ball.pos, target)
+    }
+    const apex = CHIP.minApex + (CHIP.maxApex - CHIP.minApex) * Math.pow(pw, 0.9)
+    const vel = lobVelocity(s.ball.pos, target, apex, 0.85)
+    const err = this.rng.gaussian() * attr(p.profile.attributes.passing, CHIP.error[0], CHIP.error[1])
+    const h = fromAngle(Math.atan2(vel.y, vel.x) + err, Math.hypot(vel.x, vel.y))
+    this.kick(p, h, vel.vz, 0, 'pass')
+    s.ball.intendedReceiverId = receiver ? receiver.id : null
+    s.ball.landing = addScaled(s.ball.pos, normalize(h), length * 0.85)
+    s.ball.isShot = false
+    this.emit({
+      type: 'PassStarted',
+      tick: s.tick,
+      playerId: p.id,
+      receiverId: receiver?.id ?? null,
+      through: true,
+    })
+    if (receiver && human && receiver.role !== 'GK') this.setControlled(receiver.id)
   }
 
   /**
@@ -405,6 +486,7 @@ export class MatchSimulation implements AIActions {
     b.kickTime = this.state.time
     b.shotPlaced = false
     b.lastKickerId = p.id
+    b.landing = null
     p.touchCooldown = PLAYER.kickCooldown
     p.action = fromHands ? 'throw' : action
     p.actionTime = 0
@@ -584,9 +666,16 @@ export class MatchSimulation implements AIActions {
       const ballOff = len(b.vel) > 0.5 ? Math.abs(angleDiff(angleOf(b.vel), owner.facing)) : 0
       const redirect = human && ballOff > 0.45 && dist(b.pos, owner.pos) < CONTROL.touchReach * 1.4
       if ((owner.dribbleTouchTimer <= 0 && ahead < CONTROL.touchReach) || redirect) {
-        const extra = attr(a.dribbling, 1.7, 1.1)
-        const dir = fromAngle(owner.facing + this.rng.gaussian() * attr(a.ballControl, 0.1, 0.03))
-        b.vel = { x: dir.x * (speed + extra), y: dir.y * (speed + extra) }
+        // The knock ahead: a little faster than he runs. A touch to change direction (human) is a
+        // short one that keeps the ball at his feet — it only turns the ball, it does not push it on.
+        const extra = redirect ? 0 : attr(a.dribbling, 1.7, 1.1) * (human ? 0.6 : 1)
+        const along = redirect ? speed * 0.85 : speed
+        // A human player curving into a new direction turns his body faster than his run bends: the
+        // ball goes between where he faces and where he is running, so it stays in front of him.
+        let aim = owner.facing
+        if (human && speed > 2) aim = owner.facing + angleDiff(owner.facing, angleOf(owner.vel)) * 0.5
+        const dir = fromAngle(aim + this.rng.gaussian() * attr(a.ballControl, 0.1, 0.03))
+        b.vel = { x: dir.x * (along + extra), y: dir.y * (along + extra) }
         owner.dribbleTouchTimer = CONTROL.touchInterval
       } else {
         // Between touches: the ball rolls on (slower than the runner) and drifts into his line.
@@ -700,7 +789,8 @@ export class MatchSimulation implements AIActions {
     const buf = p.buffered
     if (buf) {
       p.buffered = null
-      if (buf.kind === 'pass') this.pass(p, buf.dir, buf.through, null, buf.power)
+      if (buf.kind === 'pass' && buf.chip) this.chip(p, buf.dir, buf.power ?? 0)
+      else if (buf.kind === 'pass') this.pass(p, buf.dir, buf.through, null, buf.power)
       else this.shoot(p, buf.dir, buf.power)
     }
   }
@@ -848,13 +938,17 @@ export class MatchSimulation implements AIActions {
       }
       if (!retouchBanned && !keeperFacingShot && d < pickupR && b.z < PLAYER.ballContactHeight) {
         const a = p.profile.attributes
-        if (rel <= CONTROL.cleanControlSpeed) {
+        // A teammate's pass is expected and taken cleanly even when firm; an opponent stepping into a
+        // firm pass often gets only a touch on it and it bounces off him.
+        const opponentsBall = b.lastTouchTeam !== null && b.lastTouchTeam !== p.team && !b.isShot
+        const clean = opponentsBall ? CONTROL.opponentCleanSpeed : CONTROL.cleanControlSpeed
+        if (rel <= clean) {
           this.giveBall(p)
           return true
         }
         if (rel < CONTROL.maxControlSpeed) {
-          const t = (rel - CONTROL.cleanControlSpeed) / (CONTROL.maxControlSpeed - CONTROL.cleanControlSpeed)
-          const chance = clamp(1 - t * attr(a.firstTouch, 1.1, 0.55), 0.05, 1)
+          const t = (rel - clean) / (CONTROL.maxControlSpeed - clean)
+          const chance = clamp(1 - t * attr(a.firstTouch, 1.1, 0.55) * (opponentsBall ? 1.6 : 1), 0.05, 1)
           if (this.rng.chance(chance)) {
             // A controlled but heavy first touch: the ball bounces off the foot a few metres away.
             if (p.role !== 'GK' && this.rng.chance(t * attr(a.firstTouch, 0.55, 0.12))) {
@@ -862,6 +956,11 @@ export class MatchSimulation implements AIActions {
               return true
             }
             this.giveBall(p)
+            return true
+          }
+          if (opponentsBall && p.role !== 'GK') {
+            // Not controlled: it strikes his foot or shin and bounces away.
+            this.deflect(p, b, dx / (d || 1), dy / (d || 1))
             return true
           }
         }
@@ -1676,6 +1775,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
       secondaryColor: d.secondaryColor,
       numberColor: d.numberColor,
       attackDir: i === 0 ? (1 as const) : (-1 as const),
+      tactics: { ...DEFAULT_TACTICS, ...d.tactics, ...setup.tactics?.[i] },
     }
   }
   return {
@@ -1706,6 +1806,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
       intendedReceiverId: null,
       isShot: false,
       blockedTouchId: null,
+      landing: null,
       kickPos: { x: 0, y: 0 },
       kickTime: 0,
       inHands: false,

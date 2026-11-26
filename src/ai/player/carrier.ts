@@ -84,19 +84,20 @@ export function carrierBehaviour(
   const toNearest = nearest ? normalize(sub(nearest.pos, p.pos)) : { x: 0, y: 0 }
   const inFront = nearest !== null && toNearest.x * heading.x + toNearest.y * heading.y > 0.2
   const humanNear = nearest !== null && nearest.id === state.controlledId
-  const shieldAt = humanNear ? 2.6 : 2.1
+  const shieldAt = humanNear ? 2.3 : 1.6
   const threat = nearest !== null && nearest.role !== 'GK' && inFront && nd < shieldAt
-  if (nearest && nd < (humanNear ? 4.5 : 3)) {
+  if (nearest && nd < 3) {
     const away = normalize(sub(p.pos, nearest.pos))
     // Round him on the side away from him (sideways), not straight back.
     const side = heading.x * toNearest.y - heading.y * toNearest.x > 0 ? 1 : -1
     const round = { x: -heading.y * side, y: heading.x * side }
-    const k = (humanNear ? 4.5 - nd : 3 - nd) / 2
+    const k = (3 - nd) / 2
     heading = normalize({
       x: heading.x + away.x * k + (inFront ? round.x * k : 0),
       y: heading.y + away.y * k + (inFront ? round.y * k : 0),
     })
   }
+  heading = keepInCourt(p.pos, heading)
   const open = !threat && spaceAhead(state, p, heading, 3.5)
   if (open) {
     // Space in front: carry the ball forward.
@@ -113,13 +114,33 @@ export function carrierBehaviour(
             y: (p.pos.y - nearest.pos.y) * 1.0 + heading.y * 0.3,
           })
         : heading
-    heading = escape
-    p.moveIntent = { x: heading.x * 0.45, y: heading.y * 0.45 }
+    heading = keepInCourt(p.pos, escape)
+    // Pinned against a line he works his way back in firmly (a presser leaning on him would
+    // otherwise push him and the ball over it).
+    const nearLine = COURT.halfWidth - Math.abs(p.pos.x) < 1.5 || COURT.halfLength - Math.abs(p.pos.y) < 1.5
+    const k = nearLine ? 0.8 : 0.45
+    p.moveIntent = { x: heading.x * k, y: heading.y * k }
     p.sprint = false
     // Close in he keeps it on the sole, body between the opponent and the ball.
-    p.sole = nd < (humanNear ? 2.1 : 1.6)
+    p.sole = nd < (humanNear ? 1.8 : 1.6)
     // Shield: under close pressure turn the back to the opponent, body between him and the ball.
-    if (p.sole && nearest) p.faceTarget = addScaled(p.pos, normalize(sub(p.pos, nearest.pos)), 3)
+    // Shield from everybody close, not just the nearest (turning his back on one opponent must not
+    // show the ball to a second one). Near a line he turns along it, not towards it.
+    if (p.sole && nearest) {
+      let ax = 0
+      let ay = 0
+      for (const o of state.players) {
+        if (o.team === p.team || o.role === 'GK') continue
+        const d = dist(o.pos, p.pos)
+        if (d > 3.2) continue
+        const w = 1 / Math.max(0.4, d)
+        ax += (p.pos.x - o.pos.x) * w
+        ay += (p.pos.y - o.pos.y) * w
+      }
+      const away =
+        Math.hypot(ax, ay) > 1e-3 ? normalize({ x: ax, y: ay }) : normalize(sub(p.pos, nearest.pos))
+      p.faceTarget = addScaled(p.pos, keepInCourt(p.pos, away), 3)
+    }
   }
 
   if (!decide) return
@@ -130,9 +151,26 @@ export function carrierBehaviour(
   for (const o of state.players)
     if (o.team !== p.team && o.role !== 'GK')
       incoming = Math.min(incoming, estimateTimeToReach(o, p.pos) * (o.id === state.controlledId ? 0.85 : 1))
-  const pressure = Math.max(pressureOn(state, p), incoming < 0.5 ? 0.6 : incoming < 0.8 ? 0.45 : 0)
+  // Two opponents closing in (one pressing, another coming to take it from the other side): the
+  // ball must go at once — shielding from one leaves it open to the second.
+  let close = 0
+  for (const o of state.players)
+    if (
+      o.team !== p.team &&
+      o.role !== 'GK' &&
+      dist(o.pos, p.pos) < (o.id === state.controlledId ? 3.2 : 2.7)
+    )
+      close++
+  const doubled = close >= 2
+  // The deepest player is the last man: he releases it earlier (a presser arriving within a second).
+  const last = deepestOutfield(state, p.team) === p.id
+  let pressure = Math.max(
+    pressureOn(state, p),
+    incoming < 0.5 ? 0.6 : incoming < (last ? 1.0 : 0.8) ? 0.45 : 0,
+  )
+  if (doubled) pressure = Math.max(pressure, 0.85)
 
-  const minHold = state.ball.lastTouchTeam === p.team && p.aiHoldTimer < 0.3 ? 0.25 : 0.3
+  const minHold = doubled ? 0.1 : state.ball.lastTouchTeam === p.team && p.aiHoldTimer < 0.3 ? 0.25 : 0.3
 
   if (p.aiHoldTimer < minHold) return
 
@@ -165,6 +203,7 @@ export type CarrierOptionKind =
   | 'clear'
   | 'pivot'
   | 'layoff'
+  | 'kickOut'
 
 export interface CarrierOption {
   kind: CarrierOptionKind
@@ -320,7 +359,8 @@ export function carrierOptions(
       return { target, score: (safe ? 10 : 0) + fromHuman * 0.3 + own }
     })
     const pick = cands[0]!.score >= cands[1]!.score ? cands[0]! : cands[1]!
-    if (pick.score > -Infinity)
+    // Only a clearance nobody can cut out — or any, when he is right under it.
+    if (pick.score >= 10 || (pick.score > -Infinity && pressureOn(state, p) > 0.8))
       out.push({
         kind: 'clear',
         utility: 0.35,
@@ -340,15 +380,88 @@ export function carrierOptions(
       // A pass an opponent can cut out is not worth it: shield and carry instead (only under the very
       // heaviest pressure does he risk it).
       const risky = fallback ? passInterceptable(state, p.team, p.pos, fallback.player.pos) : true
+      // Pinned (an opponent right on him for a while): shielding for ever only ends with the ball
+      // over the line, so the best pass is played even if it is risky.
+      const pinned = pressureOn(state, p) > 0.85 && p.aiHoldTimer > 2
+      const escape = pinned && c.nearest ? pinnedPass(state, p, c.nearest) : null
       if (fallback && !risky && (c.pressure > 0.7 || p.aiHoldTimer > attr(a.creativity, 2.6, 3.4)))
         out.push({
           kind: 'fallback',
           utility: 0.25,
           act: (x) => x.pass(p, sub(fallback.player.pos, p.pos), false, fallback.player),
         })
+      else if (escape)
+        out.push({
+          kind: 'fallback',
+          utility: 0.25,
+          act: (x) => x.pass(p, sub(escape.pos, p.pos), false, escape),
+        })
+      else if (pinned && p.aiHoldTimer > 2.6) {
+        // Nobody to pass to: knock it off the line for a kick-in rather than lose it near goal.
+        const side = Math.sign(p.pos.x) || 1
+        // Straight out over the near touch line (not towards a teammate the presser would reach).
+        const out2 = { x: side * (COURT.halfWidth + 2), y: p.pos.y }
+        out.push({
+          kind: 'kickOut',
+          utility: 0.2,
+          act: (x) => x.pass(p, sub(out2, p.pos), false, null, 0.5, 4),
+        })
+      }
     }
   }
   return out
+}
+
+/**
+ * Pinned by a presser (he is right on him, the carrier shielding with his back to him): a pass away
+ * from the presser cannot be cut out by him, so he is left out of the interception check for those;
+ * the most open such teammate (the keeper only if nothing else) is played.
+ */
+function pinnedPass(state: MatchState, p: PlayerState, presser: PlayerState): PlayerState | null {
+  const away = normalize(sub(p.pos, presser.pos))
+  let best: PlayerState | null = null
+  let bestScore = -Infinity
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id) continue
+    const to = sub(t.pos, p.pos)
+    const d = Math.hypot(to.x, to.y)
+    if (d < 2 || d > 18) continue
+    // Away from him: the human player, glued on and quick to turn, needs it clearly behind him.
+    const minAway = presser.id === state.controlledId ? 0.75 : 0.3
+    if ((to.x * away.x + to.y * away.y) / d < minAway || (presser.id === state.controlledId && d > 13))
+      continue
+    if (passInterceptable(state, p.team, p.pos, t.pos, 0.12, (o) => o.id === presser.id)) continue
+    let space = Infinity
+    for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
+    const score = Math.min(space, 4) - (t.role === 'GK' ? 2 : 0) - d / 20
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+    }
+  }
+  return best
+}
+
+/**
+ * Never dribble the ball out: near a touch line or goal line a heading that points out of the court
+ * is turned back along the line and a little inwards (escaping a presser, bending round him or a
+ * challenge down the line all used to run the ball over the line).
+ */
+export function keepInCourt(pos: Vec2, heading: Vec2): Vec2 {
+  const margin = 1.8
+  let { x, y } = heading
+  const nearX = COURT.halfWidth - Math.abs(pos.x)
+  if (nearX < margin && Math.sign(x) === Math.sign(pos.x)) {
+    const k = 1 - Math.max(0, nearX) / margin
+    x = x * (1 - k) - Math.sign(pos.x) * 0.35 * k
+  }
+  const nearY = COURT.halfLength - Math.abs(pos.y)
+  if (nearY < margin && Math.sign(y) === Math.sign(pos.y)) {
+    const k = 1 - Math.max(0, nearY) / margin
+    y = y * (1 - k) - Math.sign(pos.y) * 0.35 * k
+  }
+  const l = Math.hypot(x, y)
+  return l > 1e-3 ? { x: x / l, y: y / l } : { x: -Math.sign(pos.x) || 1, y: 0 }
 }
 
 /**
@@ -361,7 +474,12 @@ function layoffOption(state: MatchState, p: PlayerState, myValue: number): Playe
   for (const t of state.players)
     if (t.team === p.team && t.role !== 'GK' && t.id !== p.id && (t.pos.y - p.pos.y) * dir > 0) return null
   let best: PlayerState | null = null
-  let bestV = myValue * 1.3 + 0.03
+  // With his back to goal his own shot is worth much less (he has to turn first).
+  const goalDir = { x: -p.pos.x, y: dir * COURT.halfLength - p.pos.y }
+  const facingGoal =
+    (Math.cos(p.facing) * goalDir.x + Math.sin(p.facing) * goalDir.y) / Math.hypot(goalDir.x, goalDir.y)
+  const own = facingGoal < 0 ? myValue * 0.5 : myValue
+  let bestV = own * 1.3 + 0.03
   for (const t of state.players) {
     if (t.team !== p.team || t.role === 'GK' || t.id === p.id) continue
     const back = (p.pos.y - t.pos.y) * dir
@@ -370,7 +488,7 @@ function layoffOption(state: MatchState, p: PlayerState, myValue: number): Playe
     let space = Infinity
     for (const o of state.players)
       if (o.team !== p.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, t.pos))
-    if (space < 1.8 || passInterceptable(state, p.team, p.pos, t.pos)) continue
+    if (space < 1.4 || passInterceptable(state, p.team, p.pos, t.pos)) continue
     const v = shotValue(state, p.team, t.pos, 1, 0)
     if (v > bestV) {
       bestV = v
@@ -537,7 +655,7 @@ function challengeBehaviour(state: MatchState, p: PlayerState, defender: PlayerS
     p.aiChallengeSide = -p.aiChallengeSide
   // Sideways burst while the defender is in front, then turn upfield past him.
   const sideWeight = ahead > 0 ? 1.15 : 0.5
-  const m = normalize({ x: p.aiChallengeSide * sideWeight, y: dir })
+  const m = keepInCourt(p.pos, normalize({ x: p.aiChallengeSide * sideWeight, y: dir }))
   p.moveIntent = { x: m.x, y: m.y }
   p.sprint = true
   p.sole = false

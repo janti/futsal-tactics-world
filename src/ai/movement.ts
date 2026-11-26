@@ -4,7 +4,7 @@ import { addScaled, closestOnSegment, dist, len, normalize, sub, type Vec2 } fro
 import { routeAroundGoals } from '../physics/PlayerPhysics'
 import type { MatchState, PlayerState } from '../simulation/MatchState'
 import { COURT } from '../simulation/SimulationConfig'
-import { PRESS_ENGAGE_DISTANCE, outsideClearanceArea } from './common'
+import { outsideClearanceArea, pressEngageDistance } from './common'
 
 export function keepDistance(target: Vec2, from: Vec2, minDist: number): Vec2 {
   const d = dist(target, from)
@@ -17,7 +17,41 @@ export function steer(state: MatchState, p: PlayerState): void {
   const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
   const engage =
     owner !== null &&
-    dist(owner.pos, { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }) <= PRESS_ENGAGE_DISTANCE
+    dist(owner.pos, { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }) <=
+      pressEngageDistance(state, p.team)
+  const ownGoalPos = { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }
+  // Contained until he has actually turned to face our goal (moving sideways is not yet a turn).
+  const facingOurGoal =
+    owner !== null &&
+    (() => {
+      const g = normalize(sub(ownGoalPos, owner.pos))
+      return Math.cos(owner.facing) * g.x + Math.sin(owner.facing) * g.y > 0.55
+    })()
+  if (
+    p.aiState === 'press' &&
+    owner &&
+    owner.team !== p.team &&
+    owner.role !== 'GK' &&
+    !facingOurGoal &&
+    dist(owner.pos, ownGoalPos) < 17 &&
+    dist(owner.pos, p.pos) < 3.2
+  ) {
+    // A pivot with his back to our goal: stop him turning. Stay about a metre goal-side of him (not
+    // on the ball — diving in lets him spin off), mirroring his movement so that when he turns we are
+    // in front of him. He reads the way the pivot is moving and leans that way, so a feint one way
+    // and a turn the other can still wrong-foot him.
+    const toGoal = normalize(sub(ownGoalPos, owner.pos))
+    const lean = { x: owner.vel.x * 0.15, y: owner.vel.y * 0.15 }
+    const spot = { x: owner.pos.x + toGoal.x * 1.05 + lean.x, y: owner.pos.y + toGoal.y * 1.05 + lean.y }
+    const to = sub(spot, p.pos)
+    const l = len(to)
+    const k = l > 0.45 ? 1 : Math.max(0.25, l / 0.45)
+    p.moveIntent = l > 0.04 ? { x: (to.x / l) * k, y: (to.y / l) * k } : { x: 0, y: 0 }
+    // Keeps pace when the pivot moves off (sprints when he does or when left behind).
+    p.sprint = l > 1 || len(owner.vel) > 2.5
+    p.faceTarget = state.ball.pos
+    return
+  }
   if (p.aiState === 'press' && owner && owner.team !== p.team && engage && dist(owner.pos, p.pos) < 2.2) {
     // Close to the carrier: track him every tick and step in on the ball (where it is going), so a
     // dribbler has to beat him rather than just walk round a static marker.

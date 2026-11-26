@@ -64,7 +64,7 @@ function key(target: EventTarget, type: 'keydown' | 'keyup', code: string) {
 
 describe('input: manual pass charging', () => {
   const basis = basisForOrientation(1)
-  it('holding the pass key charges, releasing passes with that power; a tap is a soft pass', () => {
+  it('holding the pass key charges, releasing passes with that power; a tap is the softest pass', () => {
     const target = new EventTarget()
     const input = new InputManager(target as unknown as Window)
     input.setPassCharge(true)
@@ -78,6 +78,24 @@ describe('input: manual pass charging', () => {
     key(target, 'keydown', 'KeyZ')
     key(target, 'keyup', 'KeyZ')
     const tap = input.sample(basis).find((c) => c.type === 'Pass')
-    expect(tap?.type === 'Pass' && tap.power).toBeCloseTo(0.3)
+    expect(tap?.type === 'Pass' && tap.power).toBe(0)
+    expect(tap?.type === 'Pass' && tap.chip).toBe(false)
+  })
+
+  it('the chip key (old through-pass key) charges a chip; without the ball the pass key tackles at once', () => {
+    const target = new EventTarget()
+    const input = new InputManager(target as unknown as Window)
+    input.setPassCharge(true)
+    key(target, 'keydown', 'KeyC')
+    for (let i = 0; i < 30; i++) input.sample(basis)
+    key(target, 'keyup', 'KeyC')
+    const chip = input.sample(basis).find((c) => c.type === 'Pass')
+    expect(chip?.type === 'Pass' && chip.chip).toBe(true)
+    expect(chip?.type === 'Pass' && chip.power).toBeGreaterThan(0.5)
+    // No ball: the press goes out at once (a tackle in the simulation).
+    input.setPassCharge(false)
+    key(target, 'keydown', 'KeyZ')
+    expect(input.sample(basis).some((c) => c.type === 'Pass')).toBe(true)
+    key(target, 'keyup', 'KeyZ')
   })
 })

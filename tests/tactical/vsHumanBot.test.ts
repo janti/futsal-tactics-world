@@ -42,7 +42,15 @@ describe('AI against a human-like player', () => {
       for (let i = 0; i < 150 * 60; i++) {
         sim.step(botCommands(sim))
         for (const e of sim.drainEvents()) {
-          if (e.type === 'PassStarted' && e.receiverId !== null && sim.player(e.playerId).team === 1) {
+          // Clearances and kick-outs under pressure are contested long balls, not passes to feet.
+          const kind = e.type === 'PassStarted' ? sim.player(e.playerId).aiDecision : ''
+          if (
+            e.type === 'PassStarted' &&
+            e.receiverId !== null &&
+            sim.player(e.playerId).team === 1 &&
+            kind !== 'clear' &&
+            kind !== 'kickOut'
+          ) {
             aiPasses++
             pending = true
           }

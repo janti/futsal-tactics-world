@@ -1,3 +1,4 @@
+import { FORMATIONS, PRESSING_HEIGHTS } from '../../simulation/Tactics'
 import { useEffect } from 'react'
 import { TEAM_LIBRARY, teamDisplayName, type TeamCategory } from '../../data/teams'
 import { hasLocalRosters } from '../../data/localRosters'
@@ -112,6 +113,40 @@ export function QuickMatchSetupScreen() {
                 onClick={() => setQuickMatch({ difficulty: d })}
               >
                 {t(`setup.difficulty.${d}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="setup-row">
+          <span className="setup-label">{t('setup.formation')}</span>
+          <div className="segmented" role="group" aria-label={t('setup.formation')}>
+            {FORMATIONS.map((f) => (
+              <button
+                key={f}
+                data-testid={`formation-${f}`}
+                className={f === q.formation ? 'active' : ''}
+                title={t(`setup.formation.${f}`)}
+                onClick={() => setQuickMatch({ formation: f })}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="setup-hint">{t(`setup.formation.${q.formation}`)}</p>
+
+        <div className="setup-row">
+          <span className="setup-label">{t('setup.pressing')}</span>
+          <div className="segmented" role="group" aria-label={t('setup.pressing')}>
+            {PRESSING_HEIGHTS.map((h) => (
+              <button
+                key={h}
+                data-testid={`pressing-${h}`}
+                className={h === q.pressing ? 'active' : ''}
+                onClick={() => setQuickMatch({ pressing: h })}
+              >
+                {t(`setup.pressing.${h}`)}
               </button>
             ))}
           </div>

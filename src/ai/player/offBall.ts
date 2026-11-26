@@ -4,7 +4,7 @@ import type { MatchState, PlayerState } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { dynamicAnchor } from '../positioning/Formation'
 import { attackingRole } from '../team/roles'
-import { KEEPER_BALL_ALA_DROP, PRESS_ENGAGE_DISTANCE } from '../common'
+import { KEEPER_BALL_ALA_DROP, pressEngageDistance } from '../common'
 import { carrierBackToGoal, markingPosition, twoVersusOne, twoVersusOneSpot } from '../team/defending'
 import {
   runInBehind,
@@ -60,8 +60,9 @@ export function offBallDecision(
         p.aiTarget = addScaled(owner.pos, { x: Math.cos(owner.facing), y: Math.sin(owner.facing) }, 1.1)
         return
       }
-      if (dist(owner.pos, ownGoal) > PRESS_ENGAGE_DISTANCE) {
-        const off = addScaled(owner.pos, toGoal, 3)
+      if (dist(owner.pos, ownGoal) > pressEngageDistance(state, p.team)) {
+        // A low block stands off further (it waits for the carrier to come to it).
+        const off = addScaled(owner.pos, toGoal, state.teams[p.team].tactics.pressing === 'low' ? 4.5 : 3)
         p.aiTarget = { x: off.x * 0.75, y: off.y }
       } else p.aiTarget = addScaled(owner.pos, toGoal, 0.7)
     }
@@ -78,8 +79,10 @@ export function offBallDecision(
   }
   // In attack the role comes from the dynamic assignment (players fill the shape from where they are).
   const role = inPossession ? attackingRole(state, p) : p.role
-  let anchor = dynamicAnchor(role, inPossession ? 'attack' : 'defend', dir, ball.pos)
-  if (inPossession && role === 'PIVOT') anchor = pivotAnchor(state, p, anchor)
+  const tactics = state.teams[p.team].tactics
+  let anchor = dynamicAnchor(role, inPossession ? 'attack' : 'defend', dir, ball.pos, tactics.formation)
+  // The roaming pivot belongs to the 3-1 (in the 4-0 the "pivot" is one of the flat four).
+  if (inPossession && role === 'PIVOT' && tactics.formation === '3-1') anchor = pivotAnchor(state, p, anchor)
   // Our keeper on the ball: the alas come deeper so the ball out to the wing is easy — the full drop
   // for a human keeper (he needs a fixed, easy target); the AI keeper picks the safe option himself.
   if (
@@ -117,8 +120,14 @@ export function offBallDecision(
     const help = pivotSupportSpot(state, p)
     if (help) {
       p.aiState = 'run'
-      p.aiTarget = help
+      p.aiTarget = help.spot
       p.aiSetPieceTimer = 1.2 // a ball laid back or loose at the far post is struck first time
+      // The deep run down the wing carries on even once he is past the pivot.
+      if (help.kind === 'deep') {
+        p.aiRunTarget = help.spot
+        p.aiRunTimer = 2.2
+        p.aiRunCooldown = 7
+      }
       return
     }
     const behind = runInBehind(state, p)

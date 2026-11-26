@@ -42,6 +42,9 @@ export function interceptPoint(state: MatchState, p: PlayerState): Vec2 {
  * for it, which also keeps an opponent from nipping in front of him).
  */
 export function receivePoint(state: MatchState, p: PlayerState): Vec2 {
+  // A chip in the air: go to where it comes down.
+  const ball = state.ball
+  if (ball.landing && ball.z > 0.3) return ball.landing
   const meet = interceptPoint(state, p)
   const toBall = sub(state.ball.pos, p.pos)
   if (dist(meet, p.pos) < 0.6 && len(toBall) > 1.6) return addScaled(p.pos, normalize(toBall), 1)
@@ -259,7 +262,10 @@ export function safePassOption(
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== p.team || t.id === p.id) continue
-    if (t.role === 'GK' && (pressure < 0.7 || t.id === state.ball.keeperRetouchId)) continue
+    // The keeper: a back pass when it is allowed (he has not just released it in his half) and the
+    // carrier is in his own half under some pressure, or anywhere under heavy pressure.
+    const ownHalf = p.pos.y * dir < 0
+    if (t.role === 'GK' && (pressure < (ownHalf ? 0.4 : 0.7) || t.id === state.ball.keeperRetouchId)) continue
     const d = dist(t.pos, p.pos)
     if (d < 2.5 || d > 16) continue
     const lane = laneOpenness(state, p.team, p.pos, t.pos)

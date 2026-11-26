@@ -1,3 +1,4 @@
+import { FORMATIONS, PRESSING_HEIGHTS, type Formation, type PressingHeight } from '../simulation/Tactics'
 import { TEAM_LIBRARY } from '../data/teams'
 import {
   defaultBindings,
@@ -64,6 +65,9 @@ export interface QuickMatchSetup {
   halfMinutes: HalfLengthMinutes
   effectiveClock: boolean
   difficulty: Difficulty
+  /** The human team's formation and pressing height. */
+  formation: Formation
+  pressing: PressingHeight
 }
 
 export interface MatchResult {
@@ -197,6 +201,8 @@ const DEFAULT_QUICK: QuickMatchSetup = {
   halfMinutes: 3,
   effectiveClock: true,
   difficulty: 'normal',
+  formation: '3-1',
+  pressing: 'mid',
 }
 
 function loadQuickMatch(teamCount = TEAM_LIBRARY.length): QuickMatchSetup {
@@ -213,6 +219,10 @@ function loadQuickMatch(teamCount = TEAM_LIBRARY.length): QuickMatchSetup {
           : 3,
         effectiveClock: typeof v.effectiveClock === 'boolean' ? v.effectiveClock : true,
         difficulty: isDifficulty(v.difficulty) ? v.difficulty : 'normal',
+        formation: FORMATIONS.includes(v.formation as Formation) ? (v.formation as Formation) : '3-1',
+        pressing: PRESSING_HEIGHTS.includes(v.pressing as PressingHeight)
+          ? (v.pressing as PressingHeight)
+          : 'mid',
       }
       if (q.homeIndex === q.awayIndex) q.awayIndex = (q.homeIndex + 1) % teamCount
       return q

@@ -20,6 +20,7 @@ function ball(partial: Partial<BallState> = {}): BallState {
     intendedReceiverId: null,
     isShot: false,
     blockedTouchId: null,
+    landing: null,
     kickPos: { x: 0, y: 0 },
     kickTime: 0,
     inHands: false,

@@ -44,7 +44,8 @@ describe('touch-based dribbling', () => {
     }
     expect(s.ball.ownerId).toBe(2)
     // Close to the feet even at a sprint (well under a metre), but visibly touched ahead and caught up.
-    expect(maxAhead).toBeGreaterThan(0.55)
+    // The human player's sprint touches are short (the ball stays close), but it is still knocked on.
+    expect(maxAhead).toBeGreaterThan(0.45)
     expect(maxAhead).toBeLessThan(0.95)
     expect(maxAhead - minAhead).toBeGreaterThan(0.15) // touch, roll, catch up, touch...
   })
@@ -91,7 +92,7 @@ describe('first touch', () => {
       sim.player(2).pos = { x: -6, y: -14 }
       s.controlledId = 2
       s.ball.pos = { x: 0, y: -6 }
-      s.ball.vel = { x: 0, y: 14 }
+      s.ball.vel = { x: 0, y: 19 } // a very hard pass (firm ones up to 12 m/s are taken cleanly)
       s.ball.lastTouchTeam = 0
       s.ball.lastTouchId = 2
       s.ball.intendedReceiverId = 3

@@ -12,7 +12,7 @@ marks man-to-man and runs set-piece routines.
 ![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-235%20sim%20%2B%207%20browser-2ea44f)
+![Tests](https://img.shields.io/badge/tests-251%20sim%20%2B%207%20browser-2ea44f)
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 
 <img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
@@ -40,12 +40,12 @@ marks man-to-man and runs set-piece routines.
 
 ### On the ball
 
-|                 |                                                                                                                                                                          |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Passing**     | Assisted (snaps to the best teammate and leads him), semi-assisted or manual (exact direction, hold for power). Through passes into space.                               |
-| **Shooting**    | Tap for a quick, low shot placed in the near or far corner that the keeper cannot hold; hold for more pace and height — a full charge lifts the heavy ball over the bar. |
-| **Dribbling**   | Close control at running pace, touch-by-touch at a sprint, sole control and shielding: hold sole control and your player turns his back to the nearest opponent.         |
-| **First touch** | Fast passes can be controlled with a heavy touch; shots that hit a defender rebound instead of sticking to him.                                                          |
+|                 |                                                                                                                                                                                                                                                                            |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Passing**     | Hold the pass button for a firmer ground pass (a long press picks the teammate further away in that direction); the chip button dinks it slow and high over the opponents (a tap just over a leg, a long press up to about 5.5 m high). Assisted, semi-assisted or manual. |
+| **Shooting**    | Tap for a quick, low shot placed in the near or far corner that the keeper cannot hold; hold for more pace and height — a full charge lifts the heavy ball over the bar.                                                                                                   |
+| **Dribbling**   | Close control at running pace, touch-by-touch at a sprint, sole control and shielding: hold sole control and your player turns his back to the nearest opponent.                                                                                                           |
+| **First touch** | A teammate takes even a firm pass cleanly; one that strikes an opponent usually bounces off him; shots that hit a defender rebound instead of sticking to him.                                                                                                             |
 
 ### Goalkeeping
 
@@ -109,9 +109,9 @@ Production build: `npm run build`, then `npm run preview`. Add `?gfx=low`, `?gfx
 | Action                                               | Keyboard          | Gamepad            |
 | ---------------------------------------------------- | ----------------- | ------------------ |
 | Move (relative to the screen)                        | WASD / arrow keys | Left stick / D-pad |
-| Pass · standing tackle                               | Z (or J)          | A                  |
+| Pass (hold = firmer) · standing tackle               | Z (or J)          | A                  |
 | Shoot — tap: placed low shot, hold: power and height | X (or K)          | B                  |
-| Through pass                                         | C (or L)          | X                  |
+| Chip (hold = higher and longer)                      | C (or L)          | X                  |
 | Switch player                                        | V (or I)          | Y                  |
 | Sprint                                               | Shift             | RT                 |
 | Sole control · shield · jockey                       | Space             | LT                 |
@@ -135,7 +135,7 @@ Available on the title screen and in the pause menu, applied immediately and rem
 | Setting                                              | Options                                                                                                     |
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Player selection when defending                      | Nearest player (automatic) · assisted · manual                                                              |
-| Passing assistance                                   | Assisted · semi-assisted · manual (charged power)                                                           |
+| Passing assistance                                   | Assisted · semi-assisted · manual (all with charged power)                                                  |
 | Keyboard controls                                    | Rebind any game action; reset to defaults                                                                   |
 | Player size                                          | 100 % (true scale) · 106 % · 112 %                                                                          |
 | Camera                                               | Vertical Smart · Classic · Full Court · Close Action · Horizontal Tactical · Horizontal Full Court · Custom |
@@ -171,7 +171,7 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.m
 ## Quality
 
 ```bash
-npm test             # 235 unit, integration and tactical tests (headless simulation)
+npm test             # 251 unit, integration and tactical tests (headless simulation)
 npm run test:e2e     # 7 Playwright browser tests (first time: npx playwright install chromium)
 npm run typecheck    # strict TypeScript
 npm run lint         # Oxlint

@@ -64,6 +64,7 @@ export class GameSession {
       control: useUi.getState().controls,
       rules: { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
       difficulty: setup.difficulty,
+      tactics: [{ formation: setup.formation, pressing: setup.pressing }],
     })
     this.renderer = new ThreeRenderer(
       container,
@@ -139,7 +140,7 @@ export class GameSession {
       this.accumulator += dt
       while (this.accumulator >= DT) {
         this.input.setThrowMode(this.humanKeeperHolding())
-        this.input.setPassCharge(ui.controls.passAssist === 'manual')
+        this.input.setPassCharge(this.humanOnBall())
         const commands = this.input.sample(this.renderer.cameraController.getBasis())
         if (this.pendingCommands.length) commands.push(...this.pendingCommands.splice(0))
         copySnapshot(this.curr, this.prev)
@@ -195,6 +196,18 @@ export class GameSession {
     if (s.controlledId === null || s.ball.ownerId !== s.controlledId) return false
     const p = this.sim.player(s.controlledId)
     return p.role === 'GK' && s.teams[p.team].attackDir * p.pos.y <= 0
+  }
+
+  /**
+   * The controlled player has the ball at his feet, or it is on its way to him: the pass and chip
+   * keys charge power (otherwise the pass key tackles at once).
+   */
+  private humanOnBall(): boolean {
+    const s = this.sim.state
+    const id = s.controlledId
+    if (id === null || s.ball.inHands) return false
+    if (s.ball.ownerId === id) return true
+    return s.ball.ownerId === null && s.ball.intendedReceiverId === id
   }
 
   /** The human-controlled keeper holds the ball in the hands (throw mode). */

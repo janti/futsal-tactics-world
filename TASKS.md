@@ -92,7 +92,12 @@
 
 ## Current / next (Milestone 6: advanced futsal tactics)
 
-- [ ] Formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay
+- [x] Stage 1: tactics model in the match state, formations 3-1 / 4-0 / 2-2, pressing height
+      (low / mid / high), choice in Quick Match, team styles, SetTactics command
+- [ ] Stage 2: pressing triggers (back pass, poor touch, back to goal, ball on the wing / touchline)
+- [ ] Stage 3: rotations (4-0 rotation, pivot rotation, overlap, wall pass, back-post rotation)
+- [ ] Stage 4: Tactical Lab (scenario sandbox) and an extended AI debug overlay (intentions, marking)
+- [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs
 
 ## Known bugs / issues
 

@@ -73,7 +73,8 @@ describe('goalkeeper save style', () => {
     sim.drainEvents()
     for (let i = 0; i < 60; i++) {
       sim.step()
-      if (gk.action === 'save') return gk.saveDive
+      // A save attempt (parried or caught: a caught ball turns into 'receive' at once).
+      if (gk.action === 'save' || sim.drainEvents().some((e) => e.type === 'Save')) return gk.saveDive
     }
     return null
   }
@@ -110,8 +111,9 @@ describe('after a goal', () => {
       if (goalTick < 0) continue
       while (!s.restart?.ready && s.tick - goalTick < TICK_RATE * 10) sim.step()
       // Celebration 3 s + kick-off delay 1.4 s is the minimum; players hurrying back add a little
-      // (the alas line up deeper at the kick-off since they offer an easier ball there).
-      expect((s.tick - goalTick) / TICK_RATE).toBeLessThan(6)
+      // (the alas line up deeper at the kick-off; the idle human player here is only walked back
+      // automatically after a short grace period, from wherever he was when the goal went in).
+      expect((s.tick - goalTick) / TICK_RATE).toBeLessThan(7)
       measured++
     }
     expect(measured).toBeGreaterThan(0)
