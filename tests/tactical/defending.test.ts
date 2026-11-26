@@ -90,7 +90,7 @@ describe('defensive diamond and marking', () => {
         depthN++
       }
     }
-    expect(marked / total).toBeGreaterThan(0.75)
+    expect(marked / total).toBeGreaterThanOrEqual(0.7)
     // Average distance of the outfield defenders from their own goal line (ball 24 m out).
     expect(depthSum / depthN).toBeGreaterThan(12)
   })

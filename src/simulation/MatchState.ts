@@ -89,6 +89,10 @@ export interface PlayerState {
   faceTarget: Vec2 | null
   sprint: boolean
   sole: boolean
+  /** Goalkeeper's current save is a dive (far corner) rather than a standing parry. */
+  saveDive: boolean
+  /** Goalkeeper: where he stood across the goal when the current shot was struck (null: no shot). */
+  shotStartX: number | null
   stamina: number
   /** Seconds before this player can touch the ball again. */
   touchCooldown: number
@@ -111,6 +115,12 @@ export interface PlayerState {
   dribbleTouchTimer: number
   /** Set-piece shooter: time left to strike the routine pass first time. */
   aiSetPieceTimer: number
+  /** Run in behind / back-post run in progress: time left, cooldown before the next one, target. */
+  aiRunTimer: number
+  aiRunCooldown: number
+  aiRunTarget: Vec2
+  /** Just lost the ball: time left of the immediate sprint back into the defensive shape. */
+  aiRecoverTimer: number
   aiState: string
 }
 

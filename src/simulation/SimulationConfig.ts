@@ -96,6 +96,9 @@ export const PLAYER = {
   acceleration: [9, 14] as const,
   deceleration: 18,
   turnRate: [9, 15] as const,
+  /** Human-controlled player: faster turning and acceleration for immediate response to the stick. */
+  humanTurnBoost: 1.7,
+  humanAccelBoost: 1.25,
   soleSpeed: 1.7,
   withBallSpeedFactor: 0.9,
   /** Speed multiplier when moving sideways/backwards relative to facing. */

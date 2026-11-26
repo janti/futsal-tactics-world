@@ -35,6 +35,12 @@ export interface AIActions {
 }
 
 /** Difficulty parameters for a team: only the human's computer opponent is affected. */
+/** Metres the alas drop towards their own goal at the team's goal clearances. */
+export const GOAL_CLEARANCE_ALA_DROP = 1
+
+/** Seconds of immediate sprinting back into shape after losing the ball. */
+const RECOVER_TIME = 1.6
+
 /** Beyond this distance from our goal the presser contains (stands off) instead of engaging. */
 const PRESS_ENGAGE_DISTANCE = 22
 
@@ -53,6 +59,9 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
   ]
   for (const p of state.players) {
     p.aiSetPieceTimer = Math.max(0, p.aiSetPieceTimer - dt)
+    p.aiRunTimer = Math.max(0, p.aiRunTimer - dt)
+    p.aiRunCooldown = Math.max(0, p.aiRunCooldown - dt)
+    p.aiRecoverTimer = Math.max(0, p.aiRecoverTimer - dt)
     if (p.id === state.controlledId) continue
     p.aiDecisionTimer -= dt
     const decide = p.aiDecisionTimer <= 0
@@ -66,8 +75,10 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
       continue
     }
     if (state.phase === 'goal') {
+      // Back to the kick-off positions straight away (hurrying when far, e.g. from the other half).
       p.aiState = 'celebrate'
-      walkTo(p, kickoffAnchor(state, p), false)
+      const spot = kickoffAnchor(state, p)
+      walkTo(p, spot, dist(p.pos, spot) > 6)
       continue
     }
     if (state.phase === 'restart') {
@@ -180,6 +191,9 @@ function restartBehaviour(
     const mode = r.team === p.team ? 'attack' : 'defend'
     const dir = state.teams[p.team].attackDir
     target = dynamicAnchor(p.role, mode, dir, r.spot)
+    // Goal clearance: the alas start a metre deeper so the keeper has an easier angle out to the wing.
+    if (r.type === 'goalClearance' && r.team === p.team && (p.role === 'ALA_L' || p.role === 'ALA_R'))
+      target = { x: target.x, y: target.y - dir * GOAL_CLEARANCE_ALA_DROP }
     const routineSpot =
       p.role !== 'GK' ? setPieceRoutine(state, r.team)?.find((rr) => rr.id === p.id)?.spot : undefined
     if (routineSpot && r.team === p.team) target = routineSpot
@@ -196,8 +210,9 @@ function restartBehaviour(
         target = { x: clamp(target.x, -1.3, 1.3), y: -dir * (COURT.halfLength - 0.4) }
     }
   }
+  p.aiTarget = target
   walkTo(p, target, dist(p.pos, target) > 6)
-  p.faceTarget = state.ball.pos
+  p.faceTarget = dist(p.pos, target) < 3 ? state.ball.pos : null
 }
 
 function keepDistance(target: Vec2, from: Vec2, minDist: number): Vec2 {
@@ -314,8 +329,32 @@ function offBallDecision(
   let anchor = dynamicAnchor(p.role, inPossession ? 'attack' : 'defend', dir, ball.pos)
   if (inPossession && p.role === 'PIVOT') anchor = pivotAnchor(state, p, anchor)
   if (inPossession) {
+    // Attacking movement first: follow up our shot at the back post, keep running a run in behind,
+    // start a new one into empty space, or take the back post when the ball is on a wing near goal.
+    const follow = followUpTarget(state, p)
+    if (follow) {
+      p.aiState = 'run'
+      p.aiTarget = follow
+      p.aiSetPieceTimer = 1.5 // a rebound or loose ball he gets is struck at once (tap-in)
+      return
+    }
+    if (p.aiRunTimer > 0 && owner && owner.team === p.team) {
+      p.aiState = 'run'
+      p.aiTarget = p.aiRunTarget
+      return
+    }
+    const behind = runInBehind(state, p)
+    if (behind) {
+      p.aiState = 'run'
+      p.aiRunTarget = behind
+      p.aiRunTimer = 2.4
+      p.aiRunCooldown = 9
+      p.aiTarget = behind
+      return
+    }
+    const backPost = backPostSpot(state, p)
     p.aiState = 'support'
-    p.aiTarget = supportPosition(state, p, anchor)
+    p.aiTarget = backPost ?? supportPosition(state, p, anchor)
   } else {
     p.aiState = 'cover'
     p.aiTarget = markingPosition(state, p, [winnerId, helperId])
@@ -433,7 +472,17 @@ export function updateDefensiveTransitions(state: MatchState): void {
     for (const p of state.players)
       if (p.team === team && p.role !== 'GK' && dist(p.pos, ownGoal) < ballToGoal - 1) goalSide++
     // Caught out: the ball was lost with at most one outfield player goal-side of it.
-    if (state.aiPrevPossession !== state.possessionTeam) state.defTransition[team] = goalSide < 2
+    if (state.aiPrevPossession !== state.possessionTeam) {
+      state.defTransition[team] = goalSide < 2
+      // Ball lost: everybody switches to defending at once (no waiting for the next decision tick)
+      // and sprints back into shape for a moment.
+      for (const p of state.players) {
+        if (p.team !== team || p.role === 'GK') continue
+        p.aiDecisionTimer = 0
+        p.aiRecoverTimer = RECOVER_TIME
+        p.aiRunTimer = 0
+      }
+    }
     // Back in shape: three players goal-side of the ball again.
     if (goalSide >= 3) state.defTransition[team] = false
     if (state.defTransition[team] && ball.mode === 'free' && ball.intendedReceiverId !== null) {
@@ -535,6 +584,132 @@ export function setPieceRoutine(
   return r.routineIds.map((id, k) => ({ id, spot: moved[k]!, role: roles[k]! }))
 }
 
+/** The deepest outfield player of a team (stays as cover; makes no forward runs). */
+function deepestOutfield(state: MatchState, team: TeamId): number | null {
+  const dir = state.teams[team].attackDir
+  let best: PlayerState | null = null
+  for (const t of state.players)
+    if (t.team === team && t.role !== 'GK' && (!best || t.pos.y * dir < best.pos.y * dir)) best = t
+  return best ? best.id : null
+}
+
+/**
+ * Run in behind ("nousee pystyyn"): a teammate has the ball (typically the pivot holding it up) and
+ * the wing ahead of this player is empty, so he sprints forward down that wing into the space behind
+ * the defence, offering a through ball. Never the carrier, the keeper or the deepest player (cover).
+ */
+export function runInBehind(state: MatchState, p: PlayerState): Vec2 | null {
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!owner || owner.team !== p.team || owner.id === p.id || owner.role === 'GK' || state.ball.inHands)
+    return null
+  if (p.role === 'GK' || p.aiRunCooldown > 0 || deepestOutfield(state, p.team) === p.id) return null
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  const toGoal = (goalY - p.pos.y) * dir
+  if (toGoal < 9 || toGoal > 30) return null
+  // The carrier must be holding the ball up with time to play it (not under heavy pressure), and only
+  // one player of the team runs at a time.
+  if (pressureOn(state, owner) > 0.6 || owner.aiHoldTimer < 0.4) return null
+  if (state.players.some((t) => t.team === p.team && t.id !== p.id && t.aiRunTimer > 0)) return null
+  // Balance: two teammates must stay behind the ball (cover against the counter-attack).
+  const dirB = state.teams[p.team].attackDir
+  const behindBall = state.players.filter(
+    (t) =>
+      t.team === p.team &&
+      t.role !== 'GK' &&
+      t.id !== p.id &&
+      t.id !== owner.id &&
+      (t.pos.y - owner.pos.y) * dirB < 0,
+  ).length
+  if (behindBall < 2) return null
+  const side = Math.abs(p.pos.x) > 1 ? Math.sign(p.pos.x) : Math.sign(p.pos.x - owner.pos.x) || 1
+  const target = {
+    x: side * clamp(Math.abs(p.pos.x) + 1, 5.5, 8),
+    y: goalY - dir * Math.max(4.5, toGoal - 13),
+  }
+  // The lane must be empty: no outfield defender within 2.5 m of the run (ahead of him).
+  for (const o of state.players) {
+    if (o.team === p.team || o.role === 'GK') continue
+    if ((o.pos.y - p.pos.y) * dir < -0.5) continue
+    const { point } = closestOnSegment(p.pos, target, o.pos)
+    if (dist(point, o.pos) < 2.5) return null
+  }
+  // Only when it actually goes forward from where the ball is (a run beyond the carrier's line).
+  if ((target.y - owner.pos.y) * dir < 2) return null
+  return target
+}
+
+/** A teammate on a run in behind whose path the carrier can find with a through ball. */
+function runnerOption(state: MatchState, carrier: PlayerState): PlayerState | null {
+  const dir = state.teams[carrier.team].attackDir
+  let best: PlayerState | null = null
+  for (const t of state.players) {
+    if (t.team !== carrier.team || t.id === carrier.id || t.aiState !== 'run' || t.aiRunTimer <= 0) continue
+    if ((t.pos.y - carrier.pos.y) * dir < -1) continue
+    if ((t.pos.y - carrier.pos.y) * dir < 2) continue
+    const lead = predictPassTarget(carrier, t, true, dir)
+    if (laneOpenness(state, carrier.team, carrier.pos, lead) < 1.1) continue
+    if (dist(lead, carrier.pos) > 18) continue
+    // Real space at the end of the run: no defender within 2.5 m of where the ball is played.
+    let space = Infinity
+    for (const o of state.players)
+      if (o.team !== carrier.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, lead))
+    if (space < 2.5) continue
+    if (!best || t.aiRunTimer > best.aiRunTimer) best = t
+  }
+  return best
+}
+
+/**
+ * Follow-up: when a teammate shoots, the attacker best placed for it (not the shooter, not the
+ * deepest player) attacks the back post for a rebound or a tap-in.
+ */
+export function followUpTarget(state: MatchState, p: PlayerState): Vec2 | null {
+  const b = state.ball
+  if (!b.isShot || b.mode !== 'free' || b.lastTouchTeam !== p.team || b.lastTouchId === p.id) return null
+  if (p.role === 'GK' || deepestOutfield(state, p.team) === p.id) return null
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  if (b.vel.y * dir <= 0) return null
+  // Far post relative to the shot's line.
+  const crossX = b.pos.x + (b.vel.x * (goalY - b.pos.y)) / (b.vel.y || 1e-6)
+  const farSide = crossX >= 0 ? -1 : 1
+  const spot = { x: farSide * 1.8, y: goalY - dir * 1.4 }
+  // Only the nearest suitable attacker goes (one man on the rebound).
+  let best: PlayerState | null = null
+  for (const t of state.players) {
+    if (
+      t.team !== p.team ||
+      t.role === 'GK' ||
+      t.id === b.lastTouchId ||
+      deepestOutfield(state, p.team) === t.id
+    )
+      continue
+    if (!best || dist(t.pos, spot) < dist(best.pos, spot)) best = t
+  }
+  return best && best.id === p.id && dist(p.pos, spot) < 16 ? spot : null
+}
+
+/**
+ * Ball on a wing near goal: the attacker best placed (not the carrier, not the deepest) takes the
+ * back post, ready for a cross or a shot that comes across goal.
+ */
+export function backPostSpot(state: MatchState, p: PlayerState): Vec2 | null {
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!owner || owner.team !== p.team || owner.id === p.id || p.role === 'GK') return null
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  if (Math.abs(owner.pos.x) < 3.5 || (goalY - owner.pos.y) * dir > 13) return null
+  const spot = { x: -Math.sign(owner.pos.x) * 1.9, y: goalY - dir * 2.2 }
+  let best: PlayerState | null = null
+  for (const t of state.players) {
+    if (t.team !== p.team || t.role === 'GK' || t.id === owner.id || deepestOutfield(state, p.team) === t.id)
+      continue
+    if (!best || dist(t.pos, spot) < dist(best.pos, spot)) best = t
+  }
+  return best && best.id === p.id ? spot : null
+}
+
 /**
  * The pivot does not stay in the middle: every few seconds he moves between the middle, the ball-side
  * wing and the far post/wing to find space (deterministic rhythm per team and half).
@@ -584,7 +759,7 @@ function supportPosition(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 
     const forward = ((c.y - ballPos.y) * dir) / 20
     const keep = dist(c, p.aiTarget) < 1 ? 0.3 : 0
     const score =
-      lane * 0.9 + Math.min(free, 4) * 0.8 + range + crowd + forward * 0.6 + keep - dist(c, anchor) * 0.15
+      lane * 0.9 + Math.min(free, 4) * 0.8 + range + crowd + forward * 1.2 + keep - dist(c, anchor) * 0.15
     if (score > bestScore) {
       bestScore = score
       best = c
@@ -661,13 +836,14 @@ function steer(state: MatchState, p: PlayerState): void {
     return
   }
   const d = dist(p.aiTarget, p.pos)
-  // In a counter-attack against us everybody sprints back to his man.
-  const recovering = p.aiState === 'cover' && state.defTransition[p.team] && d > 1.5
+  // In a counter-attack against us, and right after losing the ball, everybody sprints back to his man.
+  const recovering = p.aiState === 'cover' && (state.defTransition[p.team] || p.aiRecoverTimer > 0) && d > 1.5
   // Getting free: a supporting player sprints into space when his spot is a few metres away.
   const showing = p.aiState === 'support' && d > 2.5
   const urgent =
     p.aiState === 'chase' ||
     p.aiState === 'intercept' ||
+    p.aiState === 'run' ||
     (p.aiState === 'press' && d > 2.5) ||
     d > 5 ||
     recovering ||
@@ -680,7 +856,9 @@ function steer(state: MatchState, p: PlayerState): void {
   if (p.aiState === 'press' && d < 1.5) {
     p.moveIntent = { x: p.moveIntent.x * 0.6, y: p.moveIntent.y * 0.6 }
   }
-  if (p.aiState !== 'chase') p.faceTarget = state.ball.pos
+  // Watch the ball while positioning or close to the play; on a longer run face where you are going
+  // (no long sideways or backwards runs).
+  if (p.aiState !== 'chase' && (d < 3 || dist(p.pos, state.ball.pos) < 4)) p.faceTarget = state.ball.pos
 }
 
 /** Detour point round the first opponent standing in the way to `target` (else `target`). */
@@ -833,6 +1011,13 @@ function carrierBehaviour(
   const chance = forwardChance(state, p)
   if (chance) {
     actions.pass(p, sub(chance.player.pos, p.pos), chance.through, chance.player)
+    return
+  }
+
+  // 1b) A teammate running in behind with an open lane: play the through ball into his path.
+  const runner = runnerOption(state, p)
+  if (runner) {
+    actions.pass(p, sub(runner.pos, p.pos), true, runner)
     return
   }
 

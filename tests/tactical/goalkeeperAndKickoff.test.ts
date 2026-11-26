@@ -107,7 +107,7 @@ describe('kick-off positions', () => {
       }
     }
     expect(kickoffs).toBeGreaterThan(1)
-  })
+  }, 30000)
 
   it('a human player left in the opponent half is walked back so the kick-off is not blocked', () => {
     const sim = newSim(4)

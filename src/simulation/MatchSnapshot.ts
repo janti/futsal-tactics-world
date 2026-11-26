@@ -18,6 +18,7 @@ export interface PlayerSnapshot {
   hasBall: boolean
   sole: boolean
   sprint: boolean
+  saveDive: boolean
 }
 
 export interface MatchSnapshot {
@@ -61,6 +62,7 @@ export function createSnapshot(state: MatchState): MatchSnapshot {
       hasBall: false,
       sole: false,
       sprint: false,
+      saveDive: false,
     })),
     controlledId: null,
     possessionTeam: null,
@@ -96,6 +98,7 @@ export function writeSnapshot(state: MatchState, out: MatchSnapshot): void {
     s.hasBall = b.ownerId === p.id
     s.sole = p.sole
     s.sprint = p.sprint
+    s.saveDive = p.saveDive
   }
   out.controlledId = state.controlledId
   out.possessionTeam = state.possessionTeam

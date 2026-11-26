@@ -77,7 +77,8 @@ describe('breakaway (through on goal)', () => {
       if (r.passed) passes++
     }
     console.log('breakaway', tally, 'mean shot distance', dists.reduce((a, b) => a + b, 0) / dists.length)
-    expect(passes).toBe(0)
+    // Through on goal he finishes himself; only rarely, when a recovering defender gets goal-side, he passes.
+    expect(passes).toBeLessThanOrEqual(2)
     expect(dists.length).toBeGreaterThan(n * 0.8)
     for (const d of dists) expect(d).toBeLessThan(10.5)
     expect(tally.goal).toBeGreaterThan(n * 0.45)

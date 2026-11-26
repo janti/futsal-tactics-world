@@ -21,16 +21,26 @@ export function maxSpeedFor(p: PlayerState, hasBall: boolean): number {
  * Integrate one player for dt: acceleration-limited velocity change, direction-dependent speed,
  * limited turn rate and run-off area bounds. Responsive arcade feel within realistic limits.
  */
-export function updatePlayerMovement(p: PlayerState, hasBall: boolean, dt: number): void {
+export function updatePlayerMovement(p: PlayerState, hasBall: boolean, dt: number, human = false): void {
   const a = p.profile.attributes
   const intent = clampLen(p.moveIntent, 1)
   const intentLen = len(intent)
 
   // Facing: towards explicit face target, else towards the intended movement direction.
-  const turnRate = attr(a.agility, PLAYER.turnRate[0], PLAYER.turnRate[1]) * (hasBall ? 0.85 : 1)
+  // The human-controlled player turns and accelerates faster so he answers the stick at once.
+  const turnRate =
+    attr(a.agility, PLAYER.turnRate[0], PLAYER.turnRate[1]) *
+    (hasBall ? 0.85 : 1) *
+    (human ? PLAYER.humanTurnBoost : 1)
   let desiredFacing = p.facing
   if (p.faceTarget) desiredFacing = angleOf(sub(p.faceTarget, p.pos))
   else if (intentLen > 0.15) desiredFacing = angleOf(intent)
+  // Running hard away from what he is watching: turn and run (no long backwards/sideways sprints).
+  // Keepers shuffle facing the ball; the human chooses his own facing.
+  if (p.faceTarget && !human && p.role !== 'GK' && intentLen > 0.7) {
+    if (Math.abs(angleDiff(desiredFacing, angleOf(intent))) > (100 * Math.PI) / 180)
+      desiredFacing = angleOf(intent)
+  }
   p.facing = turnTowards(p.facing, desiredFacing, turnRate * dt)
 
   // Moving away from the facing direction is slower (sidestep / backpedal).
@@ -48,7 +58,9 @@ export function updatePlayerMovement(p: PlayerState, hasBall: boolean, dt: numbe
   const braking = dot(desired, p.vel) < dot(p.vel, p.vel) - 1e-6
   const accel = braking
     ? PLAYER.deceleration
-    : attr(a.acceleration, PLAYER.acceleration[0], PLAYER.acceleration[1]) * (0.8 + 0.2 * p.stamina)
+    : attr(a.acceleration, PLAYER.acceleration[0], PLAYER.acceleration[1]) *
+      (0.8 + 0.2 * p.stamina) *
+      (human ? PLAYER.humanAccelBoost : 1)
   const step = clampLen(dv, accel * dt)
   p.vel = { x: p.vel.x + step.x, y: p.vel.y + step.y }
 

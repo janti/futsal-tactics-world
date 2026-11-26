@@ -230,6 +230,8 @@ export class PlayerModel {
   private lean = 0
   private torsoTwist = 0
   private smoothSpeed = 0
+  private moveFwd = 1
+  private moveSide = 0
   readonly goalkeeper: boolean
   private readonly baseScale: { x: number; y: number; z: number }
 
@@ -336,7 +338,15 @@ export class PlayerModel {
     this.smoothSpeed = lerp(this.smoothSpeed, p.speed, 1 - Math.exp(-dt * 12))
     const speed = this.smoothSpeed
     const cycle = 1.15 + 0.22 * speed // metres per full stride cycle
-    this.stridePhase = (this.stridePhase + (speed / cycle) * Math.PI * 2 * dt) % (Math.PI * 2)
+    // Travel direction relative to the body: forwards strides normally, backwards plays the stride in
+    // reverse (backpedal) and sideways turns the swing into short side-steps instead of the legs
+    // "running on the spot".
+    this.moveFwd = lerp(this.moveFwd, Math.cos(p.moveOff), 1 - Math.exp(-dt * 10))
+    this.moveSide = lerp(this.moveSide, Math.sin(p.moveOff), 1 - Math.exp(-dt * 10))
+    const dirSign = this.moveFwd < -0.25 ? -1 : 1
+    const sagittal = Math.max(Math.abs(this.moveFwd), 0.22)
+    this.stridePhase =
+      (this.stridePhase + dirSign * (speed / cycle) * Math.PI * 2 * dt + Math.PI * 4) % (Math.PI * 2)
     const targetRun = clamp(speed / 7, 0, 1)
     this.runBlend = lerp(this.runBlend, targetRun, 1 - Math.exp(-dt * 10))
     const moving = clamp(speed / 0.6, 0, 1)
@@ -352,15 +362,21 @@ export class PlayerModel {
       const thigh = lerp(w[0], r[0], rb)
       const knee = lerp(w[1], r[1], rb)
       const foot = lerp(w[2], r[2], rb)
-      // Blend towards the standing pose at low speed.
-      return [lerp(-idleKnee * 0.6, thigh, moving), lerp(idleKnee, knee, moving), lerp(0, foot, moving)]
+      // Blend towards the standing pose at low speed; sideways travel shortens the forward swing.
+      return [
+        lerp(-idleKnee * 0.6, thigh * sagittal, moving),
+        lerp(idleKnee, knee * (0.45 + 0.55 * sagittal), moving),
+        lerp(0, foot * sagittal, moving),
+      ]
     }
     const [tl, kl, fl] = legPose(phase)
     const [tr, kr, fr] = legPose(phase + 0.5)
-    this.legL.upper.rotation.set(tl, 0, 0)
+    // Side-steps: the legs open and close sideways in time with the stride.
+    const sideSwing = this.moveSide * 0.22 * moving * Math.sin(ph)
+    this.legL.upper.rotation.set(tl, 0, Math.max(0, sideSwing))
     this.legL.lower.rotation.set(kl, 0, 0)
     this.legL.end.rotation.set(fl, 0, 0)
-    this.legR.upper.rotation.set(tr, 0, 0)
+    this.legR.upper.rotation.set(tr, 0, Math.min(0, sideSwing))
     this.legR.lower.rotation.set(kr, 0, 0)
     this.legR.end.rotation.set(fr, 0, 0)
 
@@ -465,22 +481,60 @@ export class PlayerModel {
         break
       }
       case 'save': {
-        const k = clamp(t / 0.6, 0, 1)
-        const w = Math.sin(Math.min(1, k * 1.5) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.7) / 0.3)
-        this.armL.upper.rotation.x = -2.6 * w
-        this.armR.upper.rotation.x = -2.6 * w
-        this.armL.upper.rotation.z = 0.4
-        this.armR.upper.rotation.z = -0.4
-        this.armL.lower.rotation.x = -0.2
-        this.armR.lower.rotation.x = -0.2
-        this.torso.rotation.z = p.saveSide * 0.6 * w
-        this.pelvis.position.y += 0.1 * w
+        const side = p.saveSide // +1 = the model's left (+x), -1 = its right
+        const near = side > 0 ? this.armL : this.armR
+        const far = side > 0 ? this.armR : this.armL
+        if (p.saveDive) {
+          // Dive towards the corner: the whole body tips over to the side, low, arms reaching out,
+          // then he gets back up.
+          const k = clamp(t / 0.9, 0, 1)
+          const w = k < 0.25 ? Math.sin((k / 0.25) * Math.PI * 0.5) : k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4
+          // Body tips about 55 degrees towards the ball (not flat like a swimmer), the near arm reaches
+          // out to the side, the far arm comes over towards the ball, elbows and knees bent.
+          this.pelvis.rotation.z = -side * 0.95 * w
+          this.pelvis.position.x = side * 0.38 * w
+          this.pelvis.position.y = lerp(this.pelvis.position.y, 0.55, w)
+          // Arms reach past the head in the direction of the dive (the body is tipped, so "above the
+          // head" points at the ball), elbows bent so the figure does not stretch out.
+          near.upper.rotation.x = -0.3 * w
+          near.upper.rotation.z = side * (0.15 + 2.55 * w)
+          near.lower.rotation.x = -0.4 * w
+          far.upper.rotation.x = -0.45 * w
+          far.upper.rotation.z = side * 2.45 * w
+          far.lower.rotation.x = -0.7 * w
+          const push = side > 0 ? this.legR : this.legL
+          const lead = side > 0 ? this.legL : this.legR
+          push.upper.rotation.set(0.15 * w, 0, -side * 0.1 * w)
+          push.lower.rotation.x = 0.25 * w
+          lead.upper.rotation.set(-0.5 * w, 0, side * 0.25 * w)
+          lead.lower.rotation.x = 0.9 * w
+        } else {
+          // Standing save: knees bent, a short step to the ball and the near arm sweeping out to the
+          // side to steer the ball wide; the body stays upright.
+          const k = clamp(t / 0.55, 0, 1)
+          const w = Math.sin(Math.min(1, k * 1.6) * Math.PI * 0.5) * (1 - Math.max(0, k - 0.65) / 0.35)
+          near.upper.rotation.z = side * (0.25 + 1.25 * w)
+          near.upper.rotation.x = -0.7 * w
+          near.lower.rotation.x = -0.25
+          // The other hand comes across to the ball too (both hands push it wide).
+          far.upper.rotation.x = -1.1 * w
+          far.upper.rotation.z = side * 0.75 * w
+          this.torso.rotation.z = -side * 0.22 * w
+          this.pelvis.position.x = side * 0.16 * w
+          this.pelvis.position.y -= 0.1 * w
+          const step = side > 0 ? this.legL : this.legR
+          step.upper.rotation.z = side * 0.3 * w
+        }
         break
       }
       default:
         this.torso.rotation.z = 0
     }
-    if (p.action !== 'save') this.torso.rotation.z = 0
+    if (p.action !== 'save') {
+      this.torso.rotation.z = 0
+      this.pelvis.rotation.z = 0
+      this.pelvis.position.x = 0
+    }
     if (p.action !== 'throw') this.torso.rotation.y = this.torsoTwist
     if (p.holding && p.action !== 'pass' && p.action !== 'shot' && p.action !== 'throw') {
       // Ball held in both hands: the hands are placed on either side of the ball (simple two-bone IK).
@@ -536,6 +590,10 @@ export class PlayerModel {
 
 export interface AnimationInput {
   speed: number
+  /** Direction of travel relative to the facing (radians, 0 = forwards, ±PI = backwards). */
+  moveOff: number
+  /** Goalkeeper save is a dive (else a standing parry). */
+  saveDive: boolean
   sprint: boolean
   sole: boolean
   action: string

@@ -137,7 +137,7 @@ export class MatchSimulation implements AIActions {
     const prev = kickoff ? s.players.map((p) => ({ x: p.pos.x, y: p.pos.y })) : null
     const holder = s.ball.inHands && s.ball.ownerId !== null ? this.player(s.ball.ownerId) : null
     const holderPrev = holder ? { ...holder.pos } : null
-    for (const p of s.players) updatePlayerMovement(p, s.ball.ownerId === p.id, DT)
+    for (const p of s.players) updatePlayerMovement(p, s.ball.ownerId === p.id, DT, p.id === s.controlledId)
     resolvePlayerCollisions(s.players)
     resolveGoalCollisions(s.players)
     if (prev) this.enforceKickoffPositions(prev)
@@ -284,6 +284,7 @@ export class MatchSimulation implements AIActions {
     const keeper = s.players.find((q) => q.team !== p.team && q.role === 'GK')
     s.ball.shotLongRange = isLongRangeShot(p.pos, s.teams[p.team].attackDir)
     s.ball.shotScreen = keeper ? screenFactor(s, p, keeper) : 0
+    if (keeper) keeper.shotStartX = keeper.pos.x
     this.kick(p, plan.velocity, plan.vz, plan.spin, 'shot')
     s.ball.isShot = true
     s.ball.shotPlaced = plan.placed
@@ -440,7 +441,14 @@ export class MatchSimulation implements AIActions {
       p.tackleCooldown = Math.max(0, p.tackleCooldown - DT)
       if (p.action !== 'none') {
         p.actionTime += DT
-        const duration = p.action === 'tackle' ? PLAYER.tackleDuration : p.action === 'save' ? 0.6 : 0.35
+        const duration =
+          p.action === 'tackle'
+            ? PLAYER.tackleDuration
+            : p.action === 'save'
+              ? p.saveDive
+                ? 0.9
+                : 0.6
+              : 0.35
         if (p.actionTime > duration) p.action = 'none'
       }
       if (p.action === 'tackle') {
@@ -929,6 +937,21 @@ export class MatchSimulation implements AIActions {
     gk.touchCooldown = 0.35 // one attempt
     gk.action = 'save'
     gk.actionTime = 0
+    // Mostly a standing save, steering the ball wide; a dive only for a ball towards a corner at full
+    // stretch (low or mid height).
+    // Judged by where the ball would cross the goal line relative to where he stands (his own
+    // movement towards the ball must not turn a corner shot into a standing save).
+    const lineY = -this.state.teams[gk.team].attackDir * COURT.halfLength
+    const crossX = Math.abs(b.vel.y) > 0.5 ? b.pos.x + (b.vel.x * (lineY - b.pos.y)) / b.vel.y : b.pos.x
+    // A dive only when he is caught off-centre (at the near post or further out wide) and the shot goes
+    // accurately to the far post, out of reach from where he stands. From the middle he never dives:
+    // he steers it wide standing up.
+    // Judged from where he stood when the shot was struck (he may already have moved across).
+    const startX = gk.shotStartX ?? gk.pos.x
+    const offCentre = Math.abs(startX) > 0.6
+    const farPost = Math.sign(crossX) !== Math.sign(startX) && Math.abs(crossX) > 0.9
+    gk.saveDive = b.isShot && offCentre && farPost && Math.abs(crossX - startX) > 1.4 && b.z < 1.7
+    gk.shotStartX = null
     // A placed low shot into the corner (a tap): reaching it is harder (the further he has to
     // stretch, the less likely) and it cannot be held.
     if (b.isShot && b.shotPlaced && !longShot) p = clamp(p - 0.3 * reachFrac, 0.05, 0.995)
@@ -1494,7 +1517,13 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiChallengeTimer: 0,
         aiChallengeSide: 0,
         dribbleTouchTimer: 0,
+        saveDive: false,
+        shotStartX: null,
         aiSetPieceTimer: 0,
+        aiRunTimer: 0,
+        aiRunCooldown: 0,
+        aiRunTarget: { x: 0, y: 0 },
+        aiRecoverTimer: 0,
         aiState: '',
       })
     }

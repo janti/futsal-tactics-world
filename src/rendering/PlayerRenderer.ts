@@ -180,14 +180,20 @@ export class PlayerRenderer {
       const shownSpeed = dt > 0 ? Math.hypot(dx, dy) / dt : 0
       const simSpeed = Math.hypot(b.vx, b.vy)
       const speed = shownSpeed > 20 ? simSpeed : shownSpeed * 0.5 + simSpeed * 0.5
+      // Direction of travel relative to the body (0 = forwards) and the ball's side in the model frame.
+      const yaw = m.root.rotation.y
+      const moveOff = simSpeed > 0.3 ? angleDiffRad(Math.atan2(b.vy, b.vx), facing) : 0
+      const lx = (curr.ball.x - b.x) * Math.cos(yaw) - (curr.ball.y - b.y) * Math.sin(yaw)
       m.animate(dt, {
         speed,
+        moveOff,
+        saveDive: b.saveDive,
         sprint: b.sprint,
         sole: b.sole && b.hasBall,
         action: b.action,
         actionTime: b.actionTime,
         leftFooted: this.leftFooted[i]!,
-        saveSide: Math.sign(curr.ball.x - b.x),
+        saveSide: lx >= 0 ? 1 : -1,
         holding: b.hasBall && curr.ball.inHands,
       })
       this.shadows[i]!.position.set(x, 0.004, y)
@@ -214,4 +220,9 @@ export class PlayerRenderer {
     for (const m of this.models) m.dispose()
     for (const m of this.materials) m.dispose()
   }
+}
+
+/** Signed smallest difference a - b in radians (-PI..PI). */
+function angleDiffRad(a: number, b: number): number {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b))
 }

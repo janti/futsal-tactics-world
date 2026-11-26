@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+- Goal clearances: the alas start a metre deeper, giving the keeper an easier angle out to the wing.
+- Faster transition to defence: when the ball is lost the whole team switches to defending at once
+  (no waiting for the next decision) and sprints back into shape for 1.6 s. Measured AI vs AI: a team
+  caught out of shape gets three players back between ball and goal in 1.65 s instead of 1.9 s.
+
+- Your player answers the stick faster: the human-controlled player turns 1.7x and accelerates 1.25x
+  quicker than the AI players.
+- No more strange sideways or backwards runs: AI players watch the ball only while positioning or near
+  the play, and anyone running hard away from what he watches turns and runs. Measured AI vs AI: fast
+  running more than 60 degrees off the facing fell from 49 % to 11 % of the time (short side-steps).
+- Animation follows the direction of travel: backwards movement plays the stride in reverse
+  (backpedal), sideways movement becomes side-steps instead of legs running on the spot.
+- Goalkeeper saves: a standing save — knees bent, a short step and both hands pushing the ball wide,
+  body upright. A dive only when the keeper was caught off-centre (at the near post or further out
+  wide) when the shot was struck and it goes accurately to the far post; from the middle he never dives
+  (about a fifth of saves in AI vs AI). The dive pose has natural proportions: the body tips about 55
+  degrees, arms reach past the head with bent elbows, knees bent (no over-long stretched figure).
+- Runs in behind: when a teammate holds the ball up (e.g. the pivot) and the wing ahead is empty, an
+  ala sprints forward down the wing; the carrier plays a through ball into real space. One runner at a
+  time, two players always stay behind the ball.
+- Back post: with the ball on a wing near goal one attacker takes the far post; after a shot the best
+  placed attacker follows up at the far post for a rebound or tap-in (struck first time).
+- Supporting players look more for forward options.
+- After a goal both teams hurry back to their kick-off positions; the kick-off is ready about 4 s after
+  the goal (was up to 6 s while players strolled back from the other half).
+
 ### Milestone 4 — camera and visual identity
 
 - Horizontal cameras: Horizontal Tactical (broadcast-style side view that follows the play) and

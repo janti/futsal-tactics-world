@@ -22,6 +22,9 @@ the full system will be built on:
 - **Cover defender** (`pickHelper`): carrier in our half (28 m; anywhere in a counter-attack) and the
   first defender beaten (not level/goal-side or > 3.5 m away) → the defender who gets goal-side of the
   carrier fastest also presses; the fixo only if no opponent is near him (except in a counter).
+- **Ball lost**: every outfield player of the team re-decides immediately and sprints back to his
+  defensive spot for 1.6 s (`aiRecoverTimer`); runs in behind are cancelled.
+- **Goal clearance shape**: the alas start 1 m deeper than their attacking anchors.
 - **Counter-attack** (`updateDefensiveTransitions`): ball lost with at most one outfield player
   goal-side → markers sprint back, a goal-side defender is preferred as presser; ends on a back pass,
   a dead ball or three players goal-side.
@@ -33,6 +36,16 @@ the full system will be built on:
 - **Inside shoulder**: markers shift towards the middle of the court from the goal-side spot.
 - **Outnumbered**: within 18 m of goal, if only one outfield defender is goal-side of the carrier, he
   becomes the presser (the fixo leaves his man).
+- **Facing**: off-ball players watch the ball only within 3 m of their target or 4 m of the ball;
+  otherwise they face their run. In physics, a non-keeper AI player with the stick over 70 % whose
+  watched point is more than 100 degrees off his run turns to face the run.
+- **Runs in behind** (`runInBehind`): carrier holding the ball (≥ 0.4 s, not under heavy pressure),
+  empty wing lane ahead (no defender within 2.5 m of the run), not the deepest player, one runner per
+  team, two teammates behind the ball; the carrier plays a through ball if the lead point has 2.5 m of
+  space (`runnerOption`).
+- **Back post** (`backPostSpot`, `followUpTarget`): ball on a wing within 13 m of goal → one attacker
+  takes the far post; after our shot the best placed attacker attacks the far post and strikes a
+  rebound first time.
 - **Attacking pivot**: rotates every 4.5 s between the middle, the ball-side wing and the far side.
 - **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): roles fixed
   once per restart — short man (starts ~7 m off, comes to ~3 m behind the ball after 0.5 s), pivot

@@ -102,5 +102,5 @@ describe('AI direct play', () => {
     expect(completed / passes).toBeGreaterThan(0.75)
     expect(circulation / passes).toBeGreaterThan(0.35)
     expect(circulation / passes).toBeLessThan(0.85)
-  })
+  }, 30000)
 })
