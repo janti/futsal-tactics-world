@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Goalkeeper dive: the arms no longer look over-long. When the keeper caught the ball in a dive, the
+  arms tried to reach a ball at standing height from the tipped body and stretched out fully; now the
+  arms keep the dive pose (elbows bent, gloves just past the head) and the caught ball is drawn between
+  the gloves until he gets up.
+
 - National teams: men's (Finland, Spain, Portugal, Brazil, Argentina, Morocco, Iran, Kazakhstan) and
   women's (Finland, Spain, Portugal, Brazil, Argentina, Italy), grouped in the Quick Match team picker
   with clubs; picking a team from another group moves the opponent into the same group. Country names

@@ -9,6 +9,7 @@ import {
   ShapeGeometry,
   Shape,
   type Texture,
+  Vector3,
 } from 'three'
 import { facingToThreeYaw } from '../core/coords'
 import { lerp, lerpAngle } from '../core/math/scalar'
@@ -32,6 +33,7 @@ function hex(n: number): string {
 }
 
 export class PlayerRenderer {
+  private readonly tmp = new Vector3()
   readonly group = new Group()
   private readonly models: PlayerModel[] = []
   private readonly shadows: Mesh[] = []
@@ -210,6 +212,20 @@ export class PlayerRenderer {
         this.aimLength.scale.set(1, 1, 1.4 + 6 * aim)
       }
     }
+  }
+
+  /**
+   * The keeper holding the ball in the middle of a dive: where the ball is drawn (between his gloves),
+   * or null when there is no such keeper.
+   */
+  diveHoldPosition(curr: MatchSnapshot): Vector3 | null {
+    if (!curr.ball.inHands) return null
+    for (let i = 0; i < curr.players.length; i++) {
+      const b = curr.players[i]!
+      if (b.hasBall && b.role === 'GK' && b.action === 'save' && b.saveDive && b.actionTime < 0.9)
+        return this.models[i]!.handsCentre(this.tmp)
+    }
+    return null
   }
 
   setVisualScale(k: number): void {

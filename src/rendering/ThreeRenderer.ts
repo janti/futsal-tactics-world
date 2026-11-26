@@ -124,6 +124,9 @@ export class ThreeRenderer {
     const bc = this.ball.center
     this.goals.update(bc.x, bc.y, bc.z, dt)
     this.ball.offset(this.goals.ballOffset)
+    // A ball caught in a dive is drawn between the keeper's gloves.
+    const held = this.players.diveHoldPosition(curr)
+    if (held) this.ball.center.copy(held)
     const focus = focusFromSnapshot(curr, curr.teamDirs)
     const up = presentationUpSign(
       this.humanTeam,

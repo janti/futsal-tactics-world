@@ -18,6 +18,7 @@ import {
   Vector2,
   type Material,
   BoxGeometry,
+  Vector3,
 } from 'three'
 import { clamp, lerp } from '../core/math/scalar'
 import { BALL, HANDS } from '../simulation/SimulationConfig'
@@ -497,11 +498,11 @@ export class PlayerModel {
           // Arms reach past the head in the direction of the dive (the body is tipped, so "above the
           // head" points at the ball), elbows bent so the figure does not stretch out.
           near.upper.rotation.x = -0.3 * w
-          near.upper.rotation.z = side * (0.15 + 2.55 * w)
-          near.lower.rotation.x = -0.4 * w
+          near.upper.rotation.z = side * (0.15 + 2.3 * w)
+          near.lower.rotation.x = -1.0 * w
           far.upper.rotation.x = -0.45 * w
-          far.upper.rotation.z = side * 2.45 * w
-          far.lower.rotation.x = -0.7 * w
+          far.upper.rotation.z = side * 2.2 * w
+          far.lower.rotation.x = -1.2 * w
           const push = side > 0 ? this.legR : this.legL
           const lead = side > 0 ? this.legL : this.legR
           push.upper.rotation.set(0.15 * w, 0, -side * 0.1 * w)
@@ -536,7 +537,10 @@ export class PlayerModel {
       this.pelvis.position.x = 0
     }
     if (p.action !== 'throw') this.torso.rotation.y = this.torsoTwist
-    if (p.holding && p.action !== 'pass' && p.action !== 'shot' && p.action !== 'throw') {
+    // During a dive the arms keep the dive pose even when he holds the ball (the ball is drawn between
+    // the gloves instead); reaching for a ball at standing height from a tipped body stretched the arms.
+    const diving = p.action === 'save' && p.saveDive && p.actionTime < 0.9
+    if (p.holding && !diving && p.action !== 'pass' && p.action !== 'shot' && p.action !== 'throw') {
       // Ball held in both hands: the hands are placed on either side of the ball (simple two-bone IK).
       this.torso.rotation.x = 0
       const sx = this.root.scale.x
@@ -574,6 +578,14 @@ export class PlayerModel {
     limb.upper.rotation.set(pitch + alpha, 0, roll)
     limb.lower.rotation.set(-elbow, 0, 0)
     limb.end.rotation.set(0, 0, 0)
+  }
+
+  /** World position between the two hands (for drawing a ball held during a dive). */
+  handsCentre(out: Vector3): Vector3 {
+    this.root.updateMatrixWorld(true)
+    this.armL.end.getWorldPosition(out)
+    const r = this.armR.end.getWorldPosition(new Vector3())
+    return out.add(r).multiplyScalar(0.5)
   }
 
   /** Visual size multiplier on top of the player's real height (1 = true size). */
