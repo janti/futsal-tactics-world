@@ -97,8 +97,17 @@ export const PLAYER = {
   deceleration: 18,
   turnRate: [9, 15] as const,
   /** Human-controlled player: faster turning and acceleration for immediate response to the stick. */
-  humanTurnBoost: 1.7,
-  humanAccelBoost: 1.25,
+  humanTurnBoost: 1.9,
+  humanAccelBoost: 1.35,
+  /**
+   * Human: the running direction itself bends towards the stick (a curve that keeps speed) at up to
+   * this rate (rad/s), limited by a realistic sideways acceleration (m/s²): a sprinter curves wide, a
+   * jogging player turns tight.
+   */
+  humanSteerRate: 6,
+  humanLateralAccel: 12,
+  /** Human: stopping when the stick is released (m/s²). */
+  humanDeceleration: 24,
   soleSpeed: 1.7,
   withBallSpeedFactor: 0.9,
   /** Speed multiplier when moving sideways/backwards relative to facing. */

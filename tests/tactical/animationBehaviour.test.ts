@@ -107,8 +107,9 @@ describe('after a goal', () => {
       }
       if (goalTick < 0) continue
       while (!s.restart?.ready && s.tick - goalTick < TICK_RATE * 10) sim.step()
-      // Celebration 3 s + kick-off delay 1.4 s is the minimum; players hurrying back add a little.
-      expect((s.tick - goalTick) / TICK_RATE).toBeLessThan(5.6)
+      // Celebration 3 s + kick-off delay 1.4 s is the minimum; players hurrying back add a little
+      // (the alas line up deeper at the kick-off since they offer an easier ball there).
+      expect((s.tick - goalTick) / TICK_RATE).toBeLessThan(6)
       measured++
     }
     expect(measured).toBeGreaterThan(0)

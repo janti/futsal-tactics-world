@@ -43,21 +43,39 @@ export function updatePlayerMovement(p: PlayerState, hasBall: boolean, dt: numbe
   }
   p.facing = turnTowards(p.facing, desiredFacing, turnRate * dt)
 
-  // Moving away from the facing direction is slower (sidestep / backpedal).
+  // Moving away from the facing direction is slower (sidestep / backpedal). The human player turning
+  // to where the stick points is not slowed down by the turn itself (only when he aims elsewhere).
   let maxSpeed = maxSpeedFor(p, hasBall)
   if (intentLen > 0.15) {
-    const off = Math.abs(angleDiff(p.facing, angleOf(intent)))
+    const facingRef = human && !p.faceTarget ? desiredFacing : p.facing
+    const off = Math.abs(angleDiff(facingRef, angleOf(intent)))
     const t = (1 + Math.cos(off)) / 2
     const factor = p.role === 'GK' ? PLAYER.goalkeeperShuffleFactor : PLAYER.backpedalFactor
     maxSpeed *= factor + (1 - factor) * t
   }
 
+  // Human: bend the running direction towards the stick (a curve that keeps speed) instead of braking
+  // and re-accelerating, so changes of direction feel immediate and smooth. Reversals still brake.
+  if (human && intentLen > 0.15) {
+    const v = len(p.vel)
+    if (v > 0.5) {
+      const diff = angleDiff(angleOf(p.vel), angleOf(intent))
+      if (Math.abs(diff) < (115 * Math.PI) / 180) {
+        const rate = Math.min(PLAYER.humanSteerRate, PLAYER.humanLateralAccel / v)
+        const turn = clamp(diff, -rate * dt, rate * dt)
+        const a0 = angleOf(p.vel) + turn
+        p.vel = { x: Math.cos(a0) * v, y: Math.sin(a0) * v }
+      }
+    }
+  }
   const desired: Vec2 = { x: intent.x * maxSpeed, y: intent.y * maxSpeed }
   const dv = sub(desired, p.vel)
   // Braking (reducing speed or reversing) is quicker than accelerating.
   const braking = dot(desired, p.vel) < dot(p.vel, p.vel) - 1e-6
   const accel = braking
-    ? PLAYER.deceleration
+    ? human
+      ? PLAYER.humanDeceleration
+      : PLAYER.deceleration
     : attr(a.acceleration, PLAYER.acceleration[0], PLAYER.acceleration[1]) *
       (0.8 + 0.2 * p.stamina) *
       (human ? PLAYER.humanAccelBoost : 1)

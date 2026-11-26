@@ -563,3 +563,46 @@ button.primary:focus-visible {
 .lab-slider input {
   width: 100%;
 }
+
+/* Four-second count (kick-ins, corners, free kicks, keeper in his own half): one dot per second. */
+.four-seconds {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(28, 41, 56, 0.9);
+  color: var(--text2);
+  padding: 5px 12px;
+  font-size: 0.85em;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.fs-chip {
+  width: 8px;
+  height: 14px;
+}
+.fs-dots {
+  display: flex;
+  gap: 4px;
+}
+.fs-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  background: linear-gradient(to right, var(--amber) var(--fill, 0%), transparent var(--fill, 0%));
+}
+.fs-dot.last {
+  border-color: #e05a4f;
+}
+.fs-time {
+  color: var(--amber);
+  font-weight: 700;
+  min-width: 3.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

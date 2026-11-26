@@ -51,6 +51,11 @@ export interface HudState {
   keeperCountdown: number | null
   /** Keeper has the ball in the hands (throw) rather than at the feet. */
   keeperHands: boolean
+  /**
+   * The four-second count running for either team (kick-in, corner, free kick, or a keeper with the
+   * ball in his own half, e.g. a goal clearance): seconds used, which team, else null.
+   */
+  fourSeconds: { elapsed: number; team: 0 | 1; kind: 'restart' | 'clearance' | 'keeper' } | null
 }
 
 export interface QuickMatchSetup {
@@ -307,6 +312,7 @@ export const useUi = create<UiState>((set) => ({
     restartCountdown: null,
     keeperCountdown: null,
     keeperHands: false,
+    fourSeconds: null,
   },
   flash: null,
   setLang: (lang) => {

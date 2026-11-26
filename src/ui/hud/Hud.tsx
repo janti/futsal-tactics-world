@@ -1,6 +1,8 @@
 import { keyLabel, type InputAction } from '../../input/InputMapping'
 import { useEffect, useState } from 'react'
 import { useUi } from '../store'
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v))
 import { useT } from '../useT'
 import type { TranslationKey } from '../../localization/i18n'
 
@@ -73,6 +75,30 @@ export function Hud() {
         <div className="restart-banner" data-testid="keeper-throw-banner">
           {t(hud.keeperHands ? 'hud.keeperThrow' : 'hud.keeperFeet')}
           <span className="restart-countdown"> · {Math.ceil(hud.keeperCountdown)} s</span>
+        </div>
+      )}
+
+      {hud.fourSeconds && (
+        <div className="four-seconds" data-testid="four-seconds">
+          <span
+            className="fs-chip"
+            style={{ background: hud.fourSeconds.team === 0 ? hud.homeColor : hud.awayColor }}
+          />
+          <span className="fs-label">{t(`hud.fourSeconds.${hud.fourSeconds.kind}`)}</span>
+          <span className="fs-dots">
+            {[0, 1, 2, 3].map((i) => (
+              <span
+                key={i}
+                className={
+                  'fs-dot' + (hud.fourSeconds!.elapsed >= i + 1 ? ' on' : '') + (i === 3 ? ' last' : '')
+                }
+                style={{
+                  ['--fill' as string]: `${Math.round(clamp01(hud.fourSeconds!.elapsed - i) * 100)}%`,
+                }}
+              />
+            ))}
+          </span>
+          <span className="fs-time">{hud.fourSeconds.elapsed.toFixed(1)} s</span>
         </div>
       )}
 

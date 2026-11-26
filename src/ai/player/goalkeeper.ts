@@ -43,7 +43,10 @@ export function goalkeeperBehaviour(
   const goalLineY = -dir * COURT.halfLength
   const goal = { x: 0, y: goalLineY }
   const ball = state.ball
-  p.faceTarget = ball.pos
+  // Watch the ball — but never turn his back on the court for a ball behind him (in the net, past
+  // the line): he keeps facing out.
+  p.faceTarget =
+    (ball.pos.y - p.pos.y) * dir > -0.3 ? ball.pos : { x: ball.pos.x * 0.5, y: p.pos.y + dir * 6 }
 
   if (ball.ownerId === p.id) {
     p.aiState = 'distribute'
@@ -61,7 +64,13 @@ export function goalkeeperBehaviour(
         const open = clamp(laneOpenness(state, p.team, p.pos, t.pos), 0, 3)
         // Never throw or pass to a teammate an opponent can cut off.
         const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -3 : 0
-        const score = open + risky + rng.range(0, 0.4) - dist(t.pos, p.pos) / 20
+        // A short ball to a teammate about to be pressed near our goal is a gift: prefer one with time.
+        let pressed = 0
+        if (dist(t.pos, goal) < 13)
+          for (const o of state.players)
+            if (o.team !== p.team && dist(o.pos, t.pos) < (o.id === state.controlledId ? 5 : 4))
+              pressed = -1.5
+        const score = open + risky + pressed + rng.range(0, 0.4) - dist(t.pos, p.pos) / 20
         if (score > bestScore) {
           bestScore = score
           best = t

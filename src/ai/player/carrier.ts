@@ -6,9 +6,17 @@ import { pressureOn } from '../../physics/PassingPhysics'
 import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
-import { type AIActions, spaceAhead, shootingLane, isLastMan } from '../common'
+import { screenFactor } from '../../simulation/MatchSimulation'
+import { type AIActions, spaceAhead, shootingLane, isLastMan, deepestOutfield } from '../common'
 import { runnerOption } from '../team/attacking'
-import { progressivePass, forwardChance, safePassOption, bestPassOption, passInterceptable } from '../passing'
+import {
+  progressivePass,
+  forwardChance,
+  safePassOption,
+  bestPassOption,
+  passInterceptable,
+  pivotPass,
+} from '../passing'
 
 export function carrierBehaviour(
   state: MatchState,
@@ -28,6 +36,7 @@ export function carrierBehaviour(
     const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
     if (angleOk) {
       p.aiSetPieceTimer = 0
+      p.aiDecision = 'setPiece'
       actions.shoot(p, sub(goal, p.pos), 0.55)
       return
     }
@@ -59,6 +68,7 @@ export function carrierBehaviour(
       if (decide && p.aiHoldTimer > 0.25) {
         const toGoalNow = dist(p.pos, goal)
         if (toGoalNow < 9 && shootingLane(state, p, goal.y) > 0.3) {
+          p.aiDecision = 'challengeShot'
           actions.shoot(p, sub(goal, p.pos), toGoalNow < 7.5 ? 0.3 : 0.45)
           p.aiChallengeTimer = 0
         }
@@ -80,8 +90,17 @@ export function carrierBehaviour(
     p.sprint = nd > 4
     p.sole = false
   } else {
-    // Blocked: do not run into the defender; protect the ball and look for the circulation pass.
-    p.moveIntent = { x: heading.x * 0.25, y: heading.y * 0.25 }
+    // Blocked: do not run into the defender; protect the ball and look for the circulation pass. With
+    // the presser right on him he turns away from him (sideways / back) instead of into him.
+    const escape =
+      nearest && nd < 2.2
+        ? normalize({
+            x: (p.pos.x - nearest.pos.x) * 1.0 + heading.x * 0.3,
+            y: (p.pos.y - nearest.pos.y) * 1.0 + heading.y * 0.3,
+          })
+        : heading
+    heading = escape
+    p.moveIntent = { x: heading.x * 0.45, y: heading.y * 0.45 }
     p.sprint = false
     p.sole = nd < 1.6
     // Shield: under close pressure turn the back to the opponent, body between him and the ball.
@@ -106,11 +125,31 @@ export function carrierBehaviour(
   const options = carrierOptions(state, p, rng, { open, pressure, toGoal, goal, nearest })
   const best = options.reduce<CarrierOption | null>((b, o) => (!b || o.utility > b.utility ? o : b), null)
   p.aiDecision = best ? best.kind : 'carry'
-  if (best) best.act(actions)
+  if (best) {
+    best.act(actions)
+    // Pass and move: after a pass forward or across he goes into space for the return (give-and-go).
+    if (
+      best.kind === 'progressive' ||
+      best.kind === 'circulate' ||
+      best.kind === 'direct' ||
+      best.kind === 'pivot'
+    )
+      passAndMove(state, p)
+  }
 }
 
 export type CarrierOptionKind =
-  'shoot' | 'longShot' | 'direct' | 'through' | 'challenge' | 'progressive' | 'circulate' | 'fallback'
+  | 'shoot'
+  | 'longShot'
+  | 'direct'
+  | 'through'
+  | 'challenge'
+  | 'progressive'
+  | 'circulate'
+  | 'fallback'
+  | 'clear'
+  | 'pivot'
+  | 'layoff'
 
 export interface CarrierOption {
   kind: CarrierOptionKind
@@ -157,7 +196,7 @@ export function carrierOptions(
   const out: CarrierOption[] = []
   const lane = shootingLane(state, p, c.goal.y)
   // Shoot from where a shot is worth it (from 10 m+ a keeper with a clear view saves nearly all).
-  const shootRange = attr(a.finishing, 9, 11.5)
+  const shootRange = attr(a.finishing, 8, 10.5)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - c.goal.y) * 1.6 + 1
   const myValue = shotValue(state, p.team, p.pos, lane, c.pressure)
 
@@ -173,9 +212,15 @@ export function carrierOptions(
         act: (x) => x.shoot(p, sub(c.goal, p.pos), power),
       })
     }
-  } else if (angleOk && c.toGoal < 15 && lane > 1.2 && rng.chance(attr(a.shotPower, 0.008, 0.025))) {
-    // Occasional long-range attempt through an open lane.
-    out.push({ kind: 'longShot', utility: 0.88, act: (x) => x.shoot(p, sub(c.goal, p.pos), 0.7) })
+  } else if (angleOk && c.toGoal < 14.5 && lane > 0.6) {
+    // From distance: worth it when a player screens the keeper's view ("maski"), occasionally
+    // otherwise through a wide-open lane.
+    const keeper = state.players.find((q) => q.team !== p.team && q.role === 'GK')
+    const screen = keeper ? screenFactor(state, p, keeper) : 0
+    const chance =
+      screen > 0.3 ? attr(a.shotPower, 0.12, 0.25) * screen : lane > 1.2 ? attr(a.shotPower, 0.008, 0.025) : 0
+    if (chance > 0 && rng.chance(chance))
+      out.push({ kind: 'longShot', utility: 0.88, act: (x) => x.shoot(p, sub(c.goal, p.pos), 0.62) })
   }
 
   // Direct play band (0.8+): a forward pass to a teammate free in a scoring position. If his shot is
@@ -196,6 +241,31 @@ export function carrierOptions(
   if (runner)
     out.push({ kind: 'through', utility: 0.78, act: (x) => x.pass(p, sub(runner.pos, p.pos), true, runner) })
 
+  // The vertical ball into the pivot: whenever the lane to his feet is open (a marker behind him does
+  // not matter), not only once the carry stalls.
+  if (p.aiHoldTimer > 0.3) {
+    const pivot = pivotPass(state, p)
+    if (pivot)
+      out.push({
+        kind: 'pivot',
+        utility: 0.76 + shotValue(state, p.team, pivot.pos, 1, 0) * 0.1,
+        act: (x) => x.pass(p, sub(pivot.pos, p.pos), false, pivot),
+      })
+  }
+
+  // The pivot holding it up: lay it off to a teammate arriving behind him with a better shot, who
+  // strikes it first time.
+  const lay = layoffOption(state, p, myValue)
+  if (lay)
+    out.push({
+      kind: 'layoff',
+      utility: 0.84,
+      act: (x) => {
+        lay.aiSetPieceTimer = 1.5
+        x.pass(p, sub(lay.pos, p.pos), false, lay)
+      },
+    })
+
   // Take the defender on (wing or middle; never the last man). Decided once per possession.
   if (!out.some((o) => o.utility >= 0.78) && startChallenge(state, p, c.nearest, rng))
     out.push({ kind: 'challenge', utility: 0.7, act: () => undefined })
@@ -208,6 +278,38 @@ export function carrierOptions(
         kind: 'progressive',
         utility: 0.6 + shotValue(state, p.team, ahead.pos, 1, 0) * 0.1,
         act: (x) => x.pass(p, sub(ahead.pos, p.pos), false, ahead),
+      })
+  }
+
+  // Danger zone: in our own third, under pressure, clear it long up the wing rather than risk losing
+  // it near our goal (a safe pass, if there is one, still scores higher).
+  const ownGoal = { x: 0, y: -c.goal.y }
+  if (dist(p.pos, ownGoal) < 13 && c.pressure > 0.4) {
+    // Either wing, well up the court: the side nobody can cut it out on, else the one further from
+    // the human player (who reads a long ball best), else his own side.
+    const human = state.controlledId !== null ? state.players[state.controlledId]! : null
+    const cands = [1, -1].map((side) => {
+      const target = { x: side * 6.5, y: c.goal.y * 0.25 }
+      // Kicked straight into the presser in front of him it is just a block: not that way.
+      const along = normalize(sub(target, p.pos))
+      const blocked = state.players.some((o) => {
+        if (o.team === p.team) return false
+        const rel = sub(o.pos, p.pos)
+        const t = rel.x * along.x + rel.y * along.y
+        return t > -0.2 && t < 3.5 && Math.abs(rel.x * -along.y + rel.y * along.x) < 1.3
+      })
+      if (blocked) return { target, score: -Infinity }
+      const safe = !passInterceptable(state, p.team, p.pos, target)
+      const fromHuman = human && human.team !== p.team ? dist(human.pos, target) : 0
+      const own = side === (Math.sign(p.pos.x) || 1) ? 0.5 : 0
+      return { target, score: (safe ? 10 : 0) + fromHuman * 0.3 + own }
+    })
+    const pick = cands[0]!.score >= cands[1]!.score ? cands[0]! : cands[1]!
+    if (pick.score > -Infinity)
+      out.push({
+        kind: 'clear',
+        utility: 0.35,
+        act: (x) => x.pass(p, sub(pick.target, p.pos), true, null, undefined, 9),
       })
   }
 
@@ -232,6 +334,60 @@ export function carrierOptions(
     }
   }
   return out
+}
+
+/**
+ * Lay-off: the most advanced player (the pivot) with the ball in the attacking half plays it back to a
+ * teammate arriving 2-7.5 m behind him who has a clearly better shot (a first-time strike).
+ */
+function layoffOption(state: MatchState, p: PlayerState, myValue: number): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  if (p.pos.y * dir < 0) return null
+  for (const t of state.players)
+    if (t.team === p.team && t.role !== 'GK' && t.id !== p.id && (t.pos.y - p.pos.y) * dir > 0) return null
+  let best: PlayerState | null = null
+  let bestV = myValue * 1.3 + 0.03
+  for (const t of state.players) {
+    if (t.team !== p.team || t.role === 'GK' || t.id === p.id) continue
+    const back = (p.pos.y - t.pos.y) * dir
+    const d = dist(t.pos, p.pos)
+    if (back < 1 || d < 2 || d > 7.5) continue
+    let space = Infinity
+    for (const o of state.players)
+      if (o.team !== p.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, t.pos))
+    if (space < 1.8 || passInterceptable(state, p.team, p.pos, t.pos)) continue
+    const v = shotValue(state, p.team, t.pos, 1, 0)
+    if (v > bestV) {
+      bestV = v
+      best = t
+    }
+  }
+  return best
+}
+
+/**
+ * Pass and move: after releasing the ball the passer runs forward into space (a free lane, not the
+ * deepest player, not if a run is already on), so the receiver can play it back into his path.
+ */
+function passAndMove(state: MatchState, p: PlayerState): void {
+  if (p.role === 'GK' || deepestOutfield(state, p.team) === p.id || p.aiRunCooldown > 0) return
+  if (state.players.some((t) => t.team === p.team && t.id !== p.id && t.aiRunTimer > 0)) return
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  // Forward and a little towards the middle, stopping short of the goal.
+  const target = {
+    x: clamp(p.pos.x * 0.7, -7.5, 7.5),
+    y: clamp(p.pos.y + dir * 7, -COURT.halfLength + 4, COURT.halfLength - 4),
+  }
+  if ((goalY - target.y) * dir < 4) return
+  for (const o of state.players) {
+    if (o.team === p.team || o.role === 'GK') continue
+    const { point } = closestOnSegment(p.pos, target, o.pos)
+    if (dist(point, o.pos) < 1.8) return
+  }
+  p.aiRunTarget = target
+  p.aiRunTimer = 1.8
+  p.aiRunCooldown = 6
 }
 
 /**
@@ -291,10 +447,24 @@ function breakawayBehaviour(
   if (!decide || p.aiHoldTimer < 0.2) return
   const shootAt = attr(a.composure, 8.5, 7)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
-  const forced = (chaser < 1.6 && toGoal < 11) || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
+  const forced = (chaser < 1.2 && toGoal < 9.5) || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
   if (!angleOk || (toGoal > shootAt && !forced)) return
-  // Corner choice as lateral input (planShot aims at the corner on that side).
-  const power = rng.chance(attr(a.finishing, 0.55, 0.85)) ? 0.3 : 0.45
+  // Forced to finish from further out (keeper rushing out, a chaser on him): a teammate free closer
+  // in gets the square ball instead of a shot the keeper will save.
+  if (toGoal > shootAt) {
+    const mate = forwardChance(state, p)
+    if (mate && dist(mate.player.pos, goal) < toGoal - 2) {
+      p.aiDecision = 'breakawaySquare'
+      actions.pass(p, sub(mate.player.pos, p.pos), false, mate.player)
+      p.aiBreakawayCorner = 0
+      return
+    }
+  }
+  // Corner choice as lateral input (planShot aims at the corner on that side). Close in a placed
+  // side-foot; further out it needs pace to beat the keeper.
+  const placed = rng.chance(attr(a.finishing, 0.55, 0.85))
+  const power = toGoal < 8 ? (placed ? 0.3 : 0.45) : clamp(0.45 + (toGoal - 8) / 20, 0.45, 0.6)
+  p.aiDecision = 'breakawayShot'
   actions.shoot(p, { x: p.aiBreakawayCorner, y: dir * 0.4 }, power)
   p.aiBreakawayCorner = 0
 }

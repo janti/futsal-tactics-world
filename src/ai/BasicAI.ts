@@ -60,6 +60,8 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
       p.aiState = 'celebrate'
       const spot = kickoffAnchor(state, p)
       walkTo(p, spot, dist(p.pos, spot) > 6)
+      // A keeper who has just conceded turns back to face the court (not the ball in his net).
+      if (p.role === 'GK') p.faceTarget = { x: 0, y: 0 }
       continue
     }
     if (state.phase === 'restart') {

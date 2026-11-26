@@ -12,7 +12,7 @@ marks man-to-man and runs set-piece routines.
 ![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-218%20sim%20%2B%207%20browser-2ea44f)
+![Tests](https://img.shields.io/badge/tests-228%20sim%20%2B%207%20browser-2ea44f)
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 
 <img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
@@ -171,7 +171,7 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.m
 ## Quality
 
 ```bash
-npm test             # 218 unit, integration and tactical tests (headless simulation)
+npm test             # 228 unit, integration and tactical tests (headless simulation)
 npm run test:e2e     # 7 Playwright browser tests (first time: npx playwright install chromium)
 npm run typecheck    # strict TypeScript
 npm run lint         # Oxlint

@@ -9,9 +9,9 @@
  *  4. action timers                    9. possession + switching
  *  5. player movement + collisions    10. emit events
  */
-import { attr, clamp, rateToChance } from '../core/math/scalar'
+import { angleDiff, attr, clamp, rateToChance } from '../core/math/scalar'
 import { SeededRandom, deriveSeed } from '../core/random/SeededRandom'
-import { add, addScaled, dist, fromAngle, len, normalize, sub, type Vec2 } from '../core/math/vec2'
+import { add, addScaled, angleOf, dist, fromAngle, len, normalize, sub, type Vec2 } from '../core/math/vec2'
 import { assistControlledPlayer, updateAI, type AIActions } from '../ai/BasicAI'
 import { baseAnchor } from '../ai/positioning/Formation'
 import { checkOutOfPlay, isGoal, stepBall } from '../physics/BallPhysics'
@@ -574,7 +574,12 @@ export class MatchSimulation implements AIActions {
       const fwd = fromAngle(owner.facing)
       const rel = sub(b.pos, owner.pos)
       const ahead = rel.x * fwd.x + rel.y * fwd.y
-      if (owner.dribbleTouchTimer <= 0 && ahead < CONTROL.touchReach) {
+      // The human player changing direction takes the ball with him at once (a touch into the new
+      // direction while it is still at his feet) instead of running away from it.
+      const human = owner.id === s.controlledId
+      const ballOff = len(b.vel) > 0.5 ? Math.abs(angleDiff(angleOf(b.vel), owner.facing)) : 0
+      const redirect = human && ballOff > 0.45 && dist(b.pos, owner.pos) < CONTROL.touchReach * 1.4
+      if ((owner.dribbleTouchTimer <= 0 && ahead < CONTROL.touchReach) || redirect) {
         const extra = attr(a.dribbling, 1.7, 1.1)
         const dir = fromAngle(owner.facing + this.rng.gaussian() * attr(a.ballControl, 0.1, 0.03))
         b.vel = { x: dir.x * (speed + extra), y: dir.y * (speed + extra) }
@@ -998,8 +1003,11 @@ export class MatchSimulation implements AIActions {
     // Catch when the ball is manageable and the keeper may use the hands (own penalty area);
     // otherwise parry it wide, away from goal.
     const clearLongShot = longShot && b.shotScreen < 0.25
+    // A placed shot can only be held when it comes at him (no stretch); a firmer one when it is
+    // manageable.
+    const placedAtHim = b.isShot && b.shotPlaced && reachFrac < 0.45 && b.z < 1.4
     const catchable =
-      !(b.isShot && b.shotPlaced) &&
+      (!(b.isShot && b.shotPlaced) || placedAtHim) &&
       this.inOwnPenaltyArea(gk, b.pos) &&
       (clearLongShot
         ? // Seen all the way: caught unless it is at full stretch or very high.
@@ -1217,7 +1225,17 @@ export class MatchSimulation implements AIActions {
     const taker = this.player(r.takerId)
     // Human taker with no input walks to the ball automatically.
     const takerSpot = restartTakerSpot(s, r)
-    if (taker.id === s.controlledId && len(taker.moveIntent) < 0.1 && dist(taker.pos, takerSpot) > 0.15) {
+    // At the kick-off the human taker's movement is not his own: he goes to the ball and stays there
+    // (the direction keys only aim once he is at it).
+    if (r.type === 'kickoff' && taker.id === s.controlledId && dist(taker.pos, takerSpot) <= 0.15) {
+      taker.moveIntent = { x: 0, y: 0 }
+      taker.sprint = false
+    }
+    if (
+      taker.id === s.controlledId &&
+      (r.type === 'kickoff' || len(taker.moveIntent) < 0.1) &&
+      dist(taker.pos, takerSpot) > 0.15
+    ) {
       const to = sub(routeAroundGoals(taker.pos, takerSpot), taker.pos)
       const n = normalize(to)
       const m = clamp(len(to) / 1.2, 0.3, 1)
@@ -1587,6 +1605,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiSetPieceTimer: 0,
         aiRunTimer: 0,
         aiRunCooldown: 0,
+        aiMarkId: null,
         aiRunTarget: { x: 0, y: 0 },
         aiRecoverTimer: 0,
         aiDecision: '',

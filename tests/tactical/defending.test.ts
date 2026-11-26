@@ -421,7 +421,11 @@ describe('2 v 1 against the last defender', () => {
 describe('measured press and the middle', () => {
   it('far from our goal the presser stands off on the inside instead of diving in', () => {
     const { sim } = openPlay(2, { x: 6, y: 6 })
-    hold(sim, { 7: { x: 6, y: 6 } }, 2)
+    // The carrier faces the goal he attacks (with his back to it the pivot would press him tight).
+    const c = sim.player(7)
+    hold(sim, { 7: { x: 6, y: 6 } }, 2, () => {
+      c.facing = sim.state.teams[1].attackDir === 1 ? Math.PI / 2 : -Math.PI / 2
+    })
     const presser = sim.state.players.find((q) => q.team === 0 && q.aiState === 'press')!
     expect(presser).toBeDefined()
     expect(d(presser.pos, sim.player(7).pos)).toBeGreaterThan(2)

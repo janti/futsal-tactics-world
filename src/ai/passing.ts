@@ -92,6 +92,45 @@ export function progressivePass(state: MatchState, p: PlayerState): PlayerState 
 }
 
 /**
+ * The vertical ball into the pivot (our most advanced player): played into his feet even with a
+ * marker tight behind him — the marker cannot get to a ball played in front of the pivot, who holds it
+ * up for a lay-off or turns. Needs an open lane and nobody able to step in front of him.
+ */
+export function pivotPass(state: MatchState, p: PlayerState): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  let pivot: PlayerState | null = null
+  for (const t of state.players) {
+    if (t.team !== p.team || t.role === 'GK') continue
+    if (!pivot || (t.pos.y - pivot.pos.y) * dir > 0) pivot = t
+  }
+  if (!pivot || pivot.id === p.id) return null
+  const progress = (pivot.pos.y - p.pos.y) * dir
+  const d = dist(pivot.pos, p.pos)
+  if (progress < 4 || d > 20) return null
+  // Not when he is already in front of goal (a shot or the direct ball is the job then).
+  if ((dir * COURT.halfLength - pivot.pos.y) * dir < 5) return null
+  const along = normalize(sub(pivot.pos, p.pos))
+  // A marker behind him (further along the pass line, close to him) does not cut it out.
+  const behind = (o: PlayerState) => {
+    const rel = sub(o.pos, pivot!.pos)
+    const ahead = rel.x * along.x + rel.y * along.y
+    const lat = Math.abs(rel.x * -along.y + rel.y * along.x)
+    return ahead > -0.2 && ahead < 2.2 && lat < 1.4
+  }
+  let lane = Infinity
+  for (const o of state.players) {
+    if (o.team === p.team || behind(o)) continue
+    const rel = sub(o.pos, p.pos)
+    const t = rel.x * along.x + rel.y * along.y
+    if (t < 0.5 || t > d) continue
+    lane = Math.min(lane, Math.abs(rel.x * -along.y + rel.y * along.x))
+  }
+  if (lane < 1.1) return null
+  if (passInterceptable(state, p.team, p.pos, pivot.pos, FORWARD_PASS_READ, behind)) return null
+  return pivot
+}
+
+/**
  * A forward pass to a teammate who is free in a scoring position: the lane is open, the receiver has
  * space, is clearly ahead of the ball and more dangerous than the carrier. Runners moving forward with
  * space behind the defence get a through pass.
@@ -143,6 +182,7 @@ export function passInterceptable(
   from: Vec2,
   to: Vec2,
   read = 0.12,
+  ignore?: (o: PlayerState) => boolean,
 ): boolean {
   const d = dist(from, to)
   if (d < 1) return false
@@ -156,7 +196,7 @@ export function passInterceptable(
     travelled += v * h
     const pt = addScaled(from, dirV, Math.min(travelled, d))
     for (const o of state.players) {
-      if (o.team === team) continue
+      if (o.team === team || ignore?.(o)) continue
       if (o.role === 'GK' && dist(o.pos, { x: 0, y: -state.teams[o.team].attackDir * COURT.halfLength }) > 7)
         continue
       const gap = dist(o.pos, pt)
@@ -177,7 +217,7 @@ export function passInterceptable(
 }
 
 /** How the AI rates the human-controlled player when judging whether he can cut a pass out. */
-export const HUMAN_READ = { reach: 0.9, speedFactor: 0.85, read: 0 } as const
+export const HUMAN_READ = { reach: 1.1, speedFactor: 0.72, read: 0 } as const
 
 /**
  * Forward passes into danger are allowed a little more risk than circulation passes: the opponent's

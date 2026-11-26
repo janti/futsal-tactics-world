@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Human control: the controlled player turns and accelerates quicker, stops sooner when the keys are
+  released and curves into a new direction keeping his pace (within a realistic sideways
+  acceleration: a sprinter curves wider than a jogging player) instead of braking and re-accelerating;
+  turning towards where he runs no longer slows him; sprint-dribbling, a change of direction takes the
+  ball along at once. The AI's estimate of how quickly the human can cut out a pass was updated to
+  match.
+- Defending alas keep their side: they mark a man in their own zone and no longer swap men or run
+  across the court after one (at most 2 m over the middle).
+- AI attack: the vertical ball into the pivot is played whenever the lane to his feet is open (a
+  marker behind him does not stop it); then the nearest teammate comes to a lay-off spot behind him on
+  the inside and the next one attacks the far post; the pivot lays it off to a teammate with a better
+  shot, who strikes it first time.
+- Build-up: when the deepest player has the ball and turns to one side, the ala on that side drops
+  level with him out wide, offering an easy square pass.
+- Clearances from the own third are never kicked straight into the presser in front, and go to the
+  wing the human player cannot reach.
+
+- Defending: the pivot keeps the middle closed and stays with his man (he no longer runs from side
+  to side after the ball); the alas press the carrier. Only a carrier with his back to the goal he
+  attacks is pressed by the pivot, from the side he faces (closing the pass back). A second man goes
+  to the ball only in the own end, also in a counter-attack.
+- Goalkeeper: never turns his back to the court for a ball behind him (after conceding he faces the
+  court); a placed shot straight at him is held instead of always pushed away; a more compact side
+  dive (knees bent, arms bent, no stretched-out figure); keepers are generated about 3 cm shorter and
+  get only half of the player size enlargement, so they no longer look too big for the 2 m goal.
+- Kick-off: the human taker cannot walk away from the ball before the kick (the direction keys aim).
+- Kick-ins and corners: the AI does not play a ball the human player (or another opponent) could cut
+  out while there is time; the routine runners must also be safe. Late on the aim is frozen so the
+  taker is lined up behind the ball.
+- Four-second count on screen for both teams: kick-ins, corners, free kicks and a keeper with the
+  ball in his own half (goal clearances); one dot fills per second.
+- Alas start deeper in build-up: at kick-offs, at goal clearances (2.5 m deeper than the attacking
+  shape) and when their keeper has the ball in open play (2 m for a human keeper's team).
+
 - Goal clearances follow the rule: the keeper's throw must leave the penalty area before anybody
   touches it, otherwise the clearance is retaken (HUD message). Players not under human control —
   opponents and teammates alike — leave the area for the clearance and stay out until the ball is
@@ -11,7 +45,15 @@
   no longer played (the carrier shields and carries instead); the carrier releases the ball while the
   safe option is still open when a presser is closing in; keeper throws only go to teammates who
   cannot be cut off. Measured against a pressing test bot: passes cut out 82 -> about 50 per 18 min.
-- AI shooting: shots from slightly closer (9-11.5 m range; placed shots up to 8.5 m).
+- AI shooting: the shooting band starts closer (8-10.5 m by finishing; placed shots up to 8.5 m).
+- AI attacking against a human: breakaways no longer finish from 10-11 m as soon as a chaser closes
+  in; the carrier goes on to about 8 m, squares the ball to a teammate free closer in when the keeper
+  rushes out, and strikes firmer from further out. Pass and move: after a forward or square pass the
+  passer runs into space for the return. A blocked carrier turns away from the presser instead of
+  into him; screened long shots are tried more often. In the own third under pressure the ball is
+  cleared long up the wing, and the keeper no longer throws short to a teammate about to be pressed.
+  Measured against the pressing test bot (6 x 3 min): AI goals 1 -> 3, bot goals 16 -> 4-6, AI
+  entries into the final third 12 -> 23; AI vs AI goals rose as well.
 - Pressing: close to the carrier the presser keeps pace with him (jockeying only while the carrier is
   nearly still) and sprints when he does.
 

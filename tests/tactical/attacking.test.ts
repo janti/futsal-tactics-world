@@ -89,7 +89,7 @@ describe('back post', () => {
 })
 
 describe('goal clearance shape', () => {
-  it('the alas start a metre deeper than their attacking shape, for an easier angle out to the wing', async () => {
+  it('the alas start deeper than their attacking shape, for an easier angle out to the wing', async () => {
     const { MatchSimulation } = await import('../../src/simulation/MatchSimulation')
     const { dynamicAnchor } = await import('../../src/ai/positioning/Formation')
     const { GOAL_CLEARANCE_ALA_DROP } = await import('../../src/ai/BasicAI')
@@ -112,11 +112,11 @@ describe('goal clearance shape', () => {
       },
     )
     for (let i = 0; i < 20; i++) sim.step()
-    expect(GOAL_CLEARANCE_ALA_DROP).toBe(1)
+    expect(GOAL_CLEARANCE_ALA_DROP).toBe(2.5)
     for (const id of [2, 3]) {
       const p = sim.player(id)
       const shape = dynamicAnchor(p.role, 'attack', dir, s.restart!.spot)
-      expect((shape.y - p.aiTarget.y) * dir).toBeCloseTo(1, 5)
+      expect((shape.y - p.aiTarget.y) * dir).toBeCloseTo(GOAL_CLEARANCE_ALA_DROP, 5)
     }
   })
 })

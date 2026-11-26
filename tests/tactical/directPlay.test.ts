@@ -97,8 +97,9 @@ describe('AI direct play', () => {
       }
     }
     // Per 3 minutes of AI vs AI, averaged over three seeds.
-    // Fewer, closer shots since long-range shooting was cut back (was > 6 when the AI shot from 15 m).
-    expect(shots / 3).toBeGreaterThan(4.5)
+    // Fewer, closer shots since long-range shooting was cut back (was > 6 when the AI shot from 15 m;
+    // > 4.5 before breakaways and the shooting band stopped finishing from 10-11 m).
+    expect(shots / 3).toBeGreaterThan(3)
     expect(completed / passes).toBeGreaterThan(0.75)
     expect(circulation / passes).toBeGreaterThan(0.35)
     expect(circulation / passes).toBeLessThan(0.85)

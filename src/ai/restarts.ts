@@ -11,7 +11,7 @@ import { type AIActions, GOAL_CLEARANCE_ALA_DROP, kickoffAnchor, outsideClearanc
 import { walkTo, keepDistance } from './movement'
 import { markingPosition } from './team/defending'
 import { setPieceRoutine } from './team/attacking'
-import { bestPassOption } from './passing'
+import { bestPassOption, passInterceptable } from './passing'
 
 export function restartBehaviour(
   state: MatchState,
@@ -36,10 +36,12 @@ export function restartBehaviour(
         for (const rr of routine) {
           const q = state.players[rr.id]!
           const lane = laneOpenness(state, p.team, r.spot, q.pos)
-          if (lane < 0.6) continue
+          if (lane < 0.6 || passInterceptable(state, p.team, r.spot, q.pos)) continue
           let space = Infinity
           for (const o of state.players)
-            if (o.team !== p.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, q.pos))
+            if (o.team !== p.team && o.role !== 'GK')
+              // The human player reads a set piece well: he counts as closer than he is.
+              space = Math.min(space, dist(o.pos, q.pos) - (o.id === state.controlledId ? 0.8 : 0))
           // Enough room is enough: the short man and the pivot are preferred (they can shoot).
           if (space < 1.1) continue
           const pref = rr.role === 'short' ? 1.3 : rr.role === 'pivot' ? 1.0 : 0
@@ -51,19 +53,37 @@ export function restartBehaviour(
           }
         }
       }
-      if (best) {
+      // Late on (the four seconds running out) the aim is frozen so he is lined up behind the ball
+      // when he has to kick it; the receiver is the teammate on that line.
+      if (r.readyTimer >= 2.1) {
+        let bestCos = -Infinity
+        for (const t of state.players) {
+          if (t.team !== p.team || t.id === p.id) continue
+          const to = sub(t.pos, r.spot)
+          const l = Math.hypot(to.x, to.y)
+          if (l < 1) continue
+          const cos = (to.x * r.aimDir.x + to.y * r.aimDir.y) / (l * Math.hypot(r.aimDir.x, r.aimDir.y))
+          if (cos > bestCos) {
+            bestCos = cos
+            best = { player: t, score: 0 }
+          }
+        }
+      } else if (best) {
         // Aim where the receiver will meet the ball: the taker steps round the ball to stand behind
         // it on that line.
         const meet = predictPassTarget(p, best.player, false, state.teams[p.team].attackDir)
         r.aimDir = clampRestartAim(state, r, sub(meet, r.spot))
         p.faceTarget = best.player.pos
       }
+      // A ball an opponent (above all the human player) could cut out is not played while there is
+      // time: the receivers keep moving to get free.
+      const unsafe = !!best && passInterceptable(state, p.team, r.spot, best.player.pos)
       const wait = r.type === 'kickoff' ? 0.5 : routine ? 1.8 : 0.9
       // Kick only once he stands behind the ball on the aim line (he walks round it when re-aiming).
       // Never let the four-second limit run out: after 2.6 s the ball goes regardless.
       const hurry = r.readyTimer > 2.8
       const inPlace = dist(p.pos, restartTakerSpot(state, r)) < 0.15
-      if (best && ((p.aiHoldTimer >= wait && inPlace) || hurry)) {
+      if (best && ((p.aiHoldTimer >= wait && inPlace && !unsafe) || hurry)) {
         if (routine && routine.some((rr) => rr.id === best!.player.id)) {
           // The routine ball is played firmly so it beats a marker; the short man and the pivot strike
           // it first time if they are in range.

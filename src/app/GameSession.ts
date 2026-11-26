@@ -9,7 +9,7 @@ import { MatchSimulation } from '../simulation/MatchSimulation'
 import { copySnapshot, createSnapshot, writeSnapshot, type MatchSnapshot } from '../simulation/MatchSnapshot'
 import { DT, HANDS, MAX_FRAME_TIME, RESTART } from '../simulation/SimulationConfig'
 import type { Command } from '../simulation/Commands'
-import { useUi } from '../ui/store'
+import { useUi, type HudState } from '../ui/store'
 
 function hex(n: number): string {
   return `#${n.toString(16).padStart(6, '0')}`
@@ -288,6 +288,24 @@ export class GameSession {
         (s.restart.type === 'kickIn' || s.restart.type === 'corner' || s.restart.type === 'freeKick')
           ? Math.max(0, RESTART.kickTimeLimit - s.restart.readyTimer)
           : null,
+      fourSeconds: this.fourSecondCount(),
     })
+  }
+
+  /** The four-second count in progress for either team (restart kick or keeper in his own half). */
+  private fourSecondCount(): HudState['fourSeconds'] {
+    const s = this.sim.state
+    const r = s.restart
+    if (
+      s.phase === 'restart' &&
+      r?.ready &&
+      (r.type === 'kickIn' || r.type === 'corner' || r.type === 'freeKick')
+    )
+      return { elapsed: r.readyTimer, team: r.team, kind: 'restart' }
+    if (s.phase !== 'play' || s.ball.ownerId === null) return null
+    const owner = this.sim.player(s.ball.ownerId)
+    if (owner.role !== 'GK' || s.teams[owner.team].attackDir * owner.pos.y > 0) return null
+    const clearance = s.clearance !== null && s.clearance.team === owner.team
+    return { elapsed: s.ball.handsTimer, team: owner.team, kind: clearance ? 'clearance' : 'keeper' }
   }
 }

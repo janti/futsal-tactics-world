@@ -21,8 +21,10 @@ export interface AIActions {
   throwBall(p: PlayerState, dir: Vec2, power: number): void
 }
 
-/** Metres the alas drop towards their own goal at the team's goal clearances. */
-export const GOAL_CLEARANCE_ALA_DROP = 1
+/** Goal clearance: the alas start this much deeper (metres) so the keeper has an easier angle out to the wing. */
+export const GOAL_CLEARANCE_ALA_DROP = 2.5
+/** Our keeper has the ball in open play: the alas drop this much (metres) to offer an easy ball. */
+export const KEEPER_BALL_ALA_DROP = 2
 
 /** Seconds of immediate sprinting back into shape after losing the ball. */
 export const RECOVER_TIME = 1.6

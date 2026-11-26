@@ -22,7 +22,9 @@ above. Key 7 shows pitch control and the team phases on the radar.
 **Utility decisions** (`carrierOptions`): every option gets a utility — shooting band 0.9+ (after the
 player's willingness-to-shoot roll), direct pass to a free teammate in a scoring position 0.8+ (1.0+
 when his shot value is clearly better than ours: the square ball), through ball 0.78, challenge 0.7,
-forward pass 0.6+, circulation 0.4, last-resort pass 0.25; carrying is the default. `shotValue` is a
+forward pass 0.6+, circulation 0.4, clearance up the wing 0.35 (own third under pressure), last-resort pass 0.25; carrying is the
+default. After a forward or circulation pass the passer runs into space for the return (pass and
+move). On a breakaway the carrier finishes from about 8 m, or squares it when forced earlier. `shotValue` is a
 rough expected-goal value from distance, angle, lane and pressure.
 
 ## Current state (Milestone 1 groundwork) — `src/ai/BasicAI.ts`

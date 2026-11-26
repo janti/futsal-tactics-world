@@ -490,25 +490,25 @@ export class PlayerModel {
           // then he gets back up.
           const k = clamp(t / 0.9, 0, 1)
           const w = k < 0.25 ? Math.sin((k / 0.25) * Math.PI * 0.5) : k < 0.6 ? 1 : 1 - (k - 0.6) / 0.4
-          // Body tips about 55 degrees towards the ball (not flat like a swimmer), the near arm reaches
-          // out to the side, the far arm comes over towards the ball, elbows and knees bent.
-          this.pelvis.rotation.z = -side * 0.95 * w
-          this.pelvis.position.x = side * 0.38 * w
-          this.pelvis.position.y = lerp(this.pelvis.position.y, 0.55, w)
-          // Arms reach past the head in the direction of the dive (the body is tipped, so "above the
-          // head" points at the ball), elbows bent so the figure does not stretch out.
-          near.upper.rotation.x = -0.3 * w
-          near.upper.rotation.z = side * (0.15 + 2.3 * w)
-          near.lower.rotation.x = -1.0 * w
-          far.upper.rotation.x = -0.45 * w
-          far.upper.rotation.z = side * 2.2 * w
-          far.lower.rotation.x = -1.2 * w
+          // A compact side dive: the body tips about 45 degrees towards the ball and drops, the hands
+          // go out together towards the ball with the elbows bent, and the knees stay bent under him
+          // (no stretched-out "superman" figure).
+          this.pelvis.rotation.z = -side * 0.8 * w
+          this.pelvis.position.x = side * 0.3 * w
+          this.pelvis.position.y = lerp(this.pelvis.position.y, 0.62, w)
+          this.torso.rotation.z = -side * 0.12 * w
+          near.upper.rotation.x = -0.55 * w
+          near.upper.rotation.z = side * (0.15 + 1.75 * w)
+          near.lower.rotation.x = -1.25 * w
+          far.upper.rotation.x = -0.9 * w
+          far.upper.rotation.z = side * 1.45 * w
+          far.lower.rotation.x = -1.35 * w
           const push = side > 0 ? this.legR : this.legL
           const lead = side > 0 ? this.legL : this.legR
-          push.upper.rotation.set(0.15 * w, 0, -side * 0.1 * w)
-          push.lower.rotation.x = 0.25 * w
-          lead.upper.rotation.set(-0.5 * w, 0, side * 0.25 * w)
-          lead.lower.rotation.x = 0.9 * w
+          push.upper.rotation.set(-0.35 * w, 0, -side * 0.05 * w)
+          push.lower.rotation.x = 1.1 * w
+          lead.upper.rotation.set(-0.85 * w, 0, side * 0.2 * w)
+          lead.lower.rotation.x = 1.45 * w
         } else {
           // Standing save: knees bent, a short step to the ball and the near arm sweeping out to the
           // side to steer the ball wide; the body stays upright.
@@ -590,6 +590,9 @@ export class PlayerModel {
 
   /** Visual size multiplier on top of the player's real height (1 = true size). */
   setVisualScale(k: number): void {
+    // The keeper stands in front of a 2 m goal: enlarging him as much as the outfield players makes
+    // him look too big for it, so he gets half of the enlargement.
+    if (this.goalkeeper) k = 1 + (k - 1) * 0.5
     this.root.scale.set(this.baseScale.x * k, this.baseScale.y * k, this.baseScale.z * k)
   }
 

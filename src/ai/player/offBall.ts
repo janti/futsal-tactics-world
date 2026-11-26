@@ -4,9 +4,17 @@ import type { MatchState, PlayerState } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { dynamicAnchor } from '../positioning/Formation'
 import { attackingRole } from '../team/roles'
-import { PRESS_ENGAGE_DISTANCE } from '../common'
-import { markingPosition, twoVersusOne, twoVersusOneSpot } from '../team/defending'
-import { runInBehind, followUpTarget, backPostSpot, pivotAnchor, supportPosition } from '../team/attacking'
+import { KEEPER_BALL_ALA_DROP, PRESS_ENGAGE_DISTANCE } from '../common'
+import { carrierBackToGoal, markingPosition, twoVersusOne, twoVersusOneSpot } from '../team/defending'
+import {
+  runInBehind,
+  followUpTarget,
+  backPostSpot,
+  pivotAnchor,
+  pivotSupportSpot,
+  squareOptionSpot,
+  supportPosition,
+} from '../team/attacking'
 import { interceptPoint, passInterception } from '../passing'
 
 export function offBallDecision(
@@ -46,6 +54,11 @@ export function offBallDecision(
       p.aiState = 'press'
       const ownGoal = { x: 0, y: -dir * COURT.halfLength }
       const toGoal = normalize(sub(ownGoal, owner.pos))
+      if (p.role === 'PIVOT' && carrierBackToGoal(state, owner)) {
+        // Back-to-goal carrier: the pivot presses on the side he faces, closing the pass back.
+        p.aiTarget = addScaled(owner.pos, { x: Math.cos(owner.facing), y: Math.sin(owner.facing) }, 1.1)
+        return
+      }
       if (dist(owner.pos, ownGoal) > PRESS_ENGAGE_DISTANCE) {
         const off = addScaled(owner.pos, toGoal, 3)
         p.aiTarget = { x: off.x * 0.75, y: off.y }
@@ -66,6 +79,17 @@ export function offBallDecision(
   const role = inPossession ? attackingRole(state, p) : p.role
   let anchor = dynamicAnchor(role, inPossession ? 'attack' : 'defend', dir, ball.pos)
   if (inPossession && role === 'PIVOT') anchor = pivotAnchor(state, p, anchor)
+  // Our keeper on the ball: the alas come deeper so the ball out to the wing is easy — the full drop
+  // for a human keeper (he needs a fixed, easy target); the AI keeper picks the safe option himself.
+  if (
+    inPossession &&
+    owner?.team === p.team &&
+    owner.role === 'GK' &&
+    (role === 'ALA_L' || role === 'ALA_R')
+  ) {
+    const drop = p.team === state.humanTeam ? KEEPER_BALL_ALA_DROP : KEEPER_BALL_ALA_DROP * 0.5
+    anchor = { x: anchor.x, y: anchor.y - dir * drop }
+  }
   if (inPossession) {
     // Attacking movement first: follow up our shot at the back post, keep running a run in behind,
     // start a new one into empty space, or take the back post when the ball is on a wing near goal.
@@ -79,6 +103,21 @@ export function offBallDecision(
     if (p.aiRunTimer > 0 && owner && owner.team === p.team) {
       p.aiState = 'run'
       p.aiTarget = p.aiRunTarget
+      return
+    }
+    // Our deepest player on the ball turning to one side: the ala there drops level for a square pass.
+    const square = squareOptionSpot(state, p)
+    if (square) {
+      p.aiState = 'support'
+      p.aiTarget = square
+      return
+    }
+    // Our pivot has it up the court: help him (lay-off spot, far post).
+    const help = pivotSupportSpot(state, p)
+    if (help) {
+      p.aiState = 'run'
+      p.aiTarget = help
+      p.aiSetPieceTimer = 1.2 // a ball laid back or loose at the far post is struck first time
       return
     }
     const behind = runInBehind(state, p)

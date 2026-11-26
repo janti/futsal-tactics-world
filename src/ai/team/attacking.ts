@@ -176,6 +176,72 @@ export function backPostSpot(state: MatchState, p: PlayerState): Vec2 | null {
 }
 
 /**
+ * Square option for the deepest player: when our deepest outfield player has the ball in the build-up
+ * and turns to one side, the ala on that side drops to his level out wide, offering an easy square
+ * pass (not straight away: only once he has turned that way).
+ */
+export function squareOptionSpot(state: MatchState, p: PlayerState): Vec2 | null {
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!owner || owner.team !== p.team || owner.id === p.id || owner.role === 'GK' || p.role === 'GK')
+    return null
+  if (deepestOutfield(state, p.team) !== owner.id || state.ball.inHands) return null
+  const dir = state.teams[p.team].attackDir
+  // Build-up only: up to a few metres into the opponents' half.
+  if (owner.pos.y * dir > 4) return null
+  const lateral = Math.cos(owner.facing)
+  if (Math.abs(lateral) < 0.3) return null
+  const side = Math.sign(lateral)
+  const spot = {
+    x: side * clamp(Math.abs(owner.pos.x) + 5.5, 5.5, 8.6),
+    y: clamp(owner.pos.y + dir * 0.6, -COURT.halfLength + 4, COURT.halfLength - 4),
+  }
+  if (Math.abs(spot.x - owner.pos.x) < 4) return null
+  // The ala on that side: the teammate (not the most advanced one) on that side nearest the spot.
+  const dirMost = state.players
+    .filter((t) => t.team === p.team && t.role !== 'GK')
+    .reduce((a, t) => ((t.pos.y - a.pos.y) * dir > 0 ? t : a))
+  let best: PlayerState | null = null
+  for (const t of state.players) {
+    if (t.team !== p.team || t.role === 'GK' || t.id === owner.id || t.id === dirMost.id) continue
+    if (Math.sign(t.pos.x) !== side && Math.abs(t.pos.x) > 1) continue
+    if (!best || dist(t.pos, spot) < dist(best.pos, spot)) best = t
+  }
+  return best && best.id === p.id ? spot : null
+}
+
+/**
+ * Helping the pivot: when our most advanced player has the ball in the attacking half, the nearest
+ * teammate comes to a lay-off spot a few metres behind him on the inside (a first-time shot from
+ * there) and the next one attacks the far post. The deepest player stays back.
+ */
+export function pivotSupportSpot(state: MatchState, p: PlayerState): Vec2 | null {
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!owner || owner.team !== p.team || owner.id === p.id || owner.role === 'GK' || p.role === 'GK')
+    return null
+  const dir = state.teams[p.team].attackDir
+  if (owner.pos.y * dir < 1) return null
+  const deepest = deepestOutfield(state, p.team)
+  const mates = state.players.filter((t) => t.team === p.team && t.role !== 'GK' && t.id !== owner.id)
+  if (mates.some((t) => (t.pos.y - owner.pos.y) * dir > 0)) return null // he is not the furthest up
+  if (p.id === deepest) return null
+  const goalY = dir * COURT.halfLength
+  const side = Math.sign(owner.pos.x) || 1
+  const layoff = {
+    x: clamp(owner.pos.x * 0.4 - side * 1.8, -6, 6),
+    y: clamp(owner.pos.y - dir * 4, -COURT.halfLength + 3, COURT.halfLength - 3),
+  }
+  const farPost = { x: -side * 1.8, y: goalY - dir * 2.5 }
+  const helpers = mates.filter((t) => t.id !== deepest)
+  if (helpers.length === 0) return null
+  const first = helpers.reduce((a, t) => (dist(t.pos, layoff) < dist(a.pos, layoff) ? t : a))
+  if (first.id === p.id) return layoff
+  const rest = helpers.filter((t) => t.id !== first.id)
+  if (rest.length === 0) return null
+  const second = rest.reduce((a, t) => (dist(t.pos, farPost) < dist(a.pos, farPost) ? t : a))
+  return second.id === p.id ? farPost : null
+}
+
+/**
  * The pivot does not stay in the middle: every few seconds he moves between the middle, the ball-side
  * wing and the far post/wing to find space (deterministic rhythm per team and half).
  */

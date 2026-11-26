@@ -120,6 +120,8 @@ export interface PlayerState {
   /** Run in behind / back-post run in progress: time left, cooldown before the next one, target. */
   aiRunTimer: number
   aiRunCooldown: number
+  /** AI defending: the opponent this player is marking (kept unless a clearly better pairing appears). */
+  aiMarkId: number | null
   aiRunTarget: Vec2
   /** Just lost the ball: time left of the immediate sprint back into the defensive shape. */
   aiRecoverTimer: number

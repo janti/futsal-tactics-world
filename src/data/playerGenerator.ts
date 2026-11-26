@@ -173,7 +173,7 @@ export function generatePlayer(
   const meanHeight = opts.women ? 167 : 178
   const heightCm = Math.round(
     clamp(
-      meanHeight + rng.gaussian() * 6 + (role === 'GK' ? 6 : 0) + (role === 'PIVOT' ? 3 : 0),
+      meanHeight + rng.gaussian() * 6 + (role === 'GK' ? 3 : 0) + (role === 'PIVOT' ? 3 : 0),
       opts.women ? 152 : 164,
       opts.women ? 186 : 198,
     ),

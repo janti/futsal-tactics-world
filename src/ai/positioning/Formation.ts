@@ -29,15 +29,15 @@ const TEMPLATES: Record<ShapeMode, Record<PlayerRole, TeamRelative>> = {
   kickoffOwn: {
     GK: { lateral: 0, depth: 0.03 },
     FIXO: { lateral: 0, depth: 0.27 },
-    ALA_L: { lateral: -0.6, depth: 0.42 },
-    ALA_R: { lateral: 0.6, depth: 0.42 },
+    ALA_L: { lateral: -0.6, depth: 0.37 },
+    ALA_R: { lateral: 0.6, depth: 0.37 },
     PIVOT: { lateral: 0, depth: 0.49 },
   },
   kickoffOpp: {
     GK: { lateral: 0, depth: 0.03 },
     FIXO: { lateral: 0, depth: 0.25 },
-    ALA_L: { lateral: -0.55, depth: 0.38 },
-    ALA_R: { lateral: 0.55, depth: 0.38 },
+    ALA_L: { lateral: -0.55, depth: 0.34 },
+    ALA_R: { lateral: 0.55, depth: 0.34 },
     PIVOT: { lateral: 0, depth: 0.41 },
   },
 }
