@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- 2 v 1 defending: the last defender no longer rushes the carrier. Further out he covers the passing
+  lane to the second attacker; from about 16 m in he moves closer to the carrier the nearer they get,
+  goal-side of him about 3-4 m outside the arc. At the arc (or a couple of metres before it) he takes
+  the second attacker and the goalkeeper comes out to the edge of the area to block the shot. A
+  teammate chasing from behind may still press the carrier.
+
 - Goalkeeper dive: the arms no longer look over-long. When the keeper caught the ball in a dive, the
   arms tried to reach a ball at standing height from the tipped body and stretched out fully; now the
   arms keep the dive pose (elbows bent, gloves just past the head) and the caught ball is drawn between

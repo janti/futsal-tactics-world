@@ -365,32 +365,59 @@ function hold(sim: MatchSimulation, spots: Record<number, Vec2>, seconds: number
   }
 }
 
-describe('2 v 1 against the fixo', () => {
-  it('the last defender leaves his man and steps out to the carrier', () => {
-    const { sim, s } = openPlay(4, { x: 2, y: -9 })
-    // Team 0 defends y = -20; everybody except the fixo is caught upfield.
-    for (const id of [2, 3, 4]) sim.player(id).pos = { x: (id - 3) * 3, y: -2 }
-    sim.player(1).pos = { x: -2.5, y: -14.5 }
-    let stepped = false
+describe('2 v 1 against the last defender', () => {
+  /**
+   * Team 1 (attacking -y) breaks 2 v 1 against team 0's fixo (id 1): carrier 7 at `carrier`, second
+   * attacker 8 at `mate`; team 0's other outfield players are caught upfield. Returns the positions
+   * after `seconds` (attackers held in place).
+   */
+  function twoV1(carrier: Vec2, mate: Vec2, seconds = 1.6) {
+    const { sim, s } = openPlay(4, carrier)
+    sim.player(1).pos = { x: 0, y: -15 }
     hold(
       sim,
       {
-        7: { x: 2, y: -9 },
-        8: { x: -3, y: -13 },
-        2: { x: 0, y: -2 },
-        3: { x: 3, y: -2 },
-        4: { x: -3, y: -2 },
+        7: carrier,
+        8: mate,
+        2: { x: -3, y: carrier.y + 8 },
+        3: { x: 3, y: carrier.y + 8 },
+        4: { x: 0, y: carrier.y + 9 },
       },
-      1.5,
-      () => {
-        if (sim.player(1).aiState === 'press') stepped = true
-      },
+      seconds,
     )
-    expect(stepped).toBe(true)
-    expect(d(sim.player(1).pos, sim.player(7).pos)).toBeLessThan(
-      d({ x: -2.5, y: -14.5 }, { x: 2, y: -9 }) - 2,
-    )
+    return { sim, s, def: sim.player(1), gk: sim.player(0) }
+  }
+  const distToSegment = (p: Vec2, a: Vec2, b: Vec2) => {
+    const abx = b.x - a.x
+    const aby = b.y - a.y
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abx * abx + aby * aby)))
+    return d(p, { x: a.x + abx * t, y: a.y + aby * t })
+  }
+
+  it('far from goal he does not rush the carrier: he covers the passing lane to the second attacker', () => {
+    const carrier = { x: 3, y: -4 } // 16 m out
+    const mate = { x: -4, y: -7 }
+    const { def, s } = twoV1(carrier, mate)
+    expect(def.aiState).toBe('twoVone')
+    expect(distToSegment(def.pos, carrier, mate)).toBeLessThan(1.6)
+    expect(d(def.pos, carrier)).toBeGreaterThan(2)
     expect(s.phase).toBe('play')
+  })
+
+  it('the nearer they get, the closer he stands to the carrier (goal-side)', () => {
+    const mate = { x: -4, y: -12 }
+    const far = twoV1({ x: 3, y: -6 }, { x: -4, y: -9 })
+    const near = twoV1({ x: 2.5, y: -10.5 }, mate) // about 3-4 m outside the arc
+    expect(d(near.def.pos, near.sim.player(7).pos)).toBeLessThan(d(far.def.pos, far.sim.player(7).pos) - 0.8)
+    expect(d(near.def.pos, { x: 0, y: -20 })).toBeLessThan(d(near.sim.player(7).pos, { x: 0, y: -20 }))
+  })
+
+  it('at the arc he takes the second attacker and the keeper comes out to block the shot', () => {
+    const carrier = { x: 2, y: -13.2 } // about 7 m out (the arc)
+    const mate = { x: -4, y: -14 }
+    const { def, gk } = twoV1(carrier, mate, 2)
+    expect(d(def.pos, mate)).toBeLessThan(1.6)
+    expect(gk.pos.y - -20).toBeGreaterThan(3) // well off his line, towards the ball
   })
 })
 

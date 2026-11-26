@@ -34,8 +34,11 @@ the full system will be built on:
 - **Measured press**: beyond 22 m from our goal the presser contains (3 m off, on the inside) and only
   engages (close ball tracking) nearer goal. The diamond's pivot sits 4 m off the ball, centrally.
 - **Inside shoulder**: markers shift towards the middle of the court from the goal-side spot.
-- **Outnumbered**: within 18 m of goal, if only one outfield defender is goal-side of the carrier, he
-  becomes the presser (the fixo leaves his man).
+- **2 v 1** (`twoVersusOne`, `TWO_V_ONE`): carrier within 20 m, one outfield defender goal-side of
+  him and a second attacker level or ahead nearby → the defender does not press: he covers the passing
+  lane (45 % of the way from the carrier to the mate, 0.8 m goal-side), closing towards a spot 1.6 m
+  goal-side of the carrier from 16 m to 9.8 m; from 8 m he marks the second attacker and the keeper comes
+  out along the ball line to the edge of the area.
 - **Facing**: off-ball players watch the ball only within 3 m of their target or 4 m of the ball;
   otherwise they face their run. In physics, a non-keeper AI player with the stick over 70 % whose
   watched point is more than 100 degrees off his run turns to face the run.

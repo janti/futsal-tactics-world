@@ -42,17 +42,19 @@ function oneVsOne(seed: number, from: Vec2, lastMan: boolean) {
   sim.drainEvents()
   const wasLastMan = isLastMan(s, att)
   let challenged = false
+  let challengedAsLastMan = false
   let beaten = false
   let lost = false
   for (let i = 0; i < TICK_RATE * 3 && !lost && !beaten; i++) {
     sim.step()
     if (att.aiState === 'challenge') challenged = true
+    if (att.aiState === 'challenge' && isLastMan(s, att)) challengedAsLastMan = true
     if (s.ball.ownerId !== 7 && s.ball.ownerId !== null)
       lost = s.ball.ownerId === 2 || sim.player(s.ball.ownerId).team === 0
     if (s.ball.ownerId === null && (s.ball.lastTouchTeam as number) === 0) lost = true
     if (challenged && s.ball.ownerId === 7 && (def.pos.y - att.pos.y) * -1 < -1) beaten = true
   }
-  return { challenged, beaten, lost, lastMan: wasLastMan }
+  return { challenged, challengedAsLastMan, beaten, lost, lastMan: wasLastMan }
 }
 
 describe('AI 1v1 dribble challenge', () => {
@@ -76,7 +78,8 @@ describe('AI 1v1 dribble challenge', () => {
     for (let seed = 1; seed <= 15; seed++) {
       const r = oneVsOne(seed, { x: seed % 2 ? 0 : 6, y: -4 }, true)
       expect(r.lastMan).toBe(true)
-      expect(r.challenged).toBe(false)
+      // Never while he is the last man (once he has carried it past his teammates he may).
+      expect(r.challengedAsLastMan).toBe(false)
     }
   })
 })

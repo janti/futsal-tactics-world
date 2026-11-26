@@ -242,15 +242,9 @@ function pickBallWinner(state: MatchState, team: TeamId): number | null {
   // Counter-attack against us: a defender goal-side of the carrier engages him (delays him while the
   // others recover) rather than one chasing from behind.
   const preferGoalSide = owner !== null && state.defTransition[team]
-  // Outnumbered (e.g. 2 v 1 against the fixo): the only outfield defender goal-side of the carrier
-  // near our goal steps out to him and leaves his man.
-  let lastMan: number | null = null
-  if (owner && dist(owner.pos, ownGoal) < 18) {
-    const goalSide = state.players.filter(
-      (q) => q.team === team && q.role !== 'GK' && dist(q.pos, ownGoal) < dist(owner.pos, ownGoal) + 0.4,
-    )
-    if (goalSide.length === 1) lastMan = goalSide[0]!.id
-  }
+  // 2 v 1: the last defender does not rush the carrier (he covers the pass, see twoVersusOne); a
+  // teammate chasing from behind may press.
+  const outnumbered = twoVersusOne(state, team)
   let best: PlayerState | null = null
   let bestT = Infinity
   let humanT = Infinity
@@ -262,9 +256,8 @@ function pickBallWinner(state: MatchState, team: TeamId): number | null {
     if (preferGoalSide && dist(p.pos, ownGoal) > dist(target, ownGoal) - 0.5) t += 1.0
     // Near our goal the fixo does not leave a man he is marking in front of goal to press the ball
     // (unless he is the last man: then he must).
-    if (p.id === lastMan) t -= 1.0
-    else if (p.role === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id))
-      t += 0.8
+    if (outnumbered && p.id === outnumbered.defender.id) continue
+    if (p.role === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id)) t += 0.8
     if (p.id === state.controlledId) {
       humanT = t
       continue
@@ -288,6 +281,12 @@ function offBallDecision(
   const ball = state.ball
   const dir = state.teams[p.team].attackDir
   const owner = ball.ownerId !== null ? state.players[ball.ownerId]! : null
+  const twoV1 = twoVersusOne(state, p.team)
+  if (twoV1 && twoV1.defender.id === p.id) {
+    p.aiState = 'twoVone'
+    p.aiTarget = twoVersusOneSpot(state, twoV1)
+    return
+  }
   if (helperId === p.id && owner) {
     // Cover defender: the carrier got past the first defender (or nobody is goal-side of him) near
     // goal; the next defender steps across to close him down.
@@ -392,6 +391,79 @@ function markingPosition(state: MatchState, p: PlayerState, pressing: (number | 
   const zone = p.role === 'FIXO' ? 4 : p.role === 'PIVOT' ? 6.5 : 5.5
   const l = len(off)
   return l > zone ? addScaled(anchor, off, zone / l) : mark
+}
+
+/**
+ * 2 v 1 tuning (distances of the carrier from our goal, metres). Far out the last defender covers the
+ * passing lane to the second attacker instead of rushing the carrier; from `closeFrom` in he moves
+ * closer to the carrier the nearer they get, standing goal-side of him by `coverDistance` (3-4 m outside
+ * the penalty-area arc); from `markDistance` (the arc or a couple of metres before it) he marks the
+ * second attacker and the keeper comes out to the arc to block the shot.
+ */
+export const TWO_V_ONE = {
+  /** From here in, the cover moves gradually from the passing lane towards the carrier. */
+  closeFrom: 16,
+  coverDistance: 9.8,
+  markDistance: 8,
+  maxDistance: 20,
+} as const
+
+export interface TwoVersusOne {
+  defender: PlayerState
+  carrier: PlayerState
+  mate: PlayerState
+  carrierToGoal: number
+}
+
+/**
+ * Outnumbered near our goal: an opponent carries the ball within 20 m, exactly one of our outfield
+ * players is goal-side of him and a second attacker is level or ahead of the ball close by.
+ */
+export function twoVersusOne(state: MatchState, team: TeamId): TwoVersusOne | null {
+  if (state.phase !== 'play') return null
+  const ball = state.ball
+  const carrier = ball.ownerId !== null ? state.players[ball.ownerId]! : null
+  if (!carrier || carrier.team === team || carrier.role === 'GK' || ball.inHands) return null
+  const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
+  const carrierToGoal = dist(carrier.pos, ownGoal)
+  if (carrierToGoal > TWO_V_ONE.maxDistance) return null
+  const goalSide = state.players.filter(
+    (q) => q.team === team && q.role !== 'GK' && dist(q.pos, ownGoal) < carrierToGoal + 0.4,
+  )
+  if (goalSide.length !== 1) return null
+  let mate: PlayerState | null = null
+  for (const m of state.players) {
+    if (m.team !== carrier.team || m.id === carrier.id || m.role === 'GK') continue
+    if (dist(m.pos, ownGoal) > carrierToGoal + 3 || dist(m.pos, carrier.pos) > 12) continue
+    if (!mate || dist(m.pos, ownGoal) < dist(mate.pos, ownGoal)) mate = m
+  }
+  if (!mate) return null
+  return { defender: goalSide[0]!, carrier, mate, carrierToGoal }
+}
+
+/** Where the lone defender stands in a 2 v 1 (see TWO_V_ONE). */
+export function twoVersusOneSpot(state: MatchState, s: TwoVersusOne): Vec2 {
+  const team = s.defender.team
+  const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
+  // At the arc: mark the second attacker, goal-side and a little towards the ball.
+  if (s.carrierToGoal <= TWO_V_ONE.markDistance) {
+    const gs = addScaled(s.mate.pos, normalize(sub(ownGoal, s.mate.pos)), 0.8)
+    return addScaled(gs, normalize(sub(s.carrier.pos, gs)), 0.4)
+  }
+  // Further out: in the passing lane to the second attacker (a little goal-side of it), not on the ball.
+  const lanePoint = {
+    x: s.carrier.pos.x + (s.mate.pos.x - s.carrier.pos.x) * 0.45,
+    y: s.carrier.pos.y + (s.mate.pos.y - s.carrier.pos.y) * 0.45,
+  }
+  const cover = addScaled(lanePoint, normalize(sub(ownGoal, lanePoint)), 0.8)
+  // Closing in: the nearer the carrier gets to the arc, the closer to him (goal-side) he stands.
+  const onBall = addScaled(s.carrier.pos, normalize(sub(ownGoal, s.carrier.pos)), 1.6)
+  const k = clamp(
+    (TWO_V_ONE.closeFrom - s.carrierToGoal) / (TWO_V_ONE.closeFrom - TWO_V_ONE.coverDistance),
+    0,
+    1,
+  )
+  return { x: cover.x + (onBall.x - cover.x) * k, y: cover.y + (onBall.y - cover.y) * k }
 }
 
 /** An opponent (other than the carrier) within 4 m of the fixo, close to our goal. */
@@ -521,6 +593,7 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   let bestT = Infinity
   for (const d of state.players) {
     if (d.team !== team || d.role === 'GK' || d.id === winnerId || d.id === state.controlledId) continue
+    if (twoVersusOne(state, team)?.defender.id === d.id) continue
     // The fixo only steps out if no opponent is near him (he would leave a man free in front of goal).
     if (d.role === 'FIXO' && !transition) {
       let near = false
@@ -845,6 +918,7 @@ function steer(state: MatchState, p: PlayerState): void {
     p.aiState === 'chase' ||
     p.aiState === 'intercept' ||
     p.aiState === 'run' ||
+    (p.aiState === 'twoVone' && d > 1.2) ||
     (p.aiState === 'press' && d > 2.5) ||
     d > 5 ||
     recovering ||
@@ -1496,6 +1570,17 @@ function goalkeeperBehaviour(
       p.faceTarget = null
       return
     }
+  }
+
+  // 2 v 1 at the arc: our defender takes the second attacker, so the keeper comes out (up to the
+  // edge of the area) on the line to the ball to block the shot.
+  const twoV1 = twoVersusOne(state, p.team)
+  if (twoV1 && twoV1.carrierToGoal <= TWO_V_ONE.markDistance && ball.ownerId === twoV1.carrier.id) {
+    p.aiState = 'position'
+    const n = normalize(sub(twoV1.carrier.pos, goal))
+    const out = Math.min(COURT.penaltyAreaRadius - 0.3, twoV1.carrierToGoal - 1.6)
+    walkTo(p, addScaled(goal, n, Math.max(1, out)), true)
+    return
   }
 
   // Angle positioning: on the bisector of the angle the ball sees between the posts (on an angled
