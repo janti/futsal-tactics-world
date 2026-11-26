@@ -15,7 +15,7 @@ import {
   squareOptionSpot,
   supportPosition,
 } from '../team/attacking'
-import { interceptPoint, passInterception } from '../passing'
+import { interceptPoint, passInterception, receivePoint } from '../passing'
 
 export function offBallDecision(
   state: MatchState,
@@ -43,7 +43,8 @@ export function offBallDecision(
   if (winnerId === p.id) {
     if (ball.mode === 'free') {
       p.aiState = 'chase'
-      p.aiTarget = interceptPoint(state, p)
+      // A pass to him: meet it (stepping on towards it); a loose ball: the quickest point to win it.
+      p.aiTarget = ball.intendedReceiverId === p.id ? receivePoint(state, p) : interceptPoint(state, p)
     } else if (owner && owner.role === 'GK') {
       // A keeper playing with his feet (he may not pick it up): go straight for the ball to win it.
       p.aiState = 'chase'

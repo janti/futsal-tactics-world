@@ -6,24 +6,46 @@ import { estimateTimeToReach } from '../physics/PlayerPhysics'
 import { laneOpenness, pressureOn } from '../physics/PassingPhysics'
 import { rollingLaunchSpeed } from '../physics/BallPhysics'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
-import { COURT, PASS } from '../simulation/SimulationConfig'
+import { BALL, COURT, PASS } from '../simulation/SimulationConfig'
 import { difficultyFor, scoringValue, spaceAhead } from './common'
 
 /** Earliest point on the ball's path the player can reach (sampled prediction). */
+/**
+ * Where to meet a moving ball: the first point on its path (from the ball towards him) that he can
+ * get a foot to in time. A foot reaches about half a metre, so for a ball played to him he steps
+ * towards it (or stays) instead of running back along its path to where it would hit his body —
+ * which made receivers back-pedal before taking the ball.
+ */
 export function interceptPoint(state: MatchState, p: PlayerState): Vec2 {
   const ball = state.ball
   let pos = ball.pos
   let vel = ball.vel
   const h = 0.05
+  const reach = 0.55
   for (let t = 0; t < 2.5; t += h) {
-    if (estimateTimeToReach(p, pos) <= t) return pos
+    const gap = dist(p.pos, pos)
+    if (gap <= reach) return p.pos
+    const at = addScaled(pos, normalize(sub(p.pos, pos)), reach)
+    if (estimateTimeToReach(p, at) <= t) return at
     const s = len(vel)
     if (s < 0.05) break
-    const ns = Math.max(0, s - 1.8 * h)
+    const ns = Math.max(0, s - (BALL.rollingDecel + BALL.rollingDrag * s) * h)
     vel = { x: (vel.x / s) * ns, y: (vel.y / s) * ns }
     pos = addScaled(pos, vel, h)
   }
   return pos
+}
+
+/**
+ * A receiver's target for a pass coming to him: the meeting point — and once he is there with the
+ * ball still on its way, a step on towards it (he attacks the ball rather than standing and waiting
+ * for it, which also keeps an opponent from nipping in front of him).
+ */
+export function receivePoint(state: MatchState, p: PlayerState): Vec2 {
+  const meet = interceptPoint(state, p)
+  const toBall = sub(state.ball.pos, p.pos)
+  if (dist(meet, p.pos) < 0.6 && len(toBall) > 1.6) return addScaled(p.pos, normalize(toBall), 1)
+  return meet
 }
 
 /**

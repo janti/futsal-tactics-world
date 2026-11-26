@@ -60,7 +60,10 @@ export function chooseReceiver(
     if (cos < coneCos) continue
     const open = clamp(laneOpenness(state, passer.team, passer.pos, t.pos), 0, 3)
     const keeperPenalty = t.role === 'GK' ? 0.6 : 0
-    const score = cos * 3 - d / 14 + open * 0.5 - keeperPenalty
+    // An opponent on the line (blocked lane) makes a teammate a poor choice even if he is nearest the
+    // input: the assist prefers an open teammate in the same direction.
+    const blocked = open < 0.5 ? -1.4 : 0
+    const score = cos * 3 - d / 14 + open * 0.9 + blocked - keeperPenalty
     if (score > bestScore) {
       bestScore = score
       best = t
@@ -124,13 +127,22 @@ export function predictPassTarget(
     const d = dist(passer.pos, target)
     const v0 = clamp(rollingLaunchSpeed(d, arrival), PASS.minSpeed, PASS.maxSpeed)
     const t = Math.min(2.5, rollingTravelTime(d, v0))
-    const lead = through ? 0.5 : 0.75
-    const base = through
-      ? { x: receiver.pos.x, y: receiver.pos.y + attackDir * PASS.throughLead }
-      : receiver.pos
-    target = addScaled(base, receiver.vel, (Number.isFinite(t) ? t : 1.5) * lead)
+    // A ball to feet goes (nearly) to where he is: he turns to meet it, so only the first moment of
+    // his run is led — at most a metre (a square ball must not go 20-30 degrees up the court in
+    // front of him, towards an opponent). A through ball is played into his path.
+    const tt = Number.isFinite(t) ? t : 1.5
+    if (through) {
+      const base = { x: receiver.pos.x, y: receiver.pos.y + attackDir * PASS.throughLead }
+      target = addScaled(base, receiver.vel, tt * 0.5)
+    } else {
+      const off = { x: receiver.vel.x * tt * 0.25, y: receiver.vel.y * tt * 0.25 }
+      const l = Math.hypot(off.x, off.y)
+      const k = l > 1 ? 1 / l : 1
+      target = { x: receiver.pos.x + off.x * k, y: receiver.pos.y + off.y * k }
+    }
   }
-  return clampToCourt(target, 0.6)
+  // Not right on the line: with the angle error a ball aimed at the touchline goes out.
+  return clampToCourt(target, through ? 0.8 : 1.2)
 }
 
 export function clampToCourt(p: Vec2, margin: number): Vec2 {
@@ -194,7 +206,9 @@ export function planPass(
   const skill = attr(a.passing, 1, 0.15)
   const sigma =
     PASS.maxAngleErrorRad * skill * (0.6 + pressure) * (through ? 1.3 : 1) * (assist === 'semi' ? 1.3 : 1)
-  const angle = angleOf(sub(target, passer.pos)) + rng.gaussian() * sigma
+  // Aimed from where the ball is (in front of his feet), so it goes straight to the receiver.
+  const from = state.ball.ownerId === passer.id ? state.ball.pos : passer.pos
+  const angle = angleOf(sub(target, from)) + rng.gaussian() * sigma
   const velocity = fromAngle(angle, speed)
   return { receiverId: receiver ? receiver.id : null, target, velocity, speed }
 }

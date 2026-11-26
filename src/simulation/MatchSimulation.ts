@@ -12,7 +12,7 @@
 import { angleDiff, attr, clamp, rateToChance } from '../core/math/scalar'
 import { SeededRandom, deriveSeed } from '../core/random/SeededRandom'
 import { add, addScaled, angleOf, dist, fromAngle, len, normalize, sub, type Vec2 } from '../core/math/vec2'
-import { assistControlledPlayer, updateAI, type AIActions } from '../ai/BasicAI'
+import { assistControlledPlayer, outsideClearanceArea, updateAI, type AIActions } from '../ai/BasicAI'
 import { baseAnchor } from '../ai/positioning/Formation'
 import { checkOutOfPlay, isGoal, stepBall } from '../physics/BallPhysics'
 import { planPass } from '../physics/PassingPhysics'
@@ -38,6 +38,7 @@ import {
   COURT,
   DT,
   HANDS,
+  PASS,
   PLAYER,
   POST_X,
   SIDE_SHOT,
@@ -144,6 +145,7 @@ export class MatchSimulation implements AIActions {
     resolvePlayerCollisions(s.players)
     resolveGoalCollisions(s.players)
     if (prev) this.enforceKickoffPositions(prev)
+    this.enforceRestartDistance()
     // The ball may be carried in the hands only inside the own penalty area.
     if (holder && holderPrev && !this.inOwnPenaltyArea(holder, holder.pos)) {
       holder.pos = holderPrev
@@ -240,8 +242,10 @@ export class MatchSimulation implements AIActions {
     const s = this.state
     if (s.ball.ownerId !== p.id) return
     // Passing assistance applies to the human player only; the AI always passes assisted.
-    const assist = p.id === s.controlledId && p.team === s.humanTeam ? s.control.passAssist : 'assisted'
-    const plan = planPass(s, p, dir, through, this.rng, receiver, assist, power, arrival)
+    const human = p.id === s.controlledId && p.team === s.humanTeam
+    const assist = human ? s.control.passAssist : 'assisted'
+    const firm = arrival ?? (human && !through ? PASS.humanArrivalSpeed : undefined)
+    const plan = planPass(s, p, dir, through, this.rng, receiver, assist, power, firm)
     this.kick(p, plan.velocity, 0, 0, 'pass')
     s.ball.intendedReceiverId = plan.receiverId
     s.ball.isShot = false
@@ -818,7 +822,15 @@ export class MatchSimulation implements AIActions {
       const keeperFacingShot = p.role === 'GK' && b.isShot && b.lastTouchTeam !== p.team
 
       const bodyR = playerRadius(p) + BALL.radius
-      const rel = Math.hypot(b.vel.x - p.vel.x, b.vel.y - p.vel.y)
+      // Coming to meet a pass does not make it harder to control (the foot cushions it): the part of
+      // his movement towards the ball is left out of the relative speed for passes and loose balls.
+      let pv = p.vel
+      const bs = len(b.vel)
+      if (!b.isShot && bs > 0.5) {
+        const along = (p.vel.x * b.vel.x + p.vel.y * b.vel.y) / bs
+        if (along < 0) pv = { x: p.vel.x - (b.vel.x / bs) * along, y: p.vel.y - (b.vel.y / bs) * along }
+      }
+      const rel = Math.hypot(b.vel.x - pv.x, b.vel.y - pv.y)
       const pickupR = p.role === 'GK' ? 0.62 : CONTROL.pickupRadius
       // An opponent's shot hitting an outfield defender is a block: it rebounds off him (leg or
       // body), it is not brought under control. Only a weak, slow shot can be stopped.
@@ -1358,6 +1370,47 @@ export class MatchSimulation implements AIActions {
     const cl = s.clearance
     if (!cl || s.phase !== 'play') return
     if (cl.released && !s.ball.inHands && !this.inClearanceArea(s.ball.pos)) s.clearance = null
+  }
+
+  /**
+   * Kick-in, corner and free kick: opponents keep their distance from the ball until it is played —
+   * also the human-controlled player, who is walked out of the circle and cannot step back in (he
+   * would otherwise block the kick from right next to the ball).
+   */
+  private enforceRestartDistance(): void {
+    const s = this.state
+    // Goal clearance in progress (keeper has not released it): opponents — the human player as well
+    // — are walked out of the penalty area; nobody may block the keeper's throw.
+    const cl = s.clearance
+    if (cl && !cl.released && s.phase === 'play') {
+      for (const p of s.players) {
+        if (p.team === cl.team || !this.inClearanceArea(p.pos)) continue
+        const out = outsideClearanceArea(s, p.pos, cl.team)
+        const off = sub(out, p.pos)
+        const d = len(off)
+        if (d < 1e-3) continue
+        const n = normalize(off)
+        p.pos = addScaled(p.pos, n, Math.min(d, 4 * DT))
+        const inward = p.vel.x * n.x + p.vel.y * n.y
+        if (inward < 0) p.vel = { x: p.vel.x - n.x * inward, y: p.vel.y - n.y * inward }
+      }
+    }
+    const r = s.restart
+    if (s.phase !== 'restart' || !r || (r.type !== 'kickIn' && r.type !== 'corner' && r.type !== 'freeKick'))
+      return
+    const radius = RESTART.opponentDistance
+    for (const p of s.players) {
+      if (p.team === r.team || p.role === 'GK') continue
+      const off = sub(p.pos, r.spot)
+      const d = len(off)
+      if (d >= radius) continue
+      const n = d > 1e-3 ? normalize(off) : { x: -Math.sign(r.spot.x) || 1, y: 0 }
+      // Out at walking pace, and no velocity towards the ball.
+      const step = Math.min(radius - d, 4 * DT)
+      p.pos = addScaled(p.pos, n, step)
+      const inward = p.vel.x * n.x + p.vel.y * n.y
+      if (inward < 0) p.vel = { x: p.vel.x - n.x * inward, y: p.vel.y - n.y * inward }
+    }
   }
 
   /** Put a (new) ball at rest on a restart spot. */

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Passes to feet go straight to the receiver: aimed from the ball (in front of the passer's feet)
+  rather than from his body, and a moving receiver is led by at most a metre (a square pass no longer
+  goes 20-30 degrees up the court in front of him).
+- Receiving: no more back-pedalling before taking the ball. The meeting point allows for the reach of
+  the foot (it used to lie behind him on the ball's path, so receivers ran backwards to it); a
+  receiver steps on towards the ball instead of standing and waiting; coming to meet the ball does
+  not make the first touch heavier, and a firm pass (up to 8 m/s) is controlled cleanly.
+  Measured against the test bot: the human side's passes arriving 76 %, AI vs AI 92 %.
+
+- Passing assistance: the receiver comes to meet a ball played to his feet, so passes are aimed at
+  him with only a little lead (the old lead along his run sent passes past him, to an opponent or
+  out); the controlled receiver meets the pass automatically even while the passing key is still
+  held; the assist prefers an open teammate to one with an opponent on the line; the human player's
+  passes are played firmer. Measured against a test bot: the human side's passes arriving 28 % -> 65 %.
+- AI carrier against a close opponent (the human above all): bends round him early and shields the
+  ball (sole, body between) instead of dribbling into him.
+- Restarts: opponents — the human player as well — are walked out of the 4 m circle at kick-ins,
+  corners and free kicks and out of the penalty area during the opponents' goal clearance (no more
+  kicks blocked from next to the ball, no endless retaken clearances). Normal passes are no longer
+  aimed right at the touchline. AI passes reaching the bot's side 46 -> 28 and failed kick-ins
+  8/33 -> 0/12 per 24 min; AI vs AI completion 89 % -> 92 %.
+
 - Human control: the controlled player turns and accelerates quicker, stops sooner when the keys are
   released and curves into a new direction keeping his pace (within a realistic sideways
   acceleration: a sprinter curves wider than a jogging player) instead of braking and re-accelerating;

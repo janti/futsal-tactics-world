@@ -29,7 +29,7 @@ describe('passing', () => {
     expect(chooseReceiver(s, passer, { x: 0, y: 1 })?.id).toBe(4)
   })
 
-  it('leads a moving receiver instead of passing to where he is now', () => {
+  it('a ball to feet leads a moving receiver only a little (at most a metre: he turns to meet it)', () => {
     const s = state()
     const passer = s.players[1]!
     passer.pos = { x: 0, y: 0 }
@@ -37,7 +37,8 @@ describe('passing', () => {
     r.pos = { x: 0, y: 8 }
     r.vel = { x: 4, y: 0 }
     const target = predictPassTarget(passer, r, false, 1)
-    expect(target.x).toBeGreaterThan(1.5)
+    expect(target.x).toBeGreaterThan(0.3)
+    expect(target.x).toBeLessThan(1.05)
   })
 
   it('through passes target space ahead in the attacking direction', () => {

@@ -11,7 +11,7 @@ import type { MatchState, PlayerState } from '../simulation/MatchState'
 import { type AIActions, difficultyFor, kickoffAnchor } from './common'
 import { steer, walkTo } from './movement'
 import { pickBallWinner, updateDefensiveTransitions, pickHelper } from './team/defending'
-import { interceptPoint } from './passing'
+import { receivePoint } from './passing'
 import { carrierBehaviour } from './player/carrier'
 import { goalkeeperBehaviour } from './player/goalkeeper'
 import { offBallDecision } from './player/offBall'
@@ -86,11 +86,17 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
   }
 }
 
-/** Human-controlled player assistance: when idle and a pass is coming, move to meet it. */
+/**
+ * Human-controlled player assistance: a pass coming to him is met automatically. Control switches to
+ * the receiver the moment the ball is played, while the passer's direction key is usually still
+ * held — without this he would run off along that key, away from the ball, and an opponent would
+ * step in. He goes to meet it (sprinting when it is far) until he has it.
+ */
 export function assistControlledPlayer(state: MatchState, p: PlayerState): void {
   const ball = state.ball
-  if (ball.mode === 'free' && ball.intendedReceiverId === p.id && len(p.moveIntent) < 0.1) {
-    const meet = interceptPoint(state, p)
-    walkTo(p, meet, dist(meet, p.pos) > 3)
+  if (ball.mode === 'free' && ball.intendedReceiverId === p.id && len(ball.vel) > 1.5 && ball.z < 1.2) {
+    const meet = receivePoint(state, p)
+    walkTo(p, meet, dist(meet, p.pos) > 2.5)
+    p.faceTarget = ball.pos
   }
 }

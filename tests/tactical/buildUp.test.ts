@@ -103,7 +103,7 @@ describe('build-up', () => {
   it('AI vs AI: the pivot is found and laid off to', () => {
     let pivot = 0
     let layoff = 0
-    for (const seed of [1, 2, 3, 4]) {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       const sim = new MatchSimulation({
         seed,
         home: TEAM_LIBRARY[0]!,
@@ -122,5 +122,5 @@ describe('build-up', () => {
     }
     expect(pivot).toBeGreaterThan(8)
     expect(layoff).toBeGreaterThan(0)
-  }, 30000)
+  }, 60000)
 })

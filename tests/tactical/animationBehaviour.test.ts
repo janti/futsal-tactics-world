@@ -95,7 +95,9 @@ describe('goalkeeper save style', () => {
 describe('after a goal', () => {
   it('both teams are back in their own half quickly and the kick-off is ready within about 5 s', () => {
     let measured = 0
-    for (const seed of [1, 2, 4]) {
+    // Seeds until two matches have had a goal to measure from (the human side stands idle here).
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      if (measured >= 2) break
       const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
       const s = sim.state
       let goalTick = -1
@@ -113,5 +115,5 @@ describe('after a goal', () => {
       measured++
     }
     expect(measured).toBeGreaterThan(0)
-  }, 30000)
+  }, 60000)
 })

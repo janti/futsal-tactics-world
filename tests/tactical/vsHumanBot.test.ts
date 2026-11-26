@@ -34,7 +34,8 @@ describe('AI against a human-like player', () => {
   it('the AI does not keep passing the ball straight to the human player', () => {
     let aiPasses = 0
     let cut = 0
-    for (const seed of [1, 2, 3]) {
+    // Six seeds: the human side keeps the ball longer since its passes arrive, so the AI has it less.
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
       const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
       const s = sim.state
       let pending = false

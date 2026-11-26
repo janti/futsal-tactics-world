@@ -176,7 +176,7 @@ export const CONTROL = {
   /** Control is lost if the ball drifts further than this from its owner. */
   loseDistance: 1.3,
   /** Relative speeds below this are always controlled cleanly. */
-  cleanControlSpeed: 7,
+  cleanControlSpeed: 8,
   /** Relative speeds above this cannot be controlled (ball deflects). */
   maxControlSpeed: 17,
   /** Base steal rate per second for an opponent touching the dribbled ball. */
@@ -203,6 +203,8 @@ export const CONTROL = {
 
 export const PASS = {
   arrivalSpeed: 6.5,
+  /** The human player's assisted passes are played firmer (arrive this fast), harder to step into. */
+  humanArrivalSpeed: 6.9,
   throughArrivalSpeed: 6.5,
   /** Kick-in / corner routine: the ball to the shooter arrives this fast. */
   setPieceArrival: 10,

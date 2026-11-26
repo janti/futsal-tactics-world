@@ -79,11 +79,25 @@ export function carrierBehaviour(
   }
 
   let heading = normalize(sub(goal, p.pos))
-  const open = spaceAhead(state, p, heading, 3.5)
-  if (nearest && nd < 3) {
+  // An opponent in front of him closing in (the human player above all, who closes down fast): do not
+  // dribble into him. Further out the carry bends away round him; close in he shields the ball.
+  const toNearest = nearest ? normalize(sub(nearest.pos, p.pos)) : { x: 0, y: 0 }
+  const inFront = nearest !== null && toNearest.x * heading.x + toNearest.y * heading.y > 0.2
+  const humanNear = nearest !== null && nearest.id === state.controlledId
+  const shieldAt = humanNear ? 2.6 : 2.1
+  const threat = nearest !== null && nearest.role !== 'GK' && inFront && nd < shieldAt
+  if (nearest && nd < (humanNear ? 4.5 : 3)) {
     const away = normalize(sub(p.pos, nearest.pos))
-    heading = normalize(addScaled(heading, away, (3 - nd) / 2))
+    // Round him on the side away from him (sideways), not straight back.
+    const side = heading.x * toNearest.y - heading.y * toNearest.x > 0 ? 1 : -1
+    const round = { x: -heading.y * side, y: heading.x * side }
+    const k = (humanNear ? 4.5 - nd : 3 - nd) / 2
+    heading = normalize({
+      x: heading.x + away.x * k + (inFront ? round.x * k : 0),
+      y: heading.y + away.y * k + (inFront ? round.y * k : 0),
+    })
   }
+  const open = !threat && spaceAhead(state, p, heading, 3.5)
   if (open) {
     // Space in front: carry the ball forward.
     p.moveIntent = { x: heading.x * 0.85, y: heading.y * 0.85 }
@@ -93,7 +107,7 @@ export function carrierBehaviour(
     // Blocked: do not run into the defender; protect the ball and look for the circulation pass. With
     // the presser right on him he turns away from him (sideways / back) instead of into him.
     const escape =
-      nearest && nd < 2.2
+      nearest && nd < shieldAt + 0.2
         ? normalize({
             x: (p.pos.x - nearest.pos.x) * 1.0 + heading.x * 0.3,
             y: (p.pos.y - nearest.pos.y) * 1.0 + heading.y * 0.3,
@@ -102,7 +116,8 @@ export function carrierBehaviour(
     heading = escape
     p.moveIntent = { x: heading.x * 0.45, y: heading.y * 0.45 }
     p.sprint = false
-    p.sole = nd < 1.6
+    // Close in he keeps it on the sole, body between the opponent and the ball.
+    p.sole = nd < (humanNear ? 2.1 : 1.6)
     // Shield: under close pressure turn the back to the opponent, body between him and the ball.
     if (p.sole && nearest) p.faceTarget = addScaled(p.pos, normalize(sub(p.pos, nearest.pos)), 3)
   }
