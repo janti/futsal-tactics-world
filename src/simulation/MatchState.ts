@@ -263,6 +263,12 @@ export interface MatchState {
    */
   indirectKickBy: number | null
   /**
+   * Goal clearance in progress: the team taking it, whether the keeper has released the ball and the
+   * spot. Until the released ball has left the penalty area nobody may touch it (otherwise it is
+   * retaken) and players not under human control stay out of the area.
+   */
+  clearance: { team: TeamId; released: boolean; spot: Vec2 } | null
+  /**
    * AI: a team caught out of shape after losing the ball (counter-attack against it): a goal-side
    * player presses, the others sprint back to their men, until the attackers play the ball back, the
    * ball goes dead or the team is back in shape.

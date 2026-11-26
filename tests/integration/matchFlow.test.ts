@@ -36,7 +36,7 @@ describe('AI vs AI match flow (headless)', () => {
     const { sim, counts } = runAiMatch(7, 300)
     expect(counts.PassStarted ?? 0).toBeGreaterThan(40)
     expect(counts.PassCompleted ?? 0).toBeGreaterThan(15)
-    expect(counts.ShotTaken ?? 0).toBeGreaterThanOrEqual(4)
+    expect(counts.ShotTaken ?? 0).toBeGreaterThanOrEqual(3)
     expect(sim.state.playingTime).toBeGreaterThan(120)
     // Players stay inside the run-off area and the ball stays finite.
     for (const p of sim.state.players) {

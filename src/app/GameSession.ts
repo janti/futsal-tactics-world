@@ -258,6 +258,8 @@ export class GameSession {
         })
       } else if (e.type === 'KeeperHoldTimeout') {
         ui.showFlash({ key: 'hud.keeperHoldTimeout', until: performance.now() + 1800, info: true })
+      } else if (e.type === 'ClearanceRetaken') {
+        ui.showFlash({ key: 'hud.clearanceRetaken', until: performance.now() + 1800, info: true })
       } else if (e.type === 'RestartTimeout' && e.team === this.sim.state.humanTeam) {
         ui.showFlash({ key: 'hud.restartTimeout', until: performance.now() + 1800, info: true })
       }

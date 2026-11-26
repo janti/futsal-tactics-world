@@ -7,7 +7,7 @@ import type { MatchState, PlayerState } from '../simulation/MatchState'
 import { COURT, PASS, RESTART } from '../simulation/SimulationConfig'
 import { dynamicAnchor } from './positioning/Formation'
 import { clampRestartAim, restartTakerSpot } from '../simulation/RestartGeometry'
-import { type AIActions, GOAL_CLEARANCE_ALA_DROP, kickoffAnchor } from './common'
+import { type AIActions, GOAL_CLEARANCE_ALA_DROP, kickoffAnchor, outsideClearanceArea } from './common'
 import { walkTo, keepDistance } from './movement'
 import { markingPosition } from './team/defending'
 import { setPieceRoutine } from './team/attacking'
@@ -106,6 +106,8 @@ export function restartBehaviour(
         target = { x: clamp(target.x, -1.3, 1.3), y: -dir * (COURT.halfLength - 0.4) }
     }
   }
+  // Goal clearance: everybody but the keeper taking it keeps out of his penalty area.
+  if (r.type === 'goalClearance' && p.role !== 'GK') target = outsideClearanceArea(state, target, r.team)
   p.aiTarget = target
   walkTo(p, target, dist(p.pos, target) > 6)
   p.faceTarget = dist(p.pos, target) < 3 ? state.ball.pos : null

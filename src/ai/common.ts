@@ -2,7 +2,7 @@
 import { clamp } from '../core/math/scalar'
 import { closestOnSegment, dist, len, sub, type Vec2 } from '../core/math/vec2'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
-import { COURT } from '../simulation/SimulationConfig'
+import { COURT, POST_X } from '../simulation/SimulationConfig'
 import { baseAnchor } from './positioning/Formation'
 import { DIFFICULTY, type DifficultyParams } from '../simulation/Difficulty'
 
@@ -29,6 +29,27 @@ export const RECOVER_TIME = 1.6
 
 /** Beyond this distance from our goal the presser contains (stands off) instead of engaging. */
 export const PRESS_ENGAGE_DISTANCE = 22
+
+/**
+ * Goal clearance: players not under human control keep out of the clearing team's penalty area.
+ * Returns `pos`, or the nearest point just outside the area.
+ */
+export function outsideClearanceArea(state: MatchState, pos: Vec2, team?: TeamId): Vec2 {
+  const clTeam = team ?? state.clearance?.team
+  if (clTeam === undefined) return pos
+  const dir = state.teams[clTeam].attackDir
+  const goalY = -dir * COURT.halfLength
+  const r = COURT.penaltyAreaRadius + 0.7
+  const depth = (pos.y - goalY) * dir
+  const ax = Math.abs(pos.x)
+  const inside = ax <= POST_X ? depth <= r : Math.hypot(ax - POST_X, Math.max(0, depth)) <= r
+  if (!inside) return pos
+  if (ax <= POST_X) return { x: pos.x, y: goalY + dir * r }
+  const c = { x: Math.sign(pos.x) * POST_X, y: goalY }
+  const off = { x: pos.x - c.x, y: Math.max(0.1, depth) * dir }
+  const l = Math.hypot(off.x, off.y)
+  return { x: c.x + (off.x / l) * r, y: c.y + (off.y / l) * r }
+}
 
 export function difficultyFor(state: MatchState, team: TeamId): DifficultyParams {
   return state.humanTeam !== null && team !== state.humanTeam

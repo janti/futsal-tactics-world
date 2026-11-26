@@ -73,7 +73,7 @@ export function runInBehind(state: MatchState, p: PlayerState): Vec2 | null {
   // one player of the team runs at a time.
   // Counter-attack window (just won the ball): go at once, with less cover behind the ball.
   const counter = state.teamPhase[p.team] === 'transitionAttack'
-  if (pressureOn(state, owner) > 0.6 || (!counter && owner.aiHoldTimer < 0.4)) return null
+  if (pressureOn(state, owner) > 0.75 || (!counter && owner.aiHoldTimer < 0.25)) return null
   if (state.players.some((t) => t.team === p.team && t.id !== p.id && t.aiRunTimer > 0)) return null
   // Balance: two teammates must stay behind the ball (cover against the counter-attack).
   const dirB = state.teams[p.team].attackDir

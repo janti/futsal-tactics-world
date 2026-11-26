@@ -161,13 +161,23 @@ export function passInterceptable(
         continue
       const gap = dist(o.pos, pt)
       if (gap > v * 2 + 6) continue
-      const reachAt = gap > 0.6 ? addScaled(pt, normalize(sub(o.pos, pt)), 0.6) : o.pos
-      if (estimateTimeToReach(o, reachAt) + read <= t) return true
+      // The human-controlled player reacts at once and turns and accelerates faster: give him a longer
+      // reach and no read delay (otherwise the AI keeps passing straight to him).
+      const human = o.id === state.controlledId
+      const reach = human ? HUMAN_READ.reach : 0.6
+      const reachAt = gap > reach ? addScaled(pt, normalize(sub(o.pos, pt)), reach) : o.pos
+      const time = human
+        ? estimateTimeToReach(o, reachAt) * HUMAN_READ.speedFactor + Math.min(read, HUMAN_READ.read)
+        : estimateTimeToReach(o, reachAt) + read
+      if (time <= t) return true
     }
     if (t > 3) break
   }
   return false
 }
+
+/** How the AI rates the human-controlled player when judging whether he can cut a pass out. */
+export const HUMAN_READ = { reach: 0.9, speedFactor: 0.85, read: 0 } as const
 
 /**
  * Forward passes into danger are allowed a little more risk than circulation passes: the opponent's

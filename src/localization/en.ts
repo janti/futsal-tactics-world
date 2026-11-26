@@ -117,6 +117,7 @@ export const en = {
   'hud.keeperThrow': 'Throw: aim with direction, hold Z for power',
   'hud.keeperHoldTimeout': 'Four seconds! Indirect free kick to the opponents',
   'hud.freeKick': 'Indirect free kick',
+  'hud.clearanceRetaken': 'Goal clearance retaken: the ball must leave the penalty area first',
   'hud.keeperFeet': 'Keeper on the ball: play it with your feet (no hands from a back pass)',
   'controls.throw': 'Keeper throw (aim + hold for power)',
   'controls.title': 'Controls',

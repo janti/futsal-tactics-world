@@ -152,6 +152,7 @@ export class MatchSimulation implements AIActions {
 
     this.updateBallControl()
     this.updateBall()
+    this.updateClearance()
     s.rngState = this.rng.state
   }
 
@@ -378,6 +379,8 @@ export class MatchSimulation implements AIActions {
 
   private kick(p: PlayerState, vel: Vec2, vz: number, spin: number, action: 'pass' | 'shot'): void {
     const b = this.state.ball
+    const cl = this.state.clearance
+    if (cl && p.team === cl.team && p.role === 'GK') cl.released = true
     const fromHands = b.inHands
     if (b.inHands) {
       // Released from the hands: bowled along the floor, or thrown overarm from shoulder height.
@@ -772,6 +775,21 @@ export class MatchSimulation implements AIActions {
       const dx = b.pos.x - p.pos.x
       const dy = b.pos.y - p.pos.y
       const d = Math.hypot(dx, dy)
+      // Goal clearance: the released ball touched by anybody before it has left the penalty area —
+      // retaken (the keeper's throw must clear the area; nobody may block it inside).
+      const cl = s.clearance
+      if (
+        cl &&
+        cl.released &&
+        p.touchCooldown <= 0 &&
+        d < playerRadius(p) + BALL.radius + 0.25 &&
+        b.z < PLAYER.ballContactHeight &&
+        this.inClearanceArea(b.pos)
+      ) {
+        this.emit({ type: 'ClearanceRetaken', tick: s.tick, team: cl.team, playerId: p.id })
+        this.beginRestart('goalClearance', cl.team, cl.spot)
+        return true
+      }
       if (p.touchCooldown > 0) {
         // Even after a failed save attempt the keeper's body still stops the ball (no passing through).
         if (p.role === 'GK' && p.action === 'save' && d < playerRadius(p) + BALL.radius && b.z < 1.9) {
@@ -1072,6 +1090,7 @@ export class MatchSimulation implements AIActions {
     b.inHands = false
     b.handsTimer = 0
     s.indirectKickBy = null
+    s.clearance = null
     let taker: PlayerState
     const teamPlayers = s.players.filter((p) => p.team === team)
     if (type === 'goalClearance') taker = teamPlayers.find((p) => p.role === 'GK')!
@@ -1225,6 +1244,7 @@ export class MatchSimulation implements AIActions {
         s.ball.z = HANDS.height
         s.ball.vz = 0
         taker.aiHoldTimer = 0.1
+        s.clearance = { team: taker.team, released: false, spot: { ...r.spot } }
         this.emit({ type: 'PlayResumed', tick: s.tick })
       } else {
         // Kick-in / corner / kick-off: the taker is at the ball; play resumes with the kick.
@@ -1304,6 +1324,22 @@ export class MatchSimulation implements AIActions {
       x: clamp(spot.x, -COURT.halfWidth + 0.3, COURT.halfWidth - 0.3),
       y: clamp(spot.y, -COURT.halfLength + 0.3, COURT.halfLength - 0.3),
     }
+  }
+
+  /** Goal clearance: inside the clearing team's own penalty area. */
+  private inClearanceArea(pos: Vec2): boolean {
+    const cl = this.state.clearance
+    if (!cl) return false
+    const keeper = this.state.players.find((q) => q.team === cl.team && q.role === 'GK')!
+    return this.inOwnPenaltyArea(keeper, pos)
+  }
+
+  /** The released goal-clearance ball has left the penalty area: normal play from now on. */
+  private updateClearance(): void {
+    const s = this.state
+    const cl = s.clearance
+    if (!cl || s.phase !== 'play') return
+    if (cl.released && !s.ball.inHands && !this.inClearanceArea(s.ball.pos)) s.clearance = null
   }
 
   /** Put a (new) ball at rest on a restart spot. */
@@ -1618,6 +1654,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
     control: { ...DEFAULT_CONTROL_OPTIONS, ...setup.control },
     difficulty: setup.difficulty ?? 'normal',
     indirectKickBy: null,
+    clearance: null,
     defTransition: [false, false],
     possessionSinceTick: 0,
     teamPhase: ['setPiece', 'setPiece'],

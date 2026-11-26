@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Goal clearances follow the rule: the keeper's throw must leave the penalty area before anybody
+  touches it, otherwise the clearance is retaken (HUD message). Players not under human control —
+  opponents and teammates alike — leave the area for the clearance and stay out until the ball is
+  out of it; blocking the keeper's distribution inside the area is no longer possible.
+- AI against a human player: the AI now rates the human-controlled player as quicker to react, turn
+  and accelerate when judging whether he can cut out a pass; a last-resort pass he could intercept is
+  no longer played (the carrier shields and carries instead); the carrier releases the ball while the
+  safe option is still open when a presser is closing in; keeper throws only go to teammates who
+  cannot be cut off. Measured against a pressing test bot: passes cut out 82 -> about 50 per 18 min.
+- AI shooting: shots from slightly closer (9-11.5 m range; placed shots up to 8.5 m).
+- Pressing: close to the carrier the presser keeps pace with him (jockeying only while the carrier is
+  nearly still) and sprints when he does.
+
 ### Milestone 5 — tactical AI foundation
 
 - The AI is split into layers (team: defending, attacking, phases, roles; player: carrier, goalkeeper,

@@ -8,17 +8,17 @@ exact penalty-area geometry, accumulated-foul thresholds, timeout and four-secon
 
 ## Implemented (prototype simplifications)
 
-| Rule                                                                | Status                                                                                                                          |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Court 40 × 20 m, goals 3 × 2 m                                      | Implemented (geometry shared by physics and rendering)                                                                          |
-| Five players per team incl. goalkeeper                              | Implemented                                                                                                                     |
-| No offside                                                          | Implemented (there is none)                                                                                                     |
-| Goal: ball wholly over the line between the posts and under the bar | Implemented                                                                                                                     |
-| Ball out: wholly over touch line / goal line                        | Implemented, no wall rebounds                                                                                                   |
-| Kick-off after a goal (conceding team)                              | Implemented; opponents stay in their half/outside the circle via AI                                                             |
-| Kick-in to the team that did not touch last                         | Implemented; opponents kept 4 m away by AI (game setting; the official distance is 5 m)                                         |
-| Corner / goal clearance by last touch on goal line                  | Implemented (goal clearance taken by the keeper from the area, as a ground pass)                                                |
-| Clock                                                               | Two halves, countdown; effective time (default) or running clock; half-time ends switch; second-half kick-off by the other team |
+| Rule                                                                | Status                                                                                                                                                                            |
+| ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Court 40 × 20 m, goals 3 × 2 m                                      | Implemented (geometry shared by physics and rendering)                                                                                                                            |
+| Five players per team incl. goalkeeper                              | Implemented                                                                                                                                                                       |
+| No offside                                                          | Implemented (there is none)                                                                                                                                                       |
+| Goal: ball wholly over the line between the posts and under the bar | Implemented                                                                                                                                                                       |
+| Ball out: wholly over touch line / goal line                        | Implemented, no wall rebounds                                                                                                                                                     |
+| Kick-off after a goal (conceding team)                              | Implemented; opponents stay in their half/outside the circle via AI                                                                                                               |
+| Kick-in to the team that did not touch last                         | Implemented; opponents kept 4 m away by AI (game setting; the official distance is 5 m)                                                                                           |
+| Corner / goal clearance by last touch on goal line                  | Implemented: the keeper throws from his area; the ball must leave the penalty area before anybody touches it (else retaken); players not under human control stay out of the area |
+| Clock                                                               | Two halves, countdown; effective time (default) or running clock; half-time ends switch; second-half kick-off by the other team                                                   |
 
 ### Goalkeeper rules
 

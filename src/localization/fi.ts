@@ -121,6 +121,7 @@ export const fi: Record<keyof typeof en, string> = {
   'hud.keeperThrow': 'Heitto: tähtää suunnalla, pidä Z pohjassa = voima',
   'hud.keeperHoldTimeout': 'Neljä sekuntia! Epäsuora vapaapotku vastustajalle',
   'hud.freeKick': 'Epäsuora vapaapotku',
+  'hud.clearanceRetaken': 'Maaliheitto uusitaan: pallon pitää ensin tulla ulos rangaistusalueelta',
   'hud.keeperFeet': 'Maalivahti pallossa: pelaa jaloilla (takasyötöstä ei käsillä)',
   'controls.throw': 'Maalivahdin heitto (suunta + pidä = voima)',
   'controls.title': 'Ohjaimet',

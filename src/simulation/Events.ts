@@ -25,3 +25,5 @@ export type MatchEvent =
   | { type: 'KeeperHoldTimeout'; tick: number; playerId: number }
   /** A kick-in or corner was not taken within four seconds; the restart goes to the opponents. */
   | { type: 'RestartTimeout'; tick: number; restart: RestartType; team: TeamId }
+  /** Goal clearance retaken: the ball was touched before it had left the penalty area. */
+  | { type: 'ClearanceRetaken'; tick: number; team: TeamId; playerId: number }

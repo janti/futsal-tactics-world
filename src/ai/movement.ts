@@ -4,7 +4,7 @@ import { addScaled, closestOnSegment, dist, len, normalize, sub, type Vec2 } fro
 import { routeAroundGoals } from '../physics/PlayerPhysics'
 import type { MatchState, PlayerState } from '../simulation/MatchState'
 import { COURT } from '../simulation/SimulationConfig'
-import { PRESS_ENGAGE_DISTANCE } from './common'
+import { PRESS_ENGAGE_DISTANCE, outsideClearanceArea } from './common'
 
 export function keepDistance(target: Vec2, from: Vec2, minDist: number): Vec2 {
   const d = dist(target, from)
@@ -21,10 +21,21 @@ export function steer(state: MatchState, p: PlayerState): void {
   if (p.aiState === 'press' && owner && owner.team !== p.team && engage && dist(owner.pos, p.pos) < 2.2) {
     // Close to the carrier: track him every tick and step in on the ball (where it is going), so a
     // dribbler has to beat him rather than just walk round a static marker.
-    const to = sub(state.ball.pos, p.pos)
-    const k = attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.78, 0.98)
+    // Stay goal-side: track a point between the ball and our goal, stepping onto the ball itself only
+    // when right on it — a carrier driving at goal has to go through him, not past him.
+    const ownGoal = { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }
+    const gap = dist(state.ball.pos, p.pos)
+    const spot = addScaled(state.ball.pos, normalize(sub(ownGoal, state.ball.pos)), gap > 1.3 ? 0.8 : 0.15)
+    const to = sub(spot, p.pos)
+    // Jockey (a little slower than full pace) only while the carrier is nearly still; when he drives
+    // on, keep pace with him (sprinting if he does or gets away), so he cannot just run past.
+    const carrierSpeed = len(owner.vel)
+    const k =
+      carrierSpeed < 2.5
+        ? attr((p.profile.attributes.tackling + p.profile.attributes.agility) / 2, 0.78, 0.98)
+        : 1
     p.moveIntent = len(to) > 0.05 ? { x: normalize(to).x * k, y: normalize(to).y * k } : { x: 0, y: 0 }
-    p.sprint = false
+    p.sprint = owner.sprint
     p.faceTarget = state.ball.pos
     return
   }
@@ -46,8 +57,12 @@ export function steer(state: MatchState, p: PlayerState): void {
     showing
   // A marker whose spot is on the far side of an opponent goes round him (to get goal-side of his
   // man) instead of walking into his back.
-  const target =
-    p.aiState === 'cover' || p.aiState === 'press' ? aroundBodies(state, p, p.aiTarget) : p.aiTarget
+  // Goal clearance: stay out of the clearing team's penalty area (a keeper stays in his own).
+  const legal =
+    state.clearance && !(p.role === 'GK' && p.team === state.clearance.team)
+      ? outsideClearanceArea(state, p.aiTarget)
+      : p.aiTarget
+  const target = p.aiState === 'cover' || p.aiState === 'press' ? aroundBodies(state, p, legal) : legal
   walkTo(p, target, urgent)
   if (p.aiState === 'press' && d < 1.5) {
     p.moveIntent = { x: p.moveIntent.x * 0.6, y: p.moveIntent.y * 0.6 }

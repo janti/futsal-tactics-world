@@ -3,11 +3,12 @@ import { attr, clamp } from '../../core/math/scalar'
 import type { SeededRandom } from '../../core/random/SeededRandom'
 import { addScaled, closestOnSegment, dist, normalize, sub, type Vec2 } from '../../core/math/vec2'
 import { pressureOn } from '../../physics/PassingPhysics'
+import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { type AIActions, spaceAhead, shootingLane, isLastMan } from '../common'
 import { runnerOption } from '../team/attacking'
-import { progressivePass, forwardChance, safePassOption, bestPassOption } from '../passing'
+import { progressivePass, forwardChance, safePassOption, bestPassOption, passInterceptable } from '../passing'
 
 export function carrierBehaviour(
   state: MatchState,
@@ -89,7 +90,13 @@ export function carrierBehaviour(
 
   if (!decide) return
   const toGoal = dist(p.pos, goal)
-  const pressure = pressureOn(state, p)
+  // Pressure, anticipated: a presser arriving within 0.8 s counts already, so the ball is released
+  // while the safe option is still open (the human player closes down fast).
+  let incoming = Infinity
+  for (const o of state.players)
+    if (o.team !== p.team && o.role !== 'GK')
+      incoming = Math.min(incoming, estimateTimeToReach(o, p.pos) * (o.id === state.controlledId ? 0.85 : 1))
+  const pressure = Math.max(pressureOn(state, p), incoming < 0.5 ? 0.6 : incoming < 0.8 ? 0.45 : 0)
 
   const minHold = state.ball.lastTouchTeam === p.team && p.aiHoldTimer < 0.3 ? 0.25 : 0.3
 
@@ -149,7 +156,8 @@ export function carrierOptions(
   const a = p.profile.attributes
   const out: CarrierOption[] = []
   const lane = shootingLane(state, p, c.goal.y)
-  const shootRange = attr(a.finishing, 9.5, 12.5)
+  // Shoot from where a shot is worth it (from 10 m+ a keeper with a clear view saves nearly all).
+  const shootRange = attr(a.finishing, 9, 11.5)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - c.goal.y) * 1.6 + 1
   const myValue = shotValue(state, p.team, p.pos, lane, c.pressure)
 
@@ -158,7 +166,7 @@ export function carrierOptions(
     const chance = clamp(0.35 + (shootRange - c.toGoal) / shootRange + attr(a.decisions, 0, 0.2), 0, 0.95)
     if (rng.chance(chance)) {
       // Close in: a quick low placed shot into the corner; further out: a firmer, slightly higher shot.
-      const power = c.toGoal < 7.5 ? 0.3 : clamp(0.42 + (c.toGoal - 7.5) / 25, 0.42, 0.68)
+      const power = c.toGoal < 8.5 ? 0.3 : clamp(0.42 + (c.toGoal - 8.5) / 25, 0.42, 0.62)
       out.push({
         kind: 'shoot',
         utility: 0.9 + myValue * 0.1,
@@ -212,7 +220,10 @@ export function carrierOptions(
     else {
       // Nothing safe: under heavy pressure or after holding too long, the best available option.
       const fallback = bestPassOption(state, p, rng)
-      if (fallback && (c.pressure > 0.7 || p.aiHoldTimer > attr(a.creativity, 2.6, 3.4)))
+      // A pass an opponent can cut out is not worth it: shield and carry instead (only under the very
+      // heaviest pressure does he risk it).
+      const risky = fallback ? passInterceptable(state, p.team, p.pos, fallback.player.pos) : true
+      if (fallback && !risky && (c.pressure > 0.7 || p.aiHoldTimer > attr(a.creativity, 2.6, 3.4)))
         out.push({
           kind: 'fallback',
           utility: 0.25,

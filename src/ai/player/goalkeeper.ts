@@ -10,7 +10,7 @@ import { COURT, PASS, PLAYER, POST_X, SCREEN, THROW } from '../../simulation/Sim
 import type { AIActions } from '../common'
 import { walkTo } from '../movement'
 import { TWO_V_ONE, twoVersusOne } from '../team/defending'
-import { interceptPoint } from '../passing'
+import { interceptPoint, passInterceptable } from '../passing'
 
 /** Keeper coming off his line against a free shooting chance (metres off the line). */
 export const KEEPER_OUT = { base: 0.9, perMetre: 0.22, max: 2.8 } as const
@@ -59,7 +59,9 @@ export function goalkeeperBehaviour(
       for (const t of state.players) {
         if (t.team !== p.team || t.id === p.id) continue
         const open = clamp(laneOpenness(state, p.team, p.pos, t.pos), 0, 3)
-        const score = open + rng.range(0, 0.4) - dist(t.pos, p.pos) / 20
+        // Never throw or pass to a teammate an opponent can cut off.
+        const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -3 : 0
+        const score = open + risky + rng.range(0, 0.4) - dist(t.pos, p.pos) / 20
         if (score > bestScore) {
           bestScore = score
           best = t
