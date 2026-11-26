@@ -1,6 +1,7 @@
 import { clamp } from '../core/math/scalar'
 import { SeededRandom } from '../core/random/SeededRandom'
 import type { PlayerAttributes, PlayerProfile, PlayerRole } from '../simulation/MatchState'
+import { NAME_POOLS } from './namePools'
 
 /** Fictional name pools. Combinations are procedurally generated and not intended to depict real people. */
 const FINNISH_FIRST = [
@@ -144,24 +145,44 @@ export function generateAttributes(rng: SeededRandom, role: PlayerRole, quality:
   return out
 }
 
+export interface GenerateOptions {
+  /** National team: all names from that nation's pool (clubs mix in a few internationals). */
+  nation?: string
+  women?: boolean
+}
+
 export function generatePlayer(
   rng: SeededRandom,
   id: number,
   role: PlayerRole,
   shirtNumber: number,
   quality: number,
+  opts: GenerateOptions = {},
 ): PlayerProfile {
-  const international = rng.chance(0.15)
-  const firstName = rng.pick(international ? INTL_FIRST : FINNISH_FIRST)
-  const lastName = rng.pick(international ? INTL_LAST : FINNISH_LAST)
+  const pool = opts.nation ? NAME_POOLS[opts.nation] : undefined
+  const international = !pool && rng.chance(0.15)
+  let firstName: string
+  let lastName: string
+  if (pool) {
+    firstName = rng.pick(opts.women ? pool.female : pool.male)
+    lastName = rng.pick(pool.surnames)
+  } else {
+    firstName = rng.pick(international ? INTL_FIRST : FINNISH_FIRST)
+    lastName = rng.pick(international ? INTL_LAST : FINNISH_LAST)
+  }
+  const meanHeight = opts.women ? 167 : 178
   const heightCm = Math.round(
-    clamp(178 + rng.gaussian() * 6 + (role === 'GK' ? 6 : 0) + (role === 'PIVOT' ? 3 : 0), 164, 198),
+    clamp(
+      meanHeight + rng.gaussian() * 6 + (role === 'GK' ? 6 : 0) + (role === 'PIVOT' ? 3 : 0),
+      opts.women ? 152 : 164,
+      opts.women ? 186 : 198,
+    ),
   )
   return {
     id,
     firstName,
     lastName,
-    nationality: international ? rng.pick(['ESP', 'POR', 'BRA', 'ITA']) : 'FIN',
+    nationality: pool ? opts.nation! : international ? rng.pick(['ESP', 'POR', 'BRA', 'ITA']) : 'FIN',
     age: rng.int(19, 34),
     heightCm,
     weightKg: Math.round(heightCm - 104 + rng.gaussian() * 5),
@@ -171,6 +192,7 @@ export function generatePlayer(
     attributes: generateAttributes(rng, role, quality),
     skinTone: rng.pick(SKIN_TONES),
     hairColor: rng.pick(HAIR_COLORS),
-    hairStyle: rng.int(0, 3),
+    // Women's squads: mostly long hair (style 1), sometimes short or tied.
+    hairStyle: opts.women ? (rng.chance(0.75) ? 1 : rng.int(0, 2)) : rng.int(0, 3),
   }
 }

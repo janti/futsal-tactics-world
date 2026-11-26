@@ -25,3 +25,7 @@ dist-ssr
 
 test-results
 playwright-report
+
+# Local rosters (real players for private local play) must never be committed.
+src/data/local/*.json
+!src/data/local/*.example.json

@@ -12,7 +12,7 @@ marks man-to-man and runs set-piece routines.
 ![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-198%20sim%20%2B%207%20browser-2ea44f)
+![Tests](https://img.shields.io/badge/tests-203%20sim%20%2B%207%20browser-2ea44f)
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 
 <img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
@@ -75,8 +75,10 @@ marks man-to-man and runs set-piece routines.
 
 ### Match and presentation
 
-- Quick Match with team choice, half length (2–20 min), effective or running clock and three
-  difficulty levels that change the opponent's decision quality.
+- Quick Match with clubs and men's and women's national teams (Finland included), half length (2–20
+  min), effective or running clock and three difficulty levels that change the opponent's decision
+  quality. Players are fictional; for private local play you can load real squads from a git-ignored
+  file (see [src/data/local/README.md](src/data/local/README.md)).
 - Two halves with ends switched (your team keeps attacking up the screen), full-time result screen with
   shots, possession, passes, saves, corners and kick-ins.
 - Vertical 78° orthographic camera plus horizontal side views and a **Camera Lab** to tune your own
@@ -166,7 +168,7 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.m
 ## Quality
 
 ```bash
-npm test             # 198 unit, integration and tactical tests (headless simulation)
+npm test             # 203 unit, integration and tactical tests (headless simulation)
 npm run test:e2e     # 7 Playwright browser tests (first time: npx playwright install chromium)
 npm run typecheck    # strict TypeScript
 npm run lint         # Oxlint
@@ -229,4 +231,4 @@ TypeScript (strict) · Vite · Three.js · React · Zustand · Vitest · Playwri
 
 ---
 
-<sub>Futsal Tactics World is an original game. Clubs and players are fictional.</sub>
+<sub>Futsal Tactics World is an original game. Clubs and players are fictional; national teams use country names and colours only.</sub>

@@ -1,0 +1,17 @@
+{
+  "source": "Example only: fictional names. Copy to e.g. rosters.json (git-ignored) and fill in your own squads.",
+  "teams": {
+    "FIN-M": {
+      "players": [
+        { "name": "Matti Esimerkki", "number": 1, "position": "GK" },
+        { "name": "Pekka Malli", "number": 4, "position": "DF" },
+        { "name": "Jussi Testi", "number": 7, "position": "MF" },
+        { "name": "Kalle Kokeilu", "number": 10, "position": "MF" },
+        { "name": "Ville Mallinen", "number": 9, "position": "FW" }
+      ]
+    },
+    "FIN-W": {
+      "players": [{ "name": "Anna Esimerkki", "number": 1, "position": "GK" }]
+    }
+  }
+}

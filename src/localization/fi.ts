@@ -62,6 +62,11 @@ export const fi: Record<keyof typeof en, string> = {
   'setup.halfLength': 'Puoliajan pituus',
   'setup.minutes': '{n} min',
   'setup.difficulty': 'Vaikeustaso',
+  'setup.category.club': 'Seurat',
+  'setup.category.men': 'Miesten maajoukkueet',
+  'setup.category.women': 'Naisten maajoukkueet',
+  'setup.localRosters':
+    'Paikalliset kokoonpanot ladattu: maajoukkueet käyttävät paikallisen kokoonpanotiedoston pelaajia.',
   'setup.difficulty.easy': 'Helppo',
   'setup.difficulty.normal': 'Normaali',
   'setup.difficulty.hard': 'Vaikea',

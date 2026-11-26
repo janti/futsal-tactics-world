@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- National teams: men's (Finland, Spain, Portugal, Brazil, Argentina, Morocco, Iran, Kazakhstan) and
+  women's (Finland, Spain, Portugal, Brazil, Argentina, Italy), grouped in the Quick Match team picker
+  with clubs; picking a team from another group moves the opponent into the same group. Country names
+  (Finnish names in the Finnish UI) and plain national colours only — no federation crests — and
+  fictional players generated from per-nation name pools (women's squads with their own heights and
+  mostly long hair).
+- Local rosters for private play: JSON files in `src/data/local/` (git-ignored; only a fictional
+  example is committed) can give any team real names, shirt numbers and positions. They are read by the
+  dev server only, so a production build never contains them (unless `VITE_LOCAL_ROSTERS=1`). The
+  setup screen notes when local rosters are loaded. See `src/data/local/README.md`.
+
 - Shots from the side: the keeper now positions on the bisector of the angle (covering his near post
   on angled balls), and a shot from the side struck outside the penalty-area arc is saved almost
   always — except a ball into the near top corner. Measured from just outside the arc: low and mid

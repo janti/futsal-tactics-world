@@ -1,3 +1,4 @@
+import { TEAM_LIBRARY } from '../data/teams'
 import {
   defaultBindings,
   rebind,
@@ -193,7 +194,7 @@ const DEFAULT_QUICK: QuickMatchSetup = {
   difficulty: 'normal',
 }
 
-function loadQuickMatch(teamCount = 4): QuickMatchSetup {
+function loadQuickMatch(teamCount = TEAM_LIBRARY.length): QuickMatchSetup {
   try {
     const raw = localStorage.getItem(QUICK_KEY)
     if (raw) {

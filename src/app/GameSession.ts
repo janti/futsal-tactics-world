@@ -224,7 +224,9 @@ export class GameSession {
           scorer
             ? {
                 key: 'hud.goalBy',
-                vars: { name: `${scorer.firstName[0]}. ${scorer.lastName}` },
+                vars: {
+                  name: scorer.firstName ? `${scorer.firstName[0]}. ${scorer.lastName}` : scorer.lastName,
+                },
                 until: performance.now() + 2400,
               }
             : { key: 'hud.goal', until: performance.now() + 2400 },
@@ -261,7 +263,7 @@ export class GameSession {
       phase: s.phase,
       restartType: s.restart?.type ?? null,
       score: [s.score[0], s.score[1]],
-      controlledName: c ? `${c.profile.firstName} ${c.profile.lastName}` : null,
+      controlledName: c ? [c.profile.firstName, c.profile.lastName].filter(Boolean).join(' ') : null,
       controlledNumber: c ? c.profile.shirtNumber : null,
       controlledRole: c ? c.role : null,
       shotCharge: this.input.shotCharge,

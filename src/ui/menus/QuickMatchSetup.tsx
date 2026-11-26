@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { TEAM_LIBRARY } from '../../data/teams'
+import { TEAM_LIBRARY, teamDisplayName, type TeamCategory } from '../../data/teams'
+import { hasLocalRosters } from '../../data/localRosters'
 import { HALF_LENGTH_OPTIONS } from '../../simulation/MatchRules'
 import { DIFFICULTIES } from '../../simulation/Difficulty'
 import { useUi } from '../store'
@@ -27,12 +28,19 @@ export function QuickMatchSetupScreen() {
     return () => window.removeEventListener('keydown', onKey)
   }, [startMatch, quit])
 
+  const lang = useUi((s) => s.lang)
   const pickTeam = (side: 'homeIndex' | 'awayIndex', index: number) => {
     const other = side === 'homeIndex' ? 'awayIndex' : 'homeIndex'
-    // The same club cannot play itself: swap if needed.
+    const cat = TEAM_LIBRARY[index]!.category
+    // The same team cannot play itself: swap if needed. Changing your team to another category (clubs,
+    // men's or women's national teams) also moves the opponent into that category.
     if (q[other] === index) setQuickMatch({ [side]: index, [other]: q[side] })
-    else setQuickMatch({ [side]: index })
+    else if (side === 'homeIndex' && TEAM_LIBRARY[q[other]]!.category !== cat) {
+      const opp = TEAM_LIBRARY.findIndex((t, i) => t.category === cat && i !== index)
+      setQuickMatch({ [side]: index, [other]: opp >= 0 ? opp : q[other] })
+    } else setQuickMatch({ [side]: index })
   }
+  const groups: TeamCategory[] = ['club', 'men', 'women']
 
   return (
     <div className="title-screen">
@@ -54,16 +62,28 @@ export function QuickMatchSetupScreen() {
                   value={q[side]}
                   onChange={(e) => pickTeam(side, Number(e.target.value))}
                 >
-                  {TEAM_LIBRARY.map((tm, i) => (
-                    <option key={tm.name} value={i}>
-                      {tm.name}
-                    </option>
+                  {groups.map((g) => (
+                    <optgroup key={g} label={t(`setup.category.${g}`)}>
+                      {TEAM_LIBRARY.map((tm, i) =>
+                        tm.category === g ? (
+                          <option key={tm.id} value={i}>
+                            {teamDisplayName(tm, lang)}
+                          </option>
+                        ) : null,
+                      )}
+                    </optgroup>
                   ))}
                 </select>
               </label>
             )
           })}
         </div>
+
+        {hasLocalRosters() && (
+          <p className="setting-help" data-testid="local-rosters-note">
+            {t('setup.localRosters')}
+          </p>
+        )}
 
         <div className="setup-row">
           <span className="setup-label">{t('setup.halfLength')}</span>

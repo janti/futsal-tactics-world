@@ -1,11 +1,22 @@
 import type { PlayerRole } from '../simulation/MatchState'
 
+export type TeamCategory = 'club' | 'men' | 'women'
+
 /**
- * Provisional fictional club identities (see GAME_DESIGN.md). Names must be checked for accidental
- * conflicts with existing clubs before any public release.
+ * Team identities. Clubs are provisional fictional names (see GAME_DESIGN.md; check for accidental
+ * conflicts with existing clubs before any public release). National teams use the country name and
+ * plain colours only — no federation crests or logos — and fictional, generated players; real squads
+ * can only come from a local, git-ignored file (src/data/local).
  */
 export interface TeamDefinition {
+  /** Stable id, also the key for local rosters (e.g. "FIN-M", "ESP-W"). */
+  id: string
+  category: TeamCategory
+  /** Nation code for the name pool (fictional names) and nationality. */
+  nation: string
   name: string
+  /** Finnish display name, when different. */
+  nameFi?: string
   shortName: string
   primaryColor: number
   secondaryColor: number
@@ -15,6 +26,9 @@ export interface TeamDefinition {
 
 export const TEAM_LIBRARY: TeamDefinition[] = [
   {
+    id: 'KFU',
+    category: 'club',
+    nation: 'FIN',
     name: 'Kuopio Futsal United',
     shortName: 'KFU',
     primaryColor: 0x1f5fbf,
@@ -23,6 +37,9 @@ export const TEAM_LIBRARY: TeamDefinition[] = [
     quality: 64,
   },
   {
+    id: 'HCF',
+    category: 'club',
+    nation: 'FIN',
     name: 'Helsinki City Futsal',
     shortName: 'HCF',
     primaryColor: 0xd23a2f,
@@ -31,6 +48,9 @@ export const TEAM_LIBRARY: TeamDefinition[] = [
     quality: 64,
   },
   {
+    id: 'TAM',
+    category: 'club',
+    nation: 'FIN',
     name: 'Tampere Athletic',
     shortName: 'TAM',
     primaryColor: 0xf0c419,
@@ -39,6 +59,9 @@ export const TEAM_LIBRARY: TeamDefinition[] = [
     quality: 62,
   },
   {
+    id: 'ONS',
+    category: 'club',
+    nation: 'FIN',
     name: 'Oulu Northern Stars',
     shortName: 'ONS',
     primaryColor: 0x1d8a5a,
@@ -46,7 +69,135 @@ export const TEAM_LIBRARY: TeamDefinition[] = [
     numberColor: 0xffffff,
     quality: 61,
   },
+  ...nationalTeams(),
 ]
+
+/** National teams (men's and women's): country names, plain national colours, fictional players. */
+function nationalTeams(): TeamDefinition[] {
+  const nations: {
+    code: string
+    name: string
+    nameFi: string
+    primary: number
+    secondary: number
+    number: number
+    men?: number
+    women?: number
+  }[] = [
+    {
+      code: 'FIN',
+      name: 'Finland',
+      nameFi: 'Suomi',
+      primary: 0xf2f5f8,
+      secondary: 0x1d3f8f,
+      number: 0x1d3f8f,
+      men: 66,
+      women: 62,
+    },
+    {
+      code: 'ESP',
+      name: 'Spain',
+      nameFi: 'Espanja',
+      primary: 0xc8102e,
+      secondary: 0xf1bf00,
+      number: 0xf1bf00,
+      men: 82,
+      women: 80,
+    },
+    {
+      code: 'POR',
+      name: 'Portugal',
+      nameFi: 'Portugali',
+      primary: 0x8b1e2d,
+      secondary: 0x046a38,
+      number: 0xf2f5f8,
+      men: 81,
+      women: 78,
+    },
+    {
+      code: 'BRA',
+      name: 'Brazil',
+      nameFi: 'Brasilia',
+      primary: 0xf7d917,
+      secondary: 0x1d6f3a,
+      number: 0x1d4f9e,
+      men: 82,
+      women: 80,
+    },
+    {
+      code: 'ARG',
+      name: 'Argentina',
+      nameFi: 'Argentiina',
+      primary: 0x75aadb,
+      secondary: 0xf2f5f8,
+      number: 0x101923,
+      men: 78,
+      women: 72,
+    },
+    {
+      code: 'ITA',
+      name: 'Italy',
+      nameFi: 'Italia',
+      primary: 0x0b4fa2,
+      secondary: 0xf2f5f8,
+      number: 0xf2f5f8,
+      women: 72,
+    },
+    {
+      code: 'MAR',
+      name: 'Morocco',
+      nameFi: 'Marokko',
+      primary: 0xc1272d,
+      secondary: 0x006233,
+      number: 0xf2f5f8,
+      men: 77,
+    },
+    {
+      code: 'IRN',
+      name: 'Iran',
+      nameFi: 'Iran',
+      primary: 0xda1f26,
+      secondary: 0xf2f5f8,
+      number: 0xf2f5f8,
+      men: 77,
+    },
+    {
+      code: 'KAZ',
+      name: 'Kazakhstan',
+      nameFi: 'Kazakstan',
+      primary: 0x00afca,
+      secondary: 0xfec50c,
+      number: 0xfec50c,
+      men: 75,
+    },
+  ]
+  const out: TeamDefinition[] = []
+  for (const category of ['men', 'women'] as const) {
+    for (const n of nations) {
+      const quality = n[category]
+      if (quality === undefined) continue
+      const suffix = category === 'men' ? 'M' : 'W'
+      out.push({
+        id: `${n.code}-${suffix}`,
+        category,
+        nation: n.code,
+        name: category === 'men' ? n.name : `${n.name} (women)`,
+        nameFi: category === 'men' ? n.nameFi : `${n.nameFi} (naiset)`,
+        shortName: n.code,
+        primaryColor: n.primary,
+        secondaryColor: n.secondary,
+        numberColor: n.number,
+        quality,
+      })
+    }
+  }
+  return out
+}
+
+/** Display name in the current UI language. */
+export function teamDisplayName(t: TeamDefinition, lang: 'fi' | 'en'): string {
+  return lang === 'fi' && t.nameFi ? t.nameFi : t.name
+}
 
 /** Starting five in squad order: GK, Fixo, left Ala, right Ala, Pivot. */
 export const STARTING_ROLES: PlayerRole[] = ['GK', 'FIXO', 'ALA_L', 'ALA_R', 'PIVOT']

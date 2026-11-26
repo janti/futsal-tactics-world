@@ -26,6 +26,7 @@ import {
 } from '../physics/PlayerPhysics'
 import { planShot } from '../physics/ShootingPhysics'
 import { generatePlayer } from '../data/playerGenerator'
+import { applyRosterPlayer, localRoster, pickStartingFive } from '../data/localRosters'
 import { STARTING_NUMBERS, STARTING_ROLES, type TeamDefinition } from '../data/teams'
 import type { Command } from './Commands'
 import { DIFFICULTY, type Difficulty } from './Difficulty'
@@ -1494,7 +1495,14 @@ export function createInitialState(setup: MatchSetup): MatchState {
     for (let i = 0; i < STARTING_ROLES.length; i++) {
       const role = STARTING_ROLES[i]!
       const id = players.length
-      const profile = generatePlayer(rng, id, role, STARTING_NUMBERS[i]!, def.quality)
+      const profile = generatePlayer(rng, id, role, STARTING_NUMBERS[i]!, def.quality, {
+        ...(def.category !== 'club' ? { nation: def.nation } : {}),
+        women: def.category === 'women',
+      })
+      // Real squads only from a local, git-ignored roster file (private local play).
+      const roster = localRoster(def.id)
+      const real = roster ? pickStartingFive(roster)[i] : null
+      if (real) applyRosterPlayer(profile, real)
       if (setup.humanTeam !== null && t !== setup.humanTeam) {
         // Difficulty: the computer opponent's attributes are shifted (decision and execution quality).
         const off = DIFFICULTY[setup.difficulty ?? 'normal'].attributeOffset
