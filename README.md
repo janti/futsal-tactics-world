@@ -1,93 +1,227 @@
-# Futsal Tactics World
+<div align="center">
 
-An original browser futsal game: immediate arcade controls, authentic futsal tactics, a vertical
-78° orthographic camera and modern "retro realism" 3D graphics. Runs fully locally as a static site —
-no backend, no paid services, no external assets.
+# ⚽ Futsal Tactics World
 
-> **Status: Milestone 2 (complete basic arcade match) done.** See [TASKS.md](TASKS.md) and
-> [ROADMAP.md](ROADMAP.md) for what exists and what is next.
+**Arcade-fast controls. Real futsal tactics. Straight in your browser.**
 
-## Running locally
+An original 5-a-side futsal game built from scratch in TypeScript and Three.js: instant pick-up-and-play
+controls on top of a deterministic match simulation with a tactical AI that defends in a diamond,
+marks man-to-man and runs set-piece routines.
+
+![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178c6?logo=typescript&logoColor=white)
+![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-179%20sim%20%2B%206%20browser-2ea44f)
+![No backend](https://img.shields.io/badge/backend-none-lightgrey)
+
+<img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
+
+</div>
+
+---
+
+## Why it is different
+
+- **Futsal, not small football.** 40 × 20 m court, 3 × 2 m goals, a heavy low-bouncing ball, kick-ins
+  instead of throw-ins, the keeper's four-second rule, second-possession rule and the hands-vs-feet
+  rule after a back pass.
+- **Controls that feel immediate.** Screen-relative movement, tap-or-hold shooting, one-touch input
+  buffering, assisted passing that leads the receiver — and a fully manual mode when you want it.
+- **An AI that plays like a futsal team.** A compact defensive diamond that moves with the ball,
+  one-to-one marking from the inside shoulder, cover defenders, counter-attack recovery, a roaming
+  pivot and rehearsed kick-in and corner routines.
+- **Deterministic and tested.** A 60 Hz simulation with seeded randomness runs headless; gameplay
+  behaviour is measured in automated tactical tests, not just eyeballed.
+- **Runs anywhere.** A static site: no server, no accounts, no paid services and no external assets.
+  Everything you see — players, hall, crowd, nets — is generated procedurally.
+
+## Features
+
+### On the ball
+
+|                 |                                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Passing**     | Assisted (snaps to the best teammate and leads him), semi-assisted or manual (exact direction, hold for power). Through passes into space.                               |
+| **Shooting**    | Tap for a quick, low shot placed in the near or far corner that the keeper cannot hold; hold for more pace and height — a full charge lifts the heavy ball over the bar. |
+| **Dribbling**   | Close control at running pace, touch-by-touch at a sprint, sole control and shielding: hold sole control and your player turns his back to the nearest opponent.         |
+| **First touch** | Fast passes can be controlled with a heavy touch; shots that hit a defender rebound instead of sticking to him.                                                          |
+
+### Goalkeeping
+
+<img src="docs/images/keeper-throw.png" alt="The human-controlled goalkeeper holding the ball, aiming a throw with an arrow on the floor and a three-second countdown in the HUD" width="420" align="right">
+
+- Saves end in the hands or are parried wide, away from the danger zone.
+- Long-range shots are almost always stopped — unless a player screens the keeper's view.
+- Holding the ball you control the keeper: walk in the area, aim with the direction keys, hold for
+  power — soft throws roll along the floor, hard ones fly overarm.
+- Back passes must be played with the feet, and opponents will press him.
+- Four seconds too long? Indirect free kick to the opponents.
+
+<br clear="right">
+
+### Tactical AI
+
+- **Defence:** high, compact diamond (pivot, two alas, fixo) that slides with the ball; every defender
+  marks one opponent goal-side; a man far from the ball is marked loosely from the middle; the press is
+  measured far from goal and closes the central lane.
+- **Help and recovery:** when the first defender is beaten a teammate comes across; outnumbered near
+  goal, the last man steps out; after losing the ball out of shape, everyone sprints back to his man.
+- **Attack:** forward passes to players in scoring positions first, 1-v-1 dribbles on the wing or in
+  the middle (never by the last man), circulation when nothing is on, breakaways finished low into a
+  corner, support players who move away from their markers to offer a pass.
+- **Set pieces:** kick-in and corner routines with a short man for a first-time shot, a pivot coming
+  out from the back post and a deep man showing for a pass back.
+
+### Match and presentation
+
+- Quick Match with team choice, half length (2–20 min), effective or running clock and three
+  difficulty levels that change the opponent's decision quality.
+- Two halves with ends switched (your team keeps attacking up the screen), full-time result screen with
+  shots, possession, passes, saves, corners and kick-ins.
+- Vertical 78° orthographic camera, procedural players with a keyframed run cycle, goal nets that bulge,
+  a ball that keeps flying into the advertising boards when it goes out.
+- Finnish and English UI. Keyboard and gamepad, including menu navigation. Rebindable keys.
+
+<p align="center">
+  <img src="docs/images/setup.png" alt="Quick Match setup screen with team, half length and difficulty choices" width="560">
+</p>
+
+## Quick start
+
+Requires Node.js 20.19+ or 22.12+.
 
 ```bash
+git clone https://github.com/janti/futsal-tactics-world.git
+cd futsal-tactics-world
 npm install
-npm run dev        # http://localhost:5173
+npm run dev          # open http://localhost:5173
 ```
 
-Production build and local preview:
+Production build: `npm run build`, then `npm run preview`. Add `?gfx=low`, `?gfx=medium` or
+`?gfx=high` (default) to the URL to pick a graphics preset.
+
+## Controls
+
+| Action                                               | Keyboard          | Gamepad            |
+| ---------------------------------------------------- | ----------------- | ------------------ |
+| Move (relative to the screen)                        | WASD / arrow keys | Left stick / D-pad |
+| Pass · standing tackle                               | Z (or J)          | A                  |
+| Shoot — tap: placed low shot, hold: power and height | X (or K)          | B                  |
+| Through pass                                         | C (or L)          | X                  |
+| Switch player                                        | V (or I)          | Y                  |
+| Sprint                                               | Shift             | RT                 |
+| Sole control · shield · jockey                       | Space             | LT                 |
+| Camera preset                                        | F5 or 5           | —                  |
+| Pause                                                | Esc or P          | Start              |
+| Show controls                                        | H                 | —                  |
+
+- **Keeper throw:** with the ball in the keeper's hands, aim with the direction keys and hold Z (or X/C)
+  for power, release to throw.
+- **One-touch play:** press pass or shoot just before the ball arrives.
+- **Restarts** (kick-off, kick-ins, corners, free kicks) must be kicked: the taker aims by walking round
+  the ball; kick-ins, corners and free kicks have a four-second limit.
+- **Menus with a gamepad:** D-pad or stick moves, left/right changes a setting, A selects, B goes back.
+
+### Settings
+
+Available on the title screen and in the pause menu, applied immediately and remembered:
+
+| Setting                                              | Options                                           |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| Player selection when defending                      | Nearest player (automatic) · assisted · manual    |
+| Passing assistance                                   | Assisted · semi-assisted · manual (charged power) |
+| Keyboard controls                                    | Rebind any game action; reset to defaults         |
+| Player size                                          | 100 % (true scale) · 106 % · 112 %                |
+| Keep my team attacking up the screen after half-time | On · off                                          |
+| Language                                             | Suomi · English                                   |
+
+## How it works
+
+```mermaid
+flowchart LR
+  I[Keyboard / gamepad] -->|screen-relative commands| S
+  subgraph S [Deterministic simulation · 60 Hz]
+    direction TB
+    R[Rules and restarts] --> A[Tactical AI]
+    A --> P[Player and ball physics]
+  end
+  S -->|snapshots + events| V[Three.js renderer<br/>interpolated]
+  S -->|events| U[React HUD and menus]
+```
+
+- The **simulation** owns the match: typed commands in, snapshots and events out, seeded randomness.
+  It has no dependency on the DOM, Three.js or React, so it runs headless in tests and the same command
+  stream always reproduces the same match.
+- The **renderer** interpolates between the last two snapshots and never changes the game state.
+- The **AI** lives in `src/ai`, the physics in `src/physics`, the rules engine in `src/simulation`.
+
+More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.md).
+
+## Quality
 
 ```bash
-npm run build
-npm run preview
+npm test             # 179 unit, integration and tactical tests (headless simulation)
+npm run test:e2e     # 6 Playwright browser tests (first time: npx playwright install chromium)
+npm run typecheck    # strict TypeScript
+npm run lint         # Oxlint
+npm run format       # Prettier
 ```
 
-Optional URL parameter: `?gfx=low|medium|high` selects a graphics preset (default `high`).
+Tactical tests check behaviour against numbers, for example:
 
-## Scripts
+- the keeper saves almost every long shot with a clear view, but screened shots go in about a third
+  of the time;
+- breakaways are finished low into a corner and scored a little over half the time;
+- in AI vs AI play about 84 % of passes arrive and the middle between ball and goal is covered about
+  87 % of the time;
+- difficulty levels measurably change how much the opponent dominates.
 
-| Script               | What it does                                           |
-| -------------------- | ------------------------------------------------------ |
-| `npm run dev`        | Vite dev server                                        |
-| `npm run build`      | Type-check (`tsc -b`) and production build to `dist/`  |
-| `npm run preview`    | Serve the production build                             |
-| `npm run typecheck`  | TypeScript only                                        |
-| `npm test`           | Unit + integration tests (Vitest, headless simulation) |
-| `npm run test:watch` | Vitest watch mode                                      |
-| `npm run test:e2e`   | Browser smoke tests (Playwright, Chromium)             |
-| `npm run lint`       | Oxlint                                                 |
-| `npm run format`     | Prettier                                               |
+## Roadmap
 
-First-time e2e setup: `npx playwright install chromium`.
+| #   | Milestone                                                                             | Status  |
+| --- | ------------------------------------------------------------------------------------- | ------- |
+| 0   | Project foundation                                                                    | ✅ Done |
+| 1   | Playable 3D prototype                                                                 | ✅ Done |
+| 2   | Complete basic arcade match                                                           | ✅ Done |
+| 3   | Gameplay physics and controls polish                                                  | ✅ Done |
+| 4   | Camera and visual identity (all camera presets, Camera Lab, radar, graphics settings) | Next    |
+| 5   | Tactical AI foundation (utility AI, spatial reasoning)                                | Planned |
+| 6   | Advanced futsal tactics (formations, rotations, pressing triggers, Tactical Lab)      | Planned |
+| 7   | Rules and tactical editor (fouls, cards, substitutions, timeouts, flying keeper)      | Planned |
+| 8   | Presentation and analysis (audio, crowd, replays, statistics)                         | Planned |
+| 9   | Career mode                                                                           | Planned |
+| 10  | Release preparation (performance, accessibility, offline play)                        | Planned |
 
-## Controls (keyboard)
-
-| Key           | Action                                                                                                     |
-| ------------- | ---------------------------------------------------------------------------------------------------------- |
-| WASD / arrows | Move (always relative to the screen)                                                                       |
-| Z             | Pass (with the ball) / standing tackle (without)                                                           |
-| X             | Shoot — tap: fast low placed shot into the corner; hold: harder and higher (full charge goes over the bar) |
-| C             | Through pass                                                                                               |
-| V             | Switch player                                                                                              |
-| Shift         | Sprint                                                                                                     |
-| Space         | Sole control (with ball) / jockey (without)                                                                |
-| F5 or 5       | Cycle camera preset                                                                                        |
-| Esc or P      | Pause                                                                                                      |
-| H             | Show controls                                                                                              |
-
-Alternative keys: J/K/L/I for pass/shoot/through/switch. A standard gamepad works for movement and
-actions (left stick, A pass, B shoot, X through, Y switch, RT sprint, LT sole).
-
-Pressing pass/shoot just before the ball reaches you buffers a one-touch pass or first-time shot.
-
-**Goalkeeper throw:** when your keeper holds the ball in the hands you control him — aim with the
-direction keys, hold Z (or X/C) for power and release to throw. Soft throws roll along the floor,
-hard throws go through the air. You have four seconds before the keeper throws automatically.
-
-When defending you control the player nearest the ball by default. Change this under **Settings**
-(title screen or pause menu): nearest player, assisted or manual.
-
-Kick-ins, corners and kick-offs must be kicked (pass or shoot) — the taker cannot dribble, and
-kick-ins and corners must be taken within four seconds.
-
-## Technology
-
-TypeScript (strict) · Vite · Three.js (WebGL) · React · Zustand · Vitest · Playwright · Oxlint ·
-Prettier. Custom deterministic physics at a fixed 60 Hz; rendering interpolates snapshots.
+Details: [ROADMAP.md](ROADMAP.md) · [TASKS.md](TASKS.md) · [CHANGELOG.md](CHANGELOG.md)
 
 ## Deployment
 
-The build is a static site with a relative base path (`base: './'`), so `dist/` can be served from
-any static host or sub-path, e.g. GitHub Pages:
+The build is a static site with a relative base path, so `dist/` can be served from any static host
+or sub-path, such as GitHub Pages:
 
 1. `npm run build`
-2. Publish the `dist/` folder (e.g. with a GitHub Actions Pages workflow or the `gh-pages` branch).
+2. Publish the `dist/` folder (for example with a GitHub Actions Pages workflow).
 
-No server-side functionality is required. A service worker for offline play is planned for release
-preparation (Milestone 10), deliberately not earlier.
+No server-side code is needed.
 
 ## Documentation
 
-[GAME_DESIGN](GAME_DESIGN.md) · [ARCHITECTURE](ARCHITECTURE.md) · [AI_DESIGN](AI_DESIGN.md) ·
-[TACTICS_DESIGN](TACTICS_DESIGN.md) · [CAMERA_DESIGN](CAMERA_DESIGN.md) ·
-[ART_DIRECTION](ART_DIRECTION.md) · [RULES_DESIGN](RULES_DESIGN.md) · [ROADMAP](ROADMAP.md) ·
-[TASKS](TASKS.md) · [ASSET_LICENSES](ASSET_LICENSES.md) · [CHANGELOG](CHANGELOG.md)
+| Document                            | What it covers                           |
+| ----------------------------------- | ---------------------------------------- |
+| [GAME_DESIGN](GAME_DESIGN.md)       | Vision, controls, game modes             |
+| [ARCHITECTURE](ARCHITECTURE.md)     | Simulation, rendering, data flow         |
+| [AI_DESIGN](AI_DESIGN.md)           | Team and player AI, measured behaviour   |
+| [TACTICS_DESIGN](TACTICS_DESIGN.md) | Futsal tactics model                     |
+| [RULES_DESIGN](RULES_DESIGN.md)     | Implemented rules and simplifications    |
+| [CAMERA_DESIGN](CAMERA_DESIGN.md)   | Camera presets and screen-relative input |
+| [ART_DIRECTION](ART_DIRECTION.md)   | Visual style                             |
+| [ASSET_LICENSES](ASSET_LICENSES.md) | Asset sources (all procedural)           |
+
+## Built with
+
+TypeScript (strict) · Vite · Three.js · React · Zustand · Vitest · Playwright · Oxlint · Prettier
+
+---
+
+<sub>Futsal Tactics World is an original game. Clubs and players are fictional.</sub>

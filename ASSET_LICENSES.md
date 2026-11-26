@@ -10,6 +10,7 @@ third-party models, textures, fonts, sounds or music are included.
 | Arena geometry and spectators                                          | `src/rendering/CourtRenderer.ts`                     | Project code |
 | Fonts                                                                  | Local system fonts only (no bundled or remote fonts) | —            |
 | Club names, player names                                               | Fictional, seeded generation (`src/data`)            | Project data |
+| README screenshots (`docs/images`)                                     | Captured from the game itself                        | Project data |
 
 `public/favicon.svg` comes from the Vite project template (MIT) and will be replaced with an original icon.
 
