@@ -52,6 +52,9 @@ the full system will be built on:
 - **Safe passing** (`passInterceptable`): a pass is followed along its path; if an opponent can get
   within 0.6 m of a point before the ball (read delay 0.12 s; 0.3 s for forward passes) the pass is
   skipped (circulation, progressive, direct and through passes) or heavily penalised (fallback).
+- **Keeper narrowing** (`freeShootingChance`, `KEEPER_OUT`, `KEEPER_NARROW`): free chance inside 13 m
+  → depth off the line 0.9 + 0.22 m per metre inside 13 m (1.2–2.8 m, ≥ 2.6 m from the shooter);
+  save bonus up to +0.12 when he stood more than 1.4 m off the line at the shot.
 - **Keeper angle**: positions on the bisector of the ball's angle to the posts; shots from the side
   struck outside the arc are saved with 95 % once reached, except into the near top corner.
 - **Attacking pivot**: rotates every 4.5 s between the middle, the ball-side wing and the far side.

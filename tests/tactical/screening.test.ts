@@ -174,3 +174,62 @@ describe('shots from the side (outside the arc)', () => {
     expect(goals).toBeGreaterThan(3)
   })
 })
+
+describe('keeper narrowing the angle on a free shooting chance', () => {
+  /** Human holds the ball free 8 m out for a second, then shoots; returns outcome and keeper depth. */
+  function freeShot(seed: number, power: number) {
+    const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
+    const s = sim.state
+    for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
+    sim.step([{ type: 'Pass', dir: { x: 0, y: -1 }, through: false }])
+    for (let i = 0; i < 60; i++) sim.step()
+    s.phase = 'play'
+    s.restart = null
+    const from = { x: 0.5, y: 12 }
+    const sh = sim.player(4)
+    const park = () => {
+      for (const o of s.players) if (o.id !== 4 && o.role !== 'GK') o.pos = { x: o.id % 2 ? -9.5 : -9, y: -6 }
+    }
+    s.controlledId = 4
+    sh.pos = { ...from }
+    sh.vel = { x: 0, y: 0 }
+    sh.facing = Math.PI / 2
+    Object.assign(s.ball, {
+      ownerId: 4,
+      mode: 'controlled',
+      pos: { x: from.x, y: from.y + 0.4 },
+      vel: { x: 0, y: 0 },
+    })
+    s.possessionTeam = 0
+    for (let i = 0; i < 60; i++) {
+      park()
+      sim.step([{ type: 'Move', dir: { x: 0, y: 0 }, sprint: false, sole: true }])
+      s.ball.ownerId = 4
+    }
+    park()
+    const out = 20 - sim.player(5).pos.y
+    sim.drainEvents()
+    sim.step([{ type: 'Shoot', dir: { x: seed % 2 ? 1 : -1, y: 1 }, power }])
+    for (let i = 0; i < 180; i++) {
+      sim.step()
+      for (const e of sim.drainEvents()) {
+        if (e.type === 'GoalScored') return { goal: true, out }
+        if (e.type === 'Save' || e.type === 'BallOut') return { goal: false, out }
+      }
+    }
+    return { goal: false, out }
+  }
+
+  it('he comes off his line to narrow the angle, but not rushing right up to the shooter', () => {
+    const r = freeShot(3, 0.3)
+    expect(r.out).toBeGreaterThan(1.6)
+    expect(r.out).toBeLessThan(3)
+  })
+
+  it('he is not a wall: well-placed shots still score often', () => {
+    let goals = 0
+    for (let seed = 1; seed <= 30; seed++) if (freeShot(seed, 0.3).goal) goals++
+    expect(goals).toBeGreaterThan(12) // > 40 %
+    expect(goals).toBeLessThan(23) // but fewer than the ~77 % with the keeper on his line
+  })
+})

@@ -466,6 +466,25 @@ export function twoVersusOneSpot(state: MatchState, s: TwoVersusOne): Vec2 {
   return { x: cover.x + (onBall.x - cover.x) * k, y: cover.y + (onBall.y - cover.y) * k }
 }
 
+/** Keeper coming off his line against a free shooting chance (metres off the line). */
+export const KEEPER_OUT = { base: 0.9, perMetre: 0.22, max: 2.8 } as const
+
+/**
+ * A free shooting chance for `shooter` at the goal `goal`: inside 13 m (and not right on top of the
+ * keeper), not under pressure and no outfield defender in the way to goal.
+ */
+export function freeShootingChance(state: MatchState, shooter: PlayerState, goal: Vec2): boolean {
+  const d = dist(shooter.pos, goal)
+  if (d > 13 || d < 3.5 || Math.abs(shooter.pos.x) > 7.5) return false
+  if (pressureOn(state, shooter) > 0.3) return false
+  for (const o of state.players) {
+    if (o.team === shooter.team || o.role === 'GK') continue
+    const { point } = closestOnSegment(shooter.pos, goal, o.pos)
+    if (dist(point, o.pos) < 1.6) return false
+  }
+  return true
+}
+
 /** An opponent (other than the carrier) within 4 m of the fixo, close to our goal. */
 function fixoHasMan(state: MatchState, fixo: PlayerState, carrierId: number): boolean {
   const ownGoal = { x: 0, y: -state.teams[fixo.team].attackDir * COURT.halfLength }
@@ -1588,7 +1607,28 @@ function goalkeeperBehaviour(
   p.aiState = 'position'
   const toBall = sub(ball.pos, goal)
   const db = len(toBall)
-  const depth = clamp(0.5 + db * 0.07, 0.6, 2.2)
+  let depth = clamp(0.5 + db * 0.07, 0.6, 2.2)
+  // A free shooting chance (carrier unpressed, nobody in the way, inside 13 m): come off the line to
+  // narrow the angle — measured, never closer than 2.6 m to the shooter, walking rather than rushing,
+  // so a well-placed shot can still beat him.
+  const shooter = ball.ownerId !== null ? state.players[ball.ownerId]! : null
+  let narrowing = false
+  if (
+    shooter &&
+    shooter.team !== p.team &&
+    shooter.role !== 'GK' &&
+    !ball.inHands &&
+    freeShootingChance(state, shooter, goal)
+  ) {
+    const out = Math.min(
+      clamp(KEEPER_OUT.base + (13 - db) * KEEPER_OUT.perMetre, 1.2, KEEPER_OUT.max),
+      db - 2.6,
+    )
+    if (out > depth) {
+      depth = out
+      narrowing = true
+    }
+  }
   const n = db > 1e-3 ? normalize(toBall) : { x: 0, y: dir }
   const depthY = Math.max(0.35, Math.abs(n.y * depth))
   let tx = goal.x + n.x * depth
@@ -1601,7 +1641,7 @@ function goalkeeperBehaviour(
     if (t > 0) tx = ball.pos.x + bis.x * t
   }
   const target = { x: clamp(tx, -(POST_X - 0.3), POST_X - 0.3), y: planeY }
-  walkTo(p, target, dist(target, p.pos) > 1.2)
+  walkTo(p, target, dist(target, p.pos) > (narrowing ? 2.5 : 1.2))
 }
 
 /**

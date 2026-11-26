@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Goalkeeper narrows the angle: when an opponent has a free shooting chance inside 13 m (unpressed,
+  nobody in the way) the keeper comes off his line — about 2 m from 8 m out, at most 2.8 m and never
+  closer than 2.6 m to the shooter, walking rather than rushing. A keeper who had narrowed the angle
+  when the shot was struck gets a modest save bonus. He is no wall: measured from 8 m with the keeper
+  set, placed shots score about 60 % (was 77 %) and harder shots about 40 % (was 47 %).
+
 - 2 v 1 defending: the last defender no longer rushes the carrier. Further out he covers the passing
   lane to the second attacker; from about 16 m in he moves closer to the carrier the nearer they get,
   goal-side of him about 3-4 m outside the arc. At the arc (or a couple of metres before it) he takes

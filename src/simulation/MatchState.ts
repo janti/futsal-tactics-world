@@ -93,6 +93,8 @@ export interface PlayerState {
   saveDive: boolean
   /** Goalkeeper: where he stood across the goal when the current shot was struck (null: no shot). */
   shotStartX: number | null
+  /** Goalkeeper: how far off his line he stood when the current shot was struck (null: no shot). */
+  shotStartOut: number | null
   stamina: number
   /** Seconds before this player can touch the ball again. */
   touchCooldown: number

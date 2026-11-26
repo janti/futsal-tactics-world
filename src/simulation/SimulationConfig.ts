@@ -235,6 +235,13 @@ export const SIDE_SHOT = {
   nearTopHeight: 1.3,
 } as const
 
+/** Save bonus for a keeper who had come off his line to narrow the angle when the shot was struck. */
+export const KEEPER_NARROW = {
+  /** Metres off the line from which the bonus starts (full bonus 0.8 m further out). */
+  from: 1.4,
+  bonus: 0.12,
+} as const
+
 export const RESTART = {
   /** Opponent distance at kick-ins, corners and free kicks (metres). */
   opponentDistance: 4,

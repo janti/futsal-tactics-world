@@ -41,6 +41,7 @@ import {
   PLAYER,
   POST_X,
   SIDE_SHOT,
+  KEEPER_NARROW,
   RESTART,
   SCREEN,
   SWITCHING,
@@ -286,7 +287,10 @@ export class MatchSimulation implements AIActions {
     const keeper = s.players.find((q) => q.team !== p.team && q.role === 'GK')
     s.ball.shotLongRange = isLongRangeShot(p.pos, s.teams[p.team].attackDir)
     s.ball.shotScreen = keeper ? screenFactor(s, p, keeper) : 0
-    if (keeper) keeper.shotStartX = keeper.pos.x
+    if (keeper) {
+      keeper.shotStartX = keeper.pos.x
+      keeper.shotStartOut = Math.abs(keeper.pos.y + s.teams[keeper.team].attackDir * COURT.halfLength)
+    }
     this.kick(p, plan.velocity, plan.vz, plan.spin, 'shot')
     s.ball.isShot = true
     s.ball.shotPlaced = plan.placed
@@ -957,6 +961,11 @@ export class MatchSimulation implements AIActions {
     // A placed low shot into the corner (a tap): reaching it is harder (the further he has to
     // stretch, the less likely) and it cannot be held.
     if (b.isShot && b.shotPlaced && !longShot) p = clamp(p - 0.3 * reachFrac, 0.05, 0.995)
+    // Off his line and square to the shooter when it was struck (angle narrowed): a modest bonus.
+    const startOut = gk.shotStartOut ?? 0
+    gk.shotStartOut = null
+    if (b.isShot && startOut > KEEPER_NARROW.from)
+      p = Math.min(0.97, p + KEEPER_NARROW.bonus * Math.min(1, (startOut - KEEPER_NARROW.from) / 0.8))
     // A shot from the side, struck outside the penalty-area arc: the keeper covering his near post
     // saves almost everything — except a ball into the near top corner.
     const k = b.kickPos
@@ -1537,6 +1546,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
         dribbleTouchTimer: 0,
         saveDive: false,
         shotStartX: null,
+        shotStartOut: null,
         aiSetPieceTimer: 0,
         aiRunTimer: 0,
         aiRunCooldown: 0,
