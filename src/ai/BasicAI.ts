@@ -14,7 +14,7 @@ import { estimateTimeToReach, routeAroundGoals } from '../physics/PlayerPhysics'
 import { laneOpenness, predictPassTarget, pressureOn } from '../physics/PassingPhysics'
 import { rollingLaunchSpeed } from '../physics/BallPhysics'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
-import { COURT, PASS, PLAYER, RESTART, SCREEN, THROW } from '../simulation/SimulationConfig'
+import { COURT, PASS, PLAYER, POST_X, RESTART, SCREEN, THROW } from '../simulation/SimulationConfig'
 import { baseAnchor, diamondAnchor, dynamicAnchor } from './positioning/Formation'
 import { clampRestartAim, restartTakerSpot } from '../simulation/RestartGeometry'
 import { DIFFICULTY, type DifficultyParams } from '../simulation/Difficulty'
@@ -655,6 +655,7 @@ function runnerOption(state: MatchState, carrier: PlayerState): PlayerState | nu
     for (const o of state.players)
       if (o.team !== carrier.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, lead))
     if (space < 2.5) continue
+    if (passInterceptable(state, carrier.team, carrier.pos, lead, FORWARD_PASS_READ)) continue
     if (!best || t.aiRunTimer > best.aiRunTimer) best = t
   }
   return best
@@ -1199,6 +1200,7 @@ function progressivePass(state: MatchState, p: PlayerState): PlayerState | null 
     let space = Infinity
     for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
     if (space < 1.6) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos, FORWARD_PASS_READ)) continue
     const score =
       progress * 0.12 +
       scoringValue(state, p.team, t.pos) * 1.5 +
@@ -1259,6 +1261,7 @@ function forwardChance(state: MatchState, p: PlayerState): { player: PlayerState
     if (space < 1.2) continue
     const danger = scoringValue(state, p.team, t.pos)
     if (danger < 0.2 || danger < own + 0.05) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos, FORWARD_PASS_READ)) continue
     const score = danger * 2 + Math.min(lane, 3) * 0.3 + Math.min(space, 4) * 0.2
     if (score > bestScore) {
       bestScore = score
@@ -1269,6 +1272,50 @@ function forwardChance(state: MatchState, p: PlayerState): { player: PlayerState
   }
   return best ? { player: best, through: bestThrough } : null
 }
+
+/**
+ * Can an opponent cut out a ground pass from `from` to `to`? The ball is followed along its path (same
+ * launch speed as a normal pass); an opponent intercepts if he can get a foot to a point on the path
+ * (within 0.6 m) before the ball is there, allowing a short read delay. Keepers count only inside
+ * their own penalty area. Used so the AI does not play loose balls through the middle.
+ */
+export function passInterceptable(
+  state: MatchState,
+  team: TeamId,
+  from: Vec2,
+  to: Vec2,
+  read = 0.12,
+): boolean {
+  const d = dist(from, to)
+  if (d < 1) return false
+  const speed = clamp(rollingLaunchSpeed(d, PASS.arrivalSpeed), PASS.minSpeed, PASS.maxSpeed)
+  const dirV = normalize(sub(to, from))
+  let v = speed
+  let travelled = 0
+  const h = 0.05
+  for (let t = h; travelled < d - 0.6; t += h) {
+    v = Math.max(0.5, v - (1.6 + 0.12 * v) * h)
+    travelled += v * h
+    const pt = addScaled(from, dirV, Math.min(travelled, d))
+    for (const o of state.players) {
+      if (o.team === team) continue
+      if (o.role === 'GK' && dist(o.pos, { x: 0, y: -state.teams[o.team].attackDir * COURT.halfLength }) > 7)
+        continue
+      const gap = dist(o.pos, pt)
+      if (gap > v * 2 + 6) continue
+      const reachAt = gap > 0.6 ? addScaled(pt, normalize(sub(o.pos, pt)), 0.6) : o.pos
+      if (estimateTimeToReach(o, reachAt) + read <= t) return true
+    }
+    if (t > 3) break
+  }
+  return false
+}
+
+/**
+ * Forward passes into danger are allowed a little more risk than circulation passes: the opponent's
+ * read delay assumed for them is longer.
+ */
+const FORWARD_PASS_READ = 0.3
 
 /** Circulation pass: the most open nearby teammate (sideways or back), keeper only under real pressure. */
 function safePassOption(
@@ -1290,6 +1337,7 @@ function safePassOption(
     let space = Infinity
     for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
     if (space < 1.5) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos)) continue
     const progress = ((t.pos.y - p.pos.y) * dir) / 10
     const score =
       Math.min(lane, 3) +
@@ -1327,8 +1375,16 @@ function bestPassOption(
     const keeper = t.role === 'GK' ? -1.2 + pressure : 0
     // A tightly marked receiver is a bad option even with an open lane.
     const marked = space < 1.3 ? -1.5 : 0
+    // A pass an opponent can cut out is a last resort.
+    const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -2.5 : 0
     const score =
-      open * 0.9 + progress * 1.1 + Math.min(space, 4) * 0.3 + keeper + marked + rng.range(-0.15, 0.15)
+      open * 0.9 +
+      progress * 1.1 +
+      Math.min(space, 4) * 0.3 +
+      keeper +
+      marked +
+      risky +
+      rng.range(-0.15, 0.15)
     if (score > bestScore) {
       bestScore = score
       best = t
@@ -1442,16 +1498,24 @@ function goalkeeperBehaviour(
     }
   }
 
-  // Angle positioning on the ball-goal line.
+  // Angle positioning: on the bisector of the angle the ball sees between the posts (on an angled
+  // ball this is towards the near post, so the near post is covered), a little off the line.
   p.aiState = 'position'
   const toBall = sub(ball.pos, goal)
   const db = len(toBall)
   const depth = clamp(0.5 + db * 0.07, 0.6, 2.2)
   const n = db > 1e-3 ? normalize(toBall) : { x: 0, y: dir }
-  const target = {
-    x: clamp(goal.x + n.x * depth, -1.7, 1.7),
-    y: goalLineY + dir * Math.max(0.35, Math.abs(n.y * depth)),
+  const depthY = Math.max(0.35, Math.abs(n.y * depth))
+  let tx = goal.x + n.x * depth
+  const u1 = normalize(sub({ x: POST_X, y: goalLineY }, ball.pos))
+  const u2 = normalize(sub({ x: -POST_X, y: goalLineY }, ball.pos))
+  const bis = normalize({ x: u1.x + u2.x, y: u1.y + u2.y })
+  const planeY = goalLineY + dir * depthY
+  if (Math.abs(bis.y) > 0.05) {
+    const t = (planeY - ball.pos.y) / bis.y
+    if (t > 0) tx = ball.pos.x + bis.x * t
   }
+  const target = { x: clamp(tx, -(POST_X - 0.3), POST_X - 0.3), y: planeY }
   walkTo(p, target, dist(target, p.pos) > 1.2)
 }
 

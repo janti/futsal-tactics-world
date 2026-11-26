@@ -116,3 +116,61 @@ describe('long-range shots and screening ("maski")', () => {
     expect(screened).toBeGreaterThanOrEqual(clear + 5)
   })
 })
+
+describe('shots from the side (outside the arc)', () => {
+  /** Human shot from the right side just outside the penalty-area arc, aimed at the near post. */
+  function side(seed: number, power: number) {
+    const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
+    const s = sim.state
+    for (let i = 0; i < 600 && !s.restart?.ready; i++) sim.step()
+    sim.step([{ type: 'Pass', dir: { x: 0, y: -1 }, through: false }])
+    for (let i = 0; i < 60; i++) sim.step()
+    s.phase = 'play'
+    s.restart = null
+    const from = { x: 6.2, y: 15 }
+    const sh = sim.player(4)
+    const park = () => {
+      for (const o of s.players) if (o.id !== 4 && o.role !== 'GK') o.pos = { x: o.id % 2 ? -9.5 : -9, y: -6 }
+    }
+    s.controlledId = 4
+    sh.pos = { ...from }
+    sh.vel = { x: 0, y: 0 }
+    sh.facing = Math.atan2(20 - from.y, -from.x)
+    Object.assign(s.ball, {
+      ownerId: 4,
+      mode: 'controlled',
+      pos: { x: from.x, y: from.y + 0.4 },
+      vel: { x: 0, y: 0 },
+    })
+    s.possessionTeam = 0
+    for (let i = 0; i < 60; i++) {
+      park()
+      sim.step([{ type: 'Move', dir: { x: 0, y: 0 }, sprint: false, sole: true }])
+      s.ball.ownerId = 4
+    }
+    park()
+    sim.drainEvents()
+    sim.step([{ type: 'Shoot', dir: { x: 1, y: 1 }, power }]) // lateral +x: the near post
+    for (let i = 0; i < 180; i++) {
+      sim.step()
+      for (const e of sim.drainEvents()) {
+        if (e.type === 'GoalScored') return 'goal'
+        if (e.type === 'Save' || e.type === 'BallOut') return 'no'
+      }
+    }
+    return 'no'
+  }
+
+  it('the keeper covers his near post: low and mid shots are almost all saved', () => {
+    let goals = 0
+    for (let seed = 1; seed <= 30; seed++) if (side(seed, 0.3) === 'goal') goals++
+    for (let seed = 1; seed <= 30; seed++) if (side(seed, 0.5) === 'goal') goals++
+    expect(goals).toBeLessThanOrEqual(4)
+  })
+
+  it('a ball into the near top corner still beats him sometimes', () => {
+    let goals = 0
+    for (let seed = 1; seed <= 30; seed++) if (side(seed, 0.8) === 'goal') goals++
+    expect(goals).toBeGreaterThan(3)
+  })
+})

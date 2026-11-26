@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Shots from the side: the keeper now positions on the bisector of the angle (covering his near post
+  on angled balls), and a shot from the side struck outside the penalty-area arc is saved almost
+  always — except a ball into the near top corner. Measured from just outside the arc: low and mid
+  near-post shots 2/60 goals (was 30/60), near top corner 9/30 goals.
+- The AI no longer plays loose passes through the middle: before passing it checks whether an
+  opponent can get to the ball's path first (circulation passes strictly, forward passes with a little
+  more risk). Measured AI vs AI: 91 % of passes arrive (was 80 %), 7 % are intercepted (was 19 %).
+  Fewer giveaways also mean fewer counter-attacks: about 39 shots and 5 goals per 18 minutes.
+
 - Goal clearances: the alas start a metre deeper, giving the keeper an easier angle out to the wing.
 - Faster transition to defence: when the ball is lost the whole team switches to defending at once
   (no waiting for the next decision) and sprints back into shape for 1.6 s. Measured AI vs AI: a team

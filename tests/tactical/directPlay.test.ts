@@ -104,3 +104,19 @@ describe('AI direct play', () => {
     expect(circulation / passes).toBeLessThan(0.85)
   }, 30000)
 })
+
+describe('safe passing', () => {
+  it('the AI does not play passes an opponent can cut out', async () => {
+    const { passInterceptable } = await import('../../src/ai/BasicAI')
+    const { createInitialState } = await import('../../src/simulation/MatchSimulation')
+    const s = createInitialState({ seed: 5, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
+    for (const p of s.players) p.pos = { x: p.team === 0 ? -9 : 9, y: p.team === 0 ? -18 : 18 }
+    const from = { x: -6, y: 0 }
+    const to = { x: 6, y: 0 }
+    // Nobody near the line: safe.
+    expect(passInterceptable(s, 0, from, to)).toBe(false)
+    // An opponent 1.5 m off the middle of the line can step in: not safe.
+    s.players[7]!.pos = { x: 0, y: 1.5 }
+    expect(passInterceptable(s, 0, from, to)).toBe(true)
+  })
+})

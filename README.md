@@ -12,7 +12,7 @@ marks man-to-man and runs set-piece routines.
 ![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-195%20sim%20%2B%207%20browser-2ea44f)
+![Tests](https://img.shields.io/badge/tests-198%20sim%20%2B%207%20browser-2ea44f)
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 
 <img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
@@ -166,7 +166,7 @@ More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.m
 ## Quality
 
 ```bash
-npm test             # 195 unit, integration and tactical tests (headless simulation)
+npm test             # 198 unit, integration and tactical tests (headless simulation)
 npm run test:e2e     # 7 Playwright browser tests (first time: npx playwright install chromium)
 npm run typecheck    # strict TypeScript
 npm run lint         # Oxlint
@@ -178,7 +178,7 @@ Tactical tests check behaviour against numbers, for example:
 - the keeper saves almost every long shot with a clear view, but screened shots go in about a third
   of the time;
 - breakaways are finished low into a corner and scored a little over half the time;
-- in AI vs AI play about 84 % of passes arrive and the middle between ball and goal is covered about
+- in AI vs AI play about 91 % of passes arrive and the middle between ball and goal is covered about
   87 % of the time;
 - difficulty levels measurably change how much the opponent dominates.
 

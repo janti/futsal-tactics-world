@@ -39,6 +39,7 @@ import {
   HANDS,
   PLAYER,
   POST_X,
+  SIDE_SHOT,
   RESTART,
   SCREEN,
   SWITCHING,
@@ -955,6 +956,15 @@ export class MatchSimulation implements AIActions {
     // A placed low shot into the corner (a tap): reaching it is harder (the further he has to
     // stretch, the less likely) and it cannot be held.
     if (b.isShot && b.shotPlaced && !longShot) p = clamp(p - 0.3 * reachFrac, 0.05, 0.995)
+    // A shot from the side, struck outside the penalty-area arc: the keeper covering his near post
+    // saves almost everything — except a ball into the near top corner.
+    const k = b.kickPos
+    if (b.isShot && Math.abs(k.x) > 3 && !this.inOwnPenaltyArea(gk, k)) {
+      const tLine = Math.abs(b.vel.y) > 0.5 ? (lineY - b.pos.y) / b.vel.y : 0
+      const zAtLine = b.z + b.vz * tLine - 0.5 * BALL.gravity * tLine * tLine
+      const nearTop = Math.sign(crossX) === Math.sign(k.x) && zAtLine > SIDE_SHOT.nearTopHeight
+      if (!nearTop) p = Math.max(p, SIDE_SHOT.save + attr(a.reflexes, -0.03, 0.02))
+    }
     if (!this.rng.chance(p)) return false
     // Catch when the ball is manageable and the keeper may use the hands (own penalty area);
     // otherwise parry it wide, away from goal.

@@ -46,6 +46,11 @@ the full system will be built on:
 - **Back post** (`backPostSpot`, `followUpTarget`): ball on a wing within 13 m of goal → one attacker
   takes the far post; after our shot the best placed attacker attacks the far post and strikes a
   rebound first time.
+- **Safe passing** (`passInterceptable`): a pass is followed along its path; if an opponent can get
+  within 0.6 m of a point before the ball (read delay 0.12 s; 0.3 s for forward passes) the pass is
+  skipped (circulation, progressive, direct and through passes) or heavily penalised (fallback).
+- **Keeper angle**: positions on the bisector of the ball's angle to the posts; shots from the side
+  struck outside the arc are saved with 95 % once reached, except into the near top corner.
 - **Attacking pivot**: rotates every 4.5 s between the middle, the ball-side wing and the far side.
 - **Set-piece routine** (`setPieceRoutine`, kick-ins in the attacking half and corners): roles fixed
   once per restart — short man (starts ~7 m off, comes to ~3 m behind the ball after 0.5 s), pivot

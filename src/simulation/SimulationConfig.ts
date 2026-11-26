@@ -227,6 +227,14 @@ export const SHOT = {
   heightCurve: 1.7,
 } as const
 
+/** Shots from the side, struck outside the penalty-area arc. */
+export const SIDE_SHOT = {
+  /** Save chance once the keeper reaches the ball (unless it goes into the near top corner). */
+  save: 0.95,
+  /** Ball higher than this at the line on the near-post side counts as the near top corner. */
+  nearTopHeight: 1.3,
+} as const
+
 export const RESTART = {
   /** Opponent distance at kick-ins, corners and free kicks (metres). */
   opponentDistance: 4,

@@ -81,7 +81,8 @@ describe('breakaway (through on goal)', () => {
     expect(passes).toBeLessThanOrEqual(2)
     expect(dists.length).toBeGreaterThan(n * 0.8)
     for (const d of dists) expect(d).toBeLessThan(10.5)
-    expect(tally.goal).toBeGreaterThan(n * 0.45)
+    // Often a goal (the keeper covering his angle well saves a fair share).
+    expect(tally.goal).toBeGreaterThanOrEqual(n * 0.4)
     expect(tally.goal).toBeLessThan(n * 0.85)
     expect(tally.saved + tally.caught).toBeGreaterThan(n * 0.1)
   })
