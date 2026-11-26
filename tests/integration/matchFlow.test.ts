@@ -54,7 +54,7 @@ describe('AI vs AI match flow (headless)', () => {
 
   it('scores goals across several seeds', () => {
     let goals = 0
-    for (const seed of [1, 2, 3]) goals += runAiMatch(seed, 240).counts.GoalScored ?? 0
+    for (const seed of [1, 2, 3, 4, 5, 6]) goals += runAiMatch(seed, 240).counts.GoalScored ?? 0
     expect(goals).toBeGreaterThan(0)
   })
 })

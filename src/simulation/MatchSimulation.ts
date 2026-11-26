@@ -675,6 +675,7 @@ export class MatchSimulation implements AIActions {
       this.emit({ type: 'PassCompleted', tick: s.tick, playerId: passer, receiverId: p.id })
     if (prevTeam !== p.team) {
       s.possessionTeam = p.team
+      s.possessionSinceTick = s.tick
       this.emit({ type: 'PossessionChanged', tick: s.tick, team: p.team })
     }
     // Human team: control follows the ball carrier (outfield players only).
@@ -1552,6 +1553,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiRunCooldown: 0,
         aiRunTarget: { x: 0, y: 0 },
         aiRecoverTimer: 0,
+        aiDecision: '',
         aiState: '',
       })
     }
@@ -1617,6 +1619,8 @@ export function createInitialState(setup: MatchSetup): MatchState {
     difficulty: setup.difficulty ?? 'normal',
     indirectKickBy: null,
     defTransition: [false, false],
+    possessionSinceTick: 0,
+    teamPhase: ['setPiece', 'setPiece'],
     aiPrevPossession: null,
     possessionTeam: null,
     rngState: 0,

@@ -129,6 +129,7 @@ export const en = {
   'controls.sole': 'Sole control / jockey',
   'controls.camera': 'Camera preset',
   'controls.cameraLab': 'Camera Lab',
+  'controls.aiDebug': 'AI overlay on the radar (pitch control, team phases)',
   'controls.pause': 'Pause',
   'role.GK': 'Goalkeeper',
   'role.FIXO': 'Fixo',

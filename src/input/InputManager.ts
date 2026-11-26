@@ -262,7 +262,11 @@ export class InputManager {
     e.preventDefault()
     if (
       !e.repeat &&
-      (action === 'pause' || action === 'camera' || action === 'cameraLab' || action === 'help')
+      (action === 'pause' ||
+        action === 'camera' ||
+        action === 'cameraLab' ||
+        action === 'aiDebug' ||
+        action === 'help')
     )
       this.uiPresses.push(action)
     if (!e.repeat) this.tapped.add(action)

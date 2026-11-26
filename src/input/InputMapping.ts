@@ -13,6 +13,7 @@ export type InputAction =
   | 'pause'
   | 'camera'
   | 'cameraLab'
+  | 'aiDebug'
   | 'help'
 
 export const DEFAULT_KEYBOARD: Record<InputAction, string[]> = {
@@ -30,6 +31,7 @@ export const DEFAULT_KEYBOARD: Record<InputAction, string[]> = {
   // F5 normally reloads the page; Digit5 is the browser-safe alternative.
   camera: ['F5', 'Digit5'],
   cameraLab: ['Digit6'],
+  aiDebug: ['Digit7'],
   help: ['KeyH'],
 }
 
@@ -67,7 +69,7 @@ export const REBINDABLE_ACTIONS: readonly InputAction[] = [
 ]
 
 /** Keys that cannot be bound to game actions (menus and browser keys). */
-const RESERVED = new Set(['Escape', 'Enter', 'Tab', 'F5', 'KeyP', 'KeyH', 'Digit5', 'Digit6'])
+const RESERVED = new Set(['Escape', 'Enter', 'Tab', 'F5', 'KeyP', 'KeyH', 'Digit5', 'Digit6', 'Digit7'])
 
 export function isBindableKey(code: string): boolean {
   return code.length > 0 && !RESERVED.has(code)

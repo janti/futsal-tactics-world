@@ -1,5 +1,30 @@
 # AI Design
 
+## Structure (Milestone 5)
+
+| Layer   | Module                                                              | Responsibility                                                                                                                          |
+| ------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Update  | `ai/BasicAI.ts`                                                     | Per-tick loop: phases, ball winner and helper per team, then each player's behaviour                                                    |
+| Team    | `ai/team/phases.ts`                                                 | Team phase: attack, counter-attack window (2.5 s after winning the ball), defence, transition to defence, set piece, dead               |
+| Team    | `ai/team/defending.ts`                                              | Ball winner, cover defender, diamond marking, 2 v 1, transitions                                                                        |
+| Team    | `ai/team/attacking.ts`                                              | Support positions, runs in behind, back post, set-piece routine                                                                         |
+| Team    | `ai/team/roles.ts`                                                  | Dynamic attacking roles: the four outfield roles go to whoever is nearest their place (all permutations, 0.5 s refresh, 3 m hysteresis) |
+| Player  | `ai/player/carrier.ts`                                              | Utility-scored options for the ball carrier, challenges, breakaways                                                                     |
+| Player  | `ai/player/goalkeeper.ts`                                           | Positioning, saves, narrowing, claiming, distribution                                                                                   |
+| Player  | `ai/player/offBall.ts`                                              | Press, chase, cover, support, runs                                                                                                      |
+| Shared  | `ai/passing.ts`, `ai/movement.ts`, `ai/restarts.ts`, `ai/common.ts` | Pass choice and safety, steering, restarts, helpers                                                                                     |
+| Spatial | `ai/spatial/PitchControl.ts`                                        | Pitch control on 2 m cells (who arrives first, logistic), cached 5x a second                                                            |
+
+The time-to-reach model (`physics/PlayerPhysics.estimateTimeToReach`) includes reaction, turning
+(half of the turn time beyond 30 degrees), acceleration and top speed, and is shared by all of the
+above. Key 7 shows pitch control and the team phases on the radar.
+
+**Utility decisions** (`carrierOptions`): every option gets a utility — shooting band 0.9+ (after the
+player's willingness-to-shoot roll), direct pass to a free teammate in a scoring position 0.8+ (1.0+
+when his shot value is clearly better than ours: the square ball), through ball 0.78, challenge 0.7,
+forward pass 0.6+, circulation 0.4, last-resort pass 0.25; carrying is the default. `shotValue` is a
+rough expected-goal value from distance, angle, lane and pressure.
+
 ## Current state (Milestone 1 groundwork) — `src/ai/BasicAI.ts`
 
 This is intentionally a basic AI, not the final tactical system. It already follows the principles

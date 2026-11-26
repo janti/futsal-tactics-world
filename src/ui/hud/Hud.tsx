@@ -117,6 +117,7 @@ export function ControlsPanel() {
     ['F5 / 5', 'controls.camera'],
     ['Esc / P', 'controls.pause'],
     ['6', 'controls.cameraLab'],
+    ['7', 'controls.aiDebug'],
   ]
   return (
     <div className="controls-panel">

@@ -7,8 +7,8 @@
 | 2   | Complete basic arcade match (match clock + halves, full restarts, match end, Quick Match menu with team/length choice)          | ✅ Done |
 | 3   | Gameplay physics and controls polish (touch-based dribbling, shielding, interceptions, gamepad completeness, assistance levels) | ✅ Done |
 | 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)               | ✅ Done |
-| 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                       | Next    |
-| 6   | Advanced futsal tactics (all formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay)   |         |
+| 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                       | ✅ Done |
+| 6   | Advanced futsal tactics (all formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay)   | Next    |
 | 7   | Rules and tactical editor (versioned rules engine, fouls, cards, substitutions, stamina, timeouts, flying GK, AI coach)         |         |
 | 8   | Presentation and analysis (arenas, audio, crowd, replays, statistics, analysis, coach/spectator/training modes)                 |         |
 | 9   | Career mode (clubs, players, competitions, saves, transfers, training, finances, multi-season)                                  |         |
@@ -39,7 +39,13 @@
   stands with seat rows and aisles, end stands, substitutes and timekeepers' table, readable boards)
   — met (automated: `tests/unit/camera.test.ts`, browser test "camera and visuals…").
 
+- **M5**: AI split into layers (team defending / attacking / phases / roles, player carrier /
+  goalkeeper / off-ball, passing, movement, restarts, spatial) with an identical behaviour fingerprint;
+  explicit team phases with a counter-attack window; pitch-control spatial grid; time-to-reach model
+  with turning shared by all AI; dynamic role assignment in attack; utility-scored carrier decisions;
+  AI debug overlay on the radar (key 7) — met (automated: `tests/tactical/aiFoundation.test.ts`).
+
 ## Dependencies between milestones
 
-M2 builds on the M1 simulation loop; M5–M6 replace `ai/BasicAI.ts`; M7 needs the rules edition
+M2 builds on the M1 simulation loop; M5 layered the AI (M6 builds the advanced tactics on it); M7 needs the rules edition
 decision (RULES_DESIGN.md); M9 needs the headless simulation (already headless) and IndexedDB saves.

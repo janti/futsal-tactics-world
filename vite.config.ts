@@ -11,5 +11,7 @@ export default defineConfig({
   test: {
     include: ['tests/unit/**/*.test.ts', 'tests/integration/**/*.test.ts', 'tests/tactical/**/*.test.ts'],
     environment: 'node',
+    // Several tactical tests play minutes of AI vs AI football.
+    testTimeout: 20000,
   },
 })

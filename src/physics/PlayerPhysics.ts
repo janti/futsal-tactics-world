@@ -121,6 +121,11 @@ export function resolvePlayerCollisions(players: PlayerState[]): void {
  * Rough time for a player to reach a point (used for switching and loose-ball pursuit). The full
  * reusable time-to-reach / interception model arrives with the tactical AI milestone.
  */
+/**
+ * Shared time-to-reach model (used for pressing, interceptions, receivers, the keeper and pass safety):
+ * reaction, turning towards the target, acceleration from the current speed along the way, then top
+ * speed.
+ */
 export function estimateTimeToReach(p: PlayerState, target: Vec2): number {
   const a = p.profile.attributes
   const toT = sub(target, p.pos)
@@ -129,7 +134,12 @@ export function estimateTimeToReach(p: PlayerState, target: Vec2): number {
   const vmax = attr(a.sprintSpeed, PLAYER.sprintSpeed[0], PLAYER.sprintSpeed[1])
   const acc = attr(a.acceleration, PLAYER.acceleration[0], PLAYER.acceleration[1])
   const vAlong = dot(p.vel, toT) / d
-  const reaction = 0.15
+  // Turning: a player facing (and moving) away needs time to turn round before running; part of the
+  // turn overlaps with starting the run, so half the turn time is added.
+  const turnRate = attr(a.agility, PLAYER.turnRate[0], PLAYER.turnRate[1])
+  const off = Math.abs(angleDiff(p.facing, angleOf(toT)))
+  const turn = off > 0.5 ? ((off - 0.5) / turnRate) * 0.5 : 0
+  const reaction = 0.15 + turn
   // Time to reach top speed from current along-speed, then cruise.
   const tAcc = Math.max(0, (vmax - vAlong) / acc)
   const dAcc = vAlong * tAcc + 0.5 * acc * tAcc * tAcc

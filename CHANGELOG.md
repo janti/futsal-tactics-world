@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### Milestone 5 — tactical AI foundation
+
+- The AI is split into layers (team: defending, attacking, phases, roles; player: carrier, goalkeeper,
+  off-ball; passing, movement, restarts, spatial). The split itself changed no behaviour (identical
+  seeded fingerprint before and after).
+- Team phases: attack, counter-attack window after winning the ball (runs in behind start at once with
+  less cover), defence, transition to defence, set piece, dead ball.
+- Pitch control: the court is divided into 2 m cells and each is owned by the team that reaches it
+  first; supporting players move into space their team owns.
+- Time-to-reach now includes turning (a player facing away is slower to get there); used by pressing,
+  interceptions, the keeper and pass safety.
+- Dynamic roles in attack: after runs and rotations players fill the shape from where they are instead
+  of running back to their nominal positions.
+- Utility decisions for the ball carrier: every option is scored; a teammate free in front of goal
+  with a clearly better chance gets the square ball instead of a poor shot.
+- Markers sprint after a man who gets away from them and follow a man between the ball and goal
+  further out of their zone.
+- AI overlay on the radar (key 7): pitch control tinted in the team colours and both teams' phases.
+- Measured AI vs AI (12 x 3 min): 91 % pass completion, 91 shots, 9 goals.
+
 - Goalkeeper narrows the angle: when an opponent has a free shooting chance inside 13 m (unpressed,
   nobody in the way) the keeper comes off his line — about 2 m from 8 m out, at most 2.8 m and never
   closer than 2.6 m to the shooter, walking rather than rushing. A keeper who had narrowed the angle

@@ -77,9 +77,22 @@
 - [x] Fixed: Esc did not close the pause menu while a setting had the keyboard focus
 - [x] 184 unit/integration/tactical tests, 7 Playwright browser tests
 
-## Current / next (Milestone 5: tactical AI foundation)
+### Milestone 5
 
-- [ ] Utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage
+- [x] AI split into layers: `ai/team` (defending, attacking, phases, roles), `ai/player` (carrier,
+      goalkeeper, off-ball), `ai/passing`, `ai/movement`, `ai/restarts`, `ai/spatial`, `ai/common`
+      (behaviour fingerprint identical before and after the split)
+- [x] Team phases (attack, counter-attack window, defence, transition to defence, set piece, dead)
+- [x] Spatial grid: pitch control (2 m cells, cached), used for support positioning
+- [x] Time-to-reach model with turning, shared by pressing, interceptions, keeper and pass safety
+- [x] Dynamic role assignment in attack (players fill the shape from where they are)
+- [x] Utility-scored carrier decisions (shot value vs a teammate's, bands for the futsal priorities)
+- [x] Coverage made visible: AI overlay on the radar (key 7: pitch control and team phases)
+- [x] 213 unit/integration/tactical tests, 7 Playwright browser tests
+
+## Current / next (Milestone 6: advanced futsal tactics)
+
+- [ ] Formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay
 
 ## Known bugs / issues
 
@@ -91,8 +104,6 @@
 
 ## Technical debt
 
-- `BasicAI.ts` is a single module; split into team/player/movement layers in M5.
-- `estimateTimeToReach` lacks turning delay; replace with the shared interception model.
 - About 400 draw calls (≈ 25 meshes per player); consider merged/skinned player meshes in M4.
 - Bundle is one ~860 kB chunk (mostly Three.js); code-split menus later if needed.
 - Club names are provisional; check for conflicts with real clubs before any public release.

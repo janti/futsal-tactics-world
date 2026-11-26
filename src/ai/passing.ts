@@ -1,0 +1,252 @@
+/** Pass selection and interception: safe, progressive and direct passes; reading passes. */
+import { attr, clamp } from '../core/math/scalar'
+import type { SeededRandom } from '../core/random/SeededRandom'
+import { addScaled, dist, len, normalize, sub, type Vec2 } from '../core/math/vec2'
+import { estimateTimeToReach } from '../physics/PlayerPhysics'
+import { laneOpenness, pressureOn } from '../physics/PassingPhysics'
+import { rollingLaunchSpeed } from '../physics/BallPhysics'
+import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
+import { COURT, PASS } from '../simulation/SimulationConfig'
+import { difficultyFor, scoringValue, spaceAhead } from './common'
+
+/** Earliest point on the ball's path the player can reach (sampled prediction). */
+export function interceptPoint(state: MatchState, p: PlayerState): Vec2 {
+  const ball = state.ball
+  let pos = ball.pos
+  let vel = ball.vel
+  const h = 0.05
+  for (let t = 0; t < 2.5; t += h) {
+    if (estimateTimeToReach(p, pos) <= t) return pos
+    const s = len(vel)
+    if (s < 0.05) break
+    const ns = Math.max(0, s - 1.8 * h)
+    vel = { x: (vel.x / s) * ns, y: (vel.y / s) * ns }
+    pos = addScaled(pos, vel, h)
+  }
+  return pos
+}
+
+/**
+ * Interception of an opponent's ground pass in flight: the earliest point on the ball's path that
+ * this player reaches first (with an anticipation-based read delay), before the receiver gets it.
+ */
+export function passInterception(state: MatchState, p: PlayerState): Vec2 | null {
+  const ball = state.ball
+  if (ball.mode !== 'free' || ball.intendedReceiverId === null || ball.lastTouchTeam === p.team) return null
+  if (ball.z > 1.1 || len(ball.vel) < 4) return null
+  const receiver = state.players[ball.intendedReceiverId]!
+  if (receiver.team === p.team) return null
+  const toReceiver = dist(ball.pos, receiver.pos)
+  const read = Math.max(
+    0,
+    attr(p.profile.attributes.anticipation, 0.3, 0.08) + difficultyFor(state, p.team).readDelay,
+  )
+  let pos = ball.pos
+  let vel = ball.vel
+  let travelled = 0
+  const h = 0.05
+  for (let t = h; t < 2; t += h) {
+    const s = len(vel)
+    if (s < 0.5) break
+    const ns = Math.max(0, s - 1.8 * h)
+    vel = { x: (vel.x / s) * ns, y: (vel.y / s) * ns }
+    pos = addScaled(pos, vel, h)
+    travelled += ns * h
+    if (travelled > toReceiver - 0.8) break
+    // He only has to get a foot to it: reach the ball's path within about 0.6 m.
+    const gap = dist(p.pos, pos)
+    const reachAt = gap > 0.6 ? addScaled(pos, normalize(sub(p.pos, pos)), 0.6) : p.pos
+    if (estimateTimeToReach(p, reachAt) + read <= t) return pos
+  }
+  return null
+}
+
+/** Progressive pass: an outfield teammate clearly ahead with an open lane and space (no keeper). */
+export function progressivePass(state: MatchState, p: PlayerState): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  let best: PlayerState | null = null
+  let bestScore = 0
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+    const progress = (t.pos.y - p.pos.y) * dir
+    if (progress < 2.5) continue
+    const d = dist(t.pos, p.pos)
+    if (d > 18) continue
+    const lane = laneOpenness(state, p.team, p.pos, t.pos)
+    if (lane < 0.9) continue
+    let space = Infinity
+    for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
+    if (space < 1.6) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos, FORWARD_PASS_READ)) continue
+    const score =
+      progress * 0.12 +
+      scoringValue(state, p.team, t.pos) * 1.5 +
+      Math.min(lane, 3) * 0.3 +
+      Math.min(space, 4) * 0.2
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+    }
+  }
+  return best
+}
+
+/**
+ * A forward pass to a teammate who is free in a scoring position: the lane is open, the receiver has
+ * space, is clearly ahead of the ball and more dangerous than the carrier. Runners moving forward with
+ * space behind the defence get a through pass.
+ */
+export function forwardChance(
+  state: MatchState,
+  p: PlayerState,
+): { player: PlayerState; through: boolean } | null {
+  const dir = state.teams[p.team].attackDir
+  const own = scoringValue(state, p.team, p.pos)
+  let best: PlayerState | null = null
+  let bestScore = 0
+  let bestThrough = false
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+    const progress = (t.pos.y - p.pos.y) * dir
+    if (progress < 1.5) continue
+    const d = dist(t.pos, p.pos)
+    if (d > 20) continue
+    const lane = laneOpenness(state, p.team, p.pos, t.pos)
+    if (lane < 0.8) continue
+    let space = Infinity
+    for (const o of state.players)
+      if (o.team !== p.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, t.pos))
+    if (space < 1.2) continue
+    const danger = scoringValue(state, p.team, t.pos)
+    if (danger < 0.2 || danger < own + 0.05) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos, FORWARD_PASS_READ)) continue
+    const score = danger * 2 + Math.min(lane, 3) * 0.3 + Math.min(space, 4) * 0.2
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+      const runningForward = t.vel.y * dir > 1.5
+      bestThrough = runningForward && spaceAhead(state, t, { x: 0, y: dir }, 3)
+    }
+  }
+  return best ? { player: best, through: bestThrough } : null
+}
+
+/**
+ * Can an opponent cut out a ground pass from `from` to `to`? The ball is followed along its path (same
+ * launch speed as a normal pass); an opponent intercepts if he can get a foot to a point on the path
+ * (within 0.6 m) before the ball is there, allowing a short read delay. Keepers count only inside
+ * their own penalty area. Used so the AI does not play loose balls through the middle.
+ */
+export function passInterceptable(
+  state: MatchState,
+  team: TeamId,
+  from: Vec2,
+  to: Vec2,
+  read = 0.12,
+): boolean {
+  const d = dist(from, to)
+  if (d < 1) return false
+  const speed = clamp(rollingLaunchSpeed(d, PASS.arrivalSpeed), PASS.minSpeed, PASS.maxSpeed)
+  const dirV = normalize(sub(to, from))
+  let v = speed
+  let travelled = 0
+  const h = 0.05
+  for (let t = h; travelled < d - 0.6; t += h) {
+    v = Math.max(0.5, v - (1.6 + 0.12 * v) * h)
+    travelled += v * h
+    const pt = addScaled(from, dirV, Math.min(travelled, d))
+    for (const o of state.players) {
+      if (o.team === team) continue
+      if (o.role === 'GK' && dist(o.pos, { x: 0, y: -state.teams[o.team].attackDir * COURT.halfLength }) > 7)
+        continue
+      const gap = dist(o.pos, pt)
+      if (gap > v * 2 + 6) continue
+      const reachAt = gap > 0.6 ? addScaled(pt, normalize(sub(o.pos, pt)), 0.6) : o.pos
+      if (estimateTimeToReach(o, reachAt) + read <= t) return true
+    }
+    if (t > 3) break
+  }
+  return false
+}
+
+/**
+ * Forward passes into danger are allowed a little more risk than circulation passes: the opponent's
+ * read delay assumed for them is longer.
+ */
+export const FORWARD_PASS_READ = 0.3
+
+/** Circulation pass: the most open nearby teammate (sideways or back), keeper only under real pressure. */
+export function safePassOption(
+  state: MatchState,
+  p: PlayerState,
+  pressure: number,
+  rng: SeededRandom,
+): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  let best: PlayerState | null = null
+  let bestScore = -Infinity
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id) continue
+    if (t.role === 'GK' && (pressure < 0.7 || t.id === state.ball.keeperRetouchId)) continue
+    const d = dist(t.pos, p.pos)
+    if (d < 2.5 || d > 16) continue
+    const lane = laneOpenness(state, p.team, p.pos, t.pos)
+    if (lane < 0.9) continue
+    let space = Infinity
+    for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
+    if (space < 1.5) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos)) continue
+    const progress = ((t.pos.y - p.pos.y) * dir) / 10
+    const score =
+      Math.min(lane, 3) +
+      Math.min(space, 4) * 0.4 +
+      progress * 0.4 -
+      Math.abs(d - 8) * 0.05 +
+      rng.range(-0.1, 0.1)
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+    }
+  }
+  return best
+}
+
+/** Score teammates as pass targets: lane openness, forward progress, receiver space; keeper only under pressure. */
+export function bestPassOption(
+  state: MatchState,
+  p: PlayerState,
+  rng: SeededRandom,
+): { player: PlayerState; score: number } | null {
+  const dir = state.teams[p.team].attackDir
+  const pressure = pressureOn(state, p)
+  let best: PlayerState | null = null
+  let bestScore = -Infinity
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id) continue
+    if (t.id === state.ball.keeperRetouchId) continue
+    const d = dist(t.pos, p.pos)
+    if (d < 2 || d > 22) continue
+    const open = clamp(laneOpenness(state, p.team, p.pos, t.pos), -1, 3)
+    let space = Infinity
+    for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
+    const progress = ((t.pos.y - p.pos.y) * dir) / 10
+    const keeper = t.role === 'GK' ? -1.2 + pressure : 0
+    // A tightly marked receiver is a bad option even with an open lane.
+    const marked = space < 1.3 ? -1.5 : 0
+    // A pass an opponent can cut out is a last resort.
+    const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -2.5 : 0
+    const score =
+      open * 0.9 +
+      progress * 1.1 +
+      Math.min(space, 4) * 0.3 +
+      keeper +
+      marked +
+      risky +
+      rng.range(-0.15, 0.15)
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+    }
+  }
+  return best ? { player: best, score: bestScore } : null
+}

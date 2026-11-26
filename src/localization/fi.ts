@@ -133,6 +133,7 @@ export const fi: Record<keyof typeof en, string> = {
   'controls.sole': 'Pohjakontrolli / jarrutus',
   'controls.camera': 'Kameran esiasetus',
   'controls.cameraLab': 'Kameralaboratorio',
+  'controls.aiDebug': 'Tekoälykerros tutkassa (kenttähallinta, joukkueiden vaiheet)',
   'controls.pause': 'Tauko',
   'role.GK': 'Maalivahti',
   'role.FIXO': 'Fixo',

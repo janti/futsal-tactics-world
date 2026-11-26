@@ -69,20 +69,17 @@ describe('defensive diamond and marking', () => {
     let total = 0
     let depthSum = 0
     let depthN = 0
-    for (const seed of [1, 2, 3, 4]) {
+    // Three attackers stand between the ball (24 m out) and the goal; team 1 attacks -y.
+    const men: Record<number, Vec2> = { 6: { x: -1, y: -6 }, 8: { x: 6, y: -3 }, 9: { x: -5.5, y: -2 } }
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
       const { sim, s } = openPlay(seed, { x: 3, y: 4 })
-      for (let i = 0; i < TICK_RATE * 2.5; i++) {
-        sim.step()
-        s.ball.ownerId = 7 // keep the ball with the carrier
-        s.ball.mode = 'controlled'
-      }
-      for (const o of s.players) {
-        // Opponents between the ball and the goal (team 1 attacks -y) must be picked up; a man left
-        // deep behind the ball is the pressing pivot's concern.
-        if (o.team !== 1 || o.role === 'GK' || o.id === 7 || o.pos.y > s.ball.pos.y) continue
+      hold(sim, { 7: { x: 3, y: 4 }, ...men }, 2.5)
+      for (const id of Object.keys(men).map(Number)) {
         total++
-        const near = s.players.some((q) => q.team === 0 && q.role !== 'GK' && d(q.pos, o.pos) < 3.5)
-        if (near) marked++
+        const o = sim.player(id)
+        // Tight near the ball; a man on the far side is marked loosely from the middle (help side).
+        const limit = d(o.pos, s.ball.pos) > 8 ? 5 : 3
+        if (s.players.some((q) => q.team === 0 && q.role !== 'GK' && d(q.pos, o.pos) < limit)) marked++
       }
       for (const q of s.players) {
         if (q.team !== 0 || q.role === 'GK') continue
@@ -90,7 +87,7 @@ describe('defensive diamond and marking', () => {
         depthN++
       }
     }
-    expect(marked / total).toBeGreaterThanOrEqual(0.7)
+    expect(marked / total).toBeGreaterThanOrEqual(0.8)
     // Average distance of the outfield defenders from their own goal line (ball 24 m out).
     expect(depthSum / depthN).toBeGreaterThan(12)
   })

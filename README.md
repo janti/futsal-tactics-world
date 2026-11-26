@@ -12,7 +12,7 @@ marks man-to-man and runs set-piece routines.
 ![Three.js](https://img.shields.io/badge/Three.js-WebGL-000000?logo=threedotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-19-61dafb?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?logo=vite&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-207%20sim%20%2B%207%20browser-2ea44f)
+![Tests](https://img.shields.io/badge/tests-213%20sim%20%2B%207%20browser-2ea44f)
 ![No backend](https://img.shields.io/badge/backend-none-lightgrey)
 
 <img src="docs/images/gameplay.png" alt="Open play from the vertical 78° camera: blue and red teams on a parquet court in front of a full hall" width="820">
@@ -117,6 +117,7 @@ Production build: `npm run build`, then `npm run preview`. Add `?gfx=low`, `?gfx
 | Sole control · shield · jockey                       | Space             | LT                 |
 | Camera preset                                        | F5 or 5           | —                  |
 | Camera Lab                                           | 6                 | —                  |
+| AI overlay (radar)                                   | 7                 | —                  |
 | Pause                                                | Esc or P          | Start              |
 | Show controls                                        | H                 | —                  |
 
@@ -161,14 +162,16 @@ flowchart LR
   It has no dependency on the DOM, Three.js or React, so it runs headless in tests and the same command
   stream always reproduces the same match.
 - The **renderer** interpolates between the last two snapshots and never changes the game state.
-- The **AI** lives in `src/ai`, the physics in `src/physics`, the rules engine in `src/simulation`.
+- The **AI** lives in `src/ai` in layers — team (defending, attacking, phases, roles), player
+  (carrier, goalkeeper, off-ball), passing, movement and a pitch-control grid — the physics in
+  `src/physics`, the rules engine in `src/simulation`.
 
 More detail in [ARCHITECTURE.md](ARCHITECTURE.md) and [AI_DESIGN.md](AI_DESIGN.md).
 
 ## Quality
 
 ```bash
-npm test             # 207 unit, integration and tactical tests (headless simulation)
+npm test             # 213 unit, integration and tactical tests (headless simulation)
 npm run test:e2e     # 7 Playwright browser tests (first time: npx playwright install chromium)
 npm run typecheck    # strict TypeScript
 npm run lint         # Oxlint
@@ -193,8 +196,8 @@ Tactical tests check behaviour against numbers, for example:
 | 2   | Complete basic arcade match                                                           | ✅ Done |
 | 3   | Gameplay physics and controls polish                                                  | ✅ Done |
 | 4   | Camera and visual identity (all camera presets, Camera Lab, radar, graphics settings) | ✅ Done |
-| 5   | Tactical AI foundation (utility AI, spatial reasoning)                                | Next    |
-| 6   | Advanced futsal tactics (formations, rotations, pressing triggers, Tactical Lab)      | Planned |
+| 5   | Tactical AI foundation (utility AI, spatial reasoning)                                | ✅ Done |
+| 6   | Advanced futsal tactics (formations, rotations, pressing triggers, Tactical Lab)      | Next    |
 | 7   | Rules and tactical editor (fouls, cards, substitutions, timeouts, flying keeper)      | Planned |
 | 8   | Presentation and analysis (audio, crowd, replays, statistics)                         | Planned |
 | 9   | Career mode                                                                           | Planned |

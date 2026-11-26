@@ -9,6 +9,9 @@ export interface RadarView {
   /** Court length currently visible in the main view (sim y range). */
   visibleMinY: number
   visibleMaxY: number
+  /** AI debug: team 0 pitch control per cell (row-major, 2 m cells) and the team phases. */
+  pitchControl?: { cols: number; rows: number; cell: number; team0: Float32Array }
+  phases?: [string, string]
 }
 
 const PAD = 6
@@ -109,6 +112,24 @@ export class Radar {
       ctx.restore()
     }
 
+    // AI debug: pitch control (who reaches each 2 m cell first), tinted with the team colours.
+    const pc = view.pitchControl
+    if (pc) {
+      for (let row = 0; row < pc.rows; row++) {
+        for (let col = 0; col < pc.cols; col++) {
+          const v = pc.team0[row * pc.cols + col]!
+          const x = -COURT.halfWidth + col * pc.cell
+          const y = -COURT.halfLength + row * pc.cell
+          const [ax, ay] = toPx(x, y)
+          const [bx, by] = toPx(x + pc.cell, y + pc.cell)
+          ctx.globalAlpha = Math.abs(v - 0.5) * 0.9
+          ctx.fillStyle = v > 0.5 ? this.colors[0] : this.colors[1]
+          ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay))
+        }
+      }
+      ctx.globalAlpha = 1
+    }
+
     // Camera window: the part of the court the main view shows.
     const [vx0, vy0] = toPx(-COURT.halfWidth - 1, Math.max(view.visibleMinY, -COURT.halfLength - 2))
     const [vx1, vy1] = toPx(COURT.halfWidth + 1, Math.min(view.visibleMaxY, COURT.halfLength + 2))
@@ -136,6 +157,13 @@ export class Radar {
         ctx.lineWidth = 1.5
         ctx.stroke()
       }
+    }
+    if (view.phases) {
+      ctx.font = '9px sans-serif'
+      ctx.fillStyle = this.colors[0]
+      ctx.fillText(view.phases[0], 3, h - 4)
+      ctx.fillStyle = this.colors[1]
+      ctx.fillText(view.phases[1], 3, 10)
     }
     const [bx, by] = toPx(s.ball.x, s.ball.y)
     ctx.beginPath()

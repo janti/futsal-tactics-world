@@ -3,6 +3,7 @@ import { TEAM_LIBRARY } from '../data/teams'
 import { InputManager } from '../input/InputManager'
 import { ThreeRenderer, graphicsFromUrl } from '../rendering/ThreeRenderer'
 import { Radar } from '../rendering/Radar'
+import { PITCH_GRID, pitchControl } from '../ai/spatial/PitchControl'
 import type { MatchEvent } from '../simulation/Events'
 import { MatchSimulation } from '../simulation/MatchSimulation'
 import { copySnapshot, createSnapshot, writeSnapshot, type MatchSnapshot } from '../simulation/MatchSnapshot'
@@ -50,6 +51,8 @@ export class GameSession {
   /** Commands from the UI (e.g. settings changes), injected into the next simulation tick. */
   private pendingCommands: Command[] = []
   private readonly radar: Radar
+  /** Key 7: AI debug overlay on the radar (pitch control, team phases). */
+  private aiDebug = false
 
   constructor(container: HTMLElement, seed: number) {
     const setup = useUi.getState().quickMatch
@@ -162,6 +165,12 @@ export class GameSession {
       orientation: cam.settings.orientation,
       visibleMinY: range.minY,
       visibleMaxY: range.maxY,
+      ...(this.aiDebug
+        ? {
+            pitchControl: { ...PITCH_GRID, team0: pitchControl(this.sim.state).team0 },
+            phases: [this.sim.state.teamPhase[0], this.sim.state.teamPhase[1]] as [string, string],
+          }
+        : {}),
     })
 
     this.hudTimer += dt
@@ -200,6 +209,7 @@ export class GameSession {
       if (a === 'pause') ui.setPaused(!ui.paused)
       else if (a === 'help') ui.toggleHelp()
       else if (a === 'cameraLab') ui.toggleCameraLab()
+      else if (a === 'aiDebug') this.aiDebug = !this.aiDebug
       else if (a === 'camera') {
         const i = CAMERA_PRESET_ORDER.indexOf(ui.cameraPreset)
         const next: CameraPresetId = CAMERA_PRESET_ORDER[(i + 1) % CAMERA_PRESET_ORDER.length]!

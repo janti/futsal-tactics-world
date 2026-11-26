@@ -71,15 +71,15 @@ for formations. See CAMERA_DESIGN.md for the screen mapping.
 
 ## Module map
 
-| Path                                         | Responsibility                                                                              |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `core/math`, `core/random`, `core/coords.ts` | Vectors, scalar helpers, seeded RNG, coordinate conversion                                  |
-| `simulation/`                                | State types, config, commands, events, snapshots, `MatchSimulation`                         |
-| `physics/`                                   | Player movement + collisions, ball physics, passing and shooting planning                   |
-| `ai/`                                        | Basic team AI and formation anchors (full Utility AI in Milestones 5–6)                     |
-| `camera/`                                    | Presets, framing maths, Vertical Smart controller, screen↔world basis                       |
-| `rendering/`                                 | Renderer, court/arena, goals, procedural player model + animation, ball, lighting, textures |
-| `input/`                                     | Key/gamepad mapping, command sampling                                                       |
-| `ui/`, `app/`                                | React screens, HUD, store, game session loop                                                |
-| `localization/`                              | Finnish and English dictionaries                                                            |
-| `data/`                                      | Fictional teams and seeded player generation                                                |
+| Path                                         | Responsibility                                                                                                                                                                                                                                 |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `core/math`, `core/random`, `core/coords.ts` | Vectors, scalar helpers, seeded RNG, coordinate conversion                                                                                                                                                                                     |
+| `simulation/`                                | State types, config, commands, events, snapshots, `MatchSimulation`                                                                                                                                                                            |
+| `physics/`                                   | Player movement + collisions, ball physics, passing and shooting planning                                                                                                                                                                      |
+| `ai/`                                        | Layered AI: `team/` (defending, attacking, phases, roles), `player/` (carrier, goalkeeper, off-ball), `passing`, `movement`, `restarts`, `spatial/` (pitch control), `positioning/` (formation anchors); `BasicAI.ts` runs the per-tick update |
+| `camera/`                                    | Presets, framing maths, Vertical Smart controller, screen↔world basis                                                                                                                                                                          |
+| `rendering/`                                 | Renderer, court/arena, goals, procedural player model + animation, ball, lighting, textures                                                                                                                                                    |
+| `input/`                                     | Key/gamepad mapping, command sampling                                                                                                                                                                                                          |
+| `ui/`, `app/`                                | React screens, HUD, store, game session loop                                                                                                                                                                                                   |
+| `localization/`                              | Finnish and English dictionaries                                                                                                                                                                                                               |
+| `data/`                                      | Fictional teams and seeded player generation                                                                                                                                                                                                   |

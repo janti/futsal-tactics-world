@@ -123,6 +123,8 @@ export interface PlayerState {
   aiRunTarget: Vec2
   /** Just lost the ball: time left of the immediate sprint back into the defensive shape. */
   aiRecoverTimer: number
+  /** AI: the carrier's last decision (utility option kind), for debugging. */
+  aiDecision: string
   aiState: string
 }
 
@@ -213,6 +215,8 @@ export interface RestartInfo {
   routineIds?: number[]
 }
 
+export type TeamPhase = 'attack' | 'transitionAttack' | 'defence' | 'transitionDefence' | 'setPiece' | 'dead'
+
 export type MatchPhase = 'restart' | 'play' | 'goal' | 'halftime' | 'fulltime'
 
 export interface TeamState {
@@ -269,5 +273,9 @@ export interface MatchState {
   /** Strength of the computer opponent (affects only the non-human team). */
   difficulty: Difficulty
   possessionTeam: TeamId | null
+  /** Tick when the current possession team got the ball (for the counter-attack window). */
+  possessionSinceTick: number
+  /** AI team phase of each team (see ai/team/phases.ts). */
+  teamPhase: [TeamPhase, TeamPhase]
   rngState: number
 }
