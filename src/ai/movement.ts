@@ -74,7 +74,15 @@ export function steer(state: MatchState, p: PlayerState): void {
     // when right on it — a carrier driving at goal has to go through him, not past him.
     const ownGoal = { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }
     const gap = dist(state.ball.pos, p.pos)
-    const spot = addScaled(state.ball.pos, normalize(sub(ownGoal, state.ball.pos)), gap > 1.3 ? 0.8 : 0.15)
+    // Always goal-side: he steps in for the ball only from goal-side (close in); not yet goal-side —
+    // the carrier level with him or past — he first gets back between the ball and our goal instead
+    // of diving in, so the carrier cannot just run past him and away up the court.
+    const goalSide = dist(p.pos, ownGoal) < dist(owner.pos, ownGoal) - 0.2
+    const spot = addScaled(
+      state.ball.pos,
+      normalize(sub(ownGoal, state.ball.pos)),
+      goalSide && gap < 1.3 ? 0.15 : 0.8,
+    )
     const to = sub(spot, p.pos)
     // Jockey (a little slower than full pace) only while the carrier is nearly still; when he drives
     // on, keep pace with him (sprinting if he does or gets away), so he cannot just run past.
@@ -101,8 +109,9 @@ export function steer(state: MatchState, p: PlayerState): void {
     // A marker left behind by his man (a run, a change of pace) sprints to get back to him; their
     // pivot's marker stays right with him (the pass into the pivot is the one to stop).
     (p.aiState === 'cover' && d > (marksPivot(state, p) || tracksRunner(state, p) ? 0.8 : 2)) ||
-    // On a pressing trigger the pressers sprint in.
-    (p.aiState === 'press' && (d > 2.5 || (d > 0.8 && pressTriggerActive(state, p.team)))) ||
+    // Pressers sprint in from afar (on a trigger from further) but not over the last metres — arriving
+    // at full speed, the carrier just goes past.
+    (p.aiState === 'press' && (d > 2.5 || (d > 1.8 && pressTriggerActive(state, p.team)))) ||
     d > 5 ||
     recovering ||
     showing

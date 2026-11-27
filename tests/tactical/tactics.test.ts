@@ -74,7 +74,7 @@ describe('pressing height', () => {
   function defDepth(pressing: TeamTactics['pressing']): number {
     let depth = 0
     let n = 0
-    for (const seed of [1, 2, 3]) {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
       const m = sim([{ pressing }], seed)
       const s = m.state
       for (let i = 0; i < TICK_RATE * 90; i++) {
@@ -100,7 +100,7 @@ describe('pressing height', () => {
     const high = defDepth('high')
     expect(low).toBeLessThan(mid - 1.5)
     expect(high).toBeGreaterThan(mid + 1)
-  }, 90000)
+  }, 180000)
 
   it('the top of the block follows the pressing height', () => {
     const ball = { x: 0, y: 18 } // by the opponents' goal

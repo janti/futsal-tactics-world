@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Men are kept marked: a second man goes to the ball only to trap the carrier against the touch line,
+  or near goal (14 m) when the carrier has got past the first defender — other pressing cues tighten
+  the press but leave everybody on his man. Two players pressing the carrier: AI vs AI 59 % -> 13 % of
+  the time, against the test bot 17 % -> 3 %.
+- Pressing stays goal-side: close to the carrier the presser steps in for the ball only from
+  goal-side; level with him or beaten, he first gets back between the ball and our goal instead of
+  diving in; no sprint over the last metres; a pass is only stepped into with time to spare.
+- Back post: out wide near goal with a teammate at the back post the computer plays the quick ball
+  across (struck first time), or shoots low across to the far post for him to turn in; the back-post
+  man attacks the space a couple of metres off the line (sprinting), also as an option for the human
+  player.
+- Fewer easy passes over the touch line: the computer plays a teammate in full stride out wide into
+  his path (a ball behind him used to roll out), and avoids a man running out of the court. AI vs AI
+  passes out 1.6 -> 1.0 per 100.
+
 - Runs in behind are tracked: when a man makes a run at goal (fast towards it, or past his marker
   and still going) his marker goes with him, goal-side and tight, sprinting — his zone, the lane
   screen and keeping the middle no longer hold him back; a defender whose man is running never leaves

@@ -439,13 +439,15 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   // up the court the others stay with their men or recover into shape instead).
   // A pressing trigger (back pass, back to goal, poor touch, touch line): a second man comes to trap
   // him anywhere the team reacts.
-  const jump = pressTriggerActive(state, team) && state.pressTrigger[team]!.kind !== 'poorTouch'
-  if (carrierToGoal > 20 && !jump) return null
+  // Men are kept marked: a second man goes to the ball only to trap the carrier against the touch
+  // line (a pressing trigger), or near our goal when the carrier has got past the first defender.
+  const jump = pressTriggerActive(state, team) && state.pressTrigger[team]!.kind === 'touchline'
+  if (carrierToGoal > 14 && !jump) return null
   if (winnerId !== null && !jump) {
     const w = state.players[winnerId]!
     // Level with the carrier still counts (margin, so the help does not flicker on and off).
     const goalSide = dist(w.pos, ownGoal) < carrierToGoal + 0.4
-    if (goalSide && dist(w.pos, owner.pos) < 3.5) return null
+    if (goalSide) return null
   }
   const spot = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 1.5)
   let best: PlayerState | null = null

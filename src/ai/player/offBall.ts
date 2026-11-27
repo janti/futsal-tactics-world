@@ -162,8 +162,15 @@ export function offBallDecision(
       return
     }
     const backPost = backPostSpot(state, p)
+    if (backPost) {
+      // Attack the back post (sprinting) and strike a ball across first time.
+      p.aiState = 'run'
+      p.aiTarget = backPost
+      p.aiSetPieceTimer = Math.max(p.aiSetPieceTimer, 1.3)
+      return
+    }
     p.aiState = 'support'
-    p.aiTarget = backPost ?? supportPosition(state, p, anchor)
+    p.aiTarget = supportPosition(state, p, anchor)
   } else {
     p.aiState = 'cover'
     p.aiTarget = markingPosition(state, p, [winnerId, helperId])

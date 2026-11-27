@@ -207,6 +207,7 @@ export type CarrierOptionKind =
   | 'pivot'
   | 'layoff'
   | 'kickOut'
+  | 'backPost'
 
 export interface CarrierOption {
   kind: CarrierOptionKind
@@ -264,10 +265,18 @@ export function carrierOptions(
     if (rng.chance(chance)) {
       // Close in: a quick low placed shot into the corner; further out: a firmer, slightly higher shot.
       const power = c.toGoal < 8.5 ? 0.3 : clamp(0.42 + (c.toGoal - 8.5) / 25, 0.42, 0.62)
+      // From the side with a teammate at the back post: low and across to the far post — in, or
+      // turned in by him.
+      const mate = Math.abs(p.pos.x) > 2.5 ? farPostMate(state, p) : null
       out.push({
         kind: 'shoot',
         utility: 0.9 + myValue * 0.1,
-        act: (x) => x.shoot(p, sub(c.goal, p.pos), power),
+        act: (x) => {
+          if (mate) {
+            mate.aiSetPieceTimer = Math.max(mate.aiSetPieceTimer, 1.3)
+            x.shoot(p, { x: -Math.sign(p.pos.x), y: c.goal.y > p.pos.y ? 0.4 : -0.4 }, 0.3)
+          } else x.shoot(p, sub(c.goal, p.pos), power)
+        },
       })
     }
   } else if (angleOk && c.toGoal < 14.5 && lane > 0.6) {
@@ -310,6 +319,20 @@ export function carrierOptions(
         act: (x) => x.pass(p, sub(pivot.pos, p.pos), false, pivot),
       })
   }
+
+  // Out wide near goal with a teammate at the back post: the quick ball across for the tap-in beats
+  // a shot from the angle.
+  const far = backPostOption(state, p)
+  if (far)
+    out.push({
+      kind: 'backPost',
+      // (Above the plain forward pass to the same man: this one is struck first time.)
+      utility: 1.08,
+      act: (x) => {
+        far.aiSetPieceTimer = Math.max(far.aiSetPieceTimer, 1.3)
+        x.pass(p, sub(far.pos, p.pos), false, far, undefined, 9)
+      },
+    })
 
   // The pivot holding it up: lay it off to a teammate arriving behind him with a better shot, who
   // strikes it first time.
@@ -466,6 +489,43 @@ export function keepInCourt(pos: Vec2, heading: Vec2): Vec2 {
   }
   const l = Math.hypot(x, y)
   return l > 1e-3 ? { x: x / l, y: y / l } : { x: -Math.sign(pos.x) || 1, y: 0 }
+}
+
+/** A teammate at the far post (opposite side, close to the line) to turn a ball across in. */
+function farPostMate(state: MatchState, p: PlayerState): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+    const depth = (goalY - t.pos.y) * dir
+    if (depth > 0.5 && depth < 5 && Math.sign(t.pos.x) !== Math.sign(p.pos.x) && Math.abs(t.pos.x) < 3.5)
+      return t
+  }
+  return null
+}
+
+/**
+ * The ball across to the back post: the carrier out wide (2.5 m+ off the middle) within 14 m of the
+ * goal line, a teammate at the far post (opposite side, within 4.5 m of the line, near the post) and
+ * the ball across safe from interception.
+ */
+function backPostOption(state: MatchState, p: PlayerState): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  if (Math.abs(p.pos.x) < 2.5 || (goalY - p.pos.y) * dir > 14) return null
+  const side = Math.sign(p.pos.x)
+  let best: PlayerState | null = null
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+    const depth = (goalY - t.pos.y) * dir
+    if (depth < 0.8 || depth > 6 || Math.sign(t.pos.x) === side || Math.abs(t.pos.x) > 4.2) continue
+    // The keeper counts only if he is right in the line of the ball across (the ball goes past him).
+    const keeperAside = (o: PlayerState) =>
+      o.role === 'GK' && dist(closestOnSegment(p.pos, t.pos, o.pos).point, o.pos) > 1.2
+    if (passInterceptable(state, p.team, p.pos, t.pos, 0.12, keeperAside)) continue
+    if (!best || Math.abs(t.pos.x) < Math.abs(best.pos.x)) best = t
+  }
+  return best
 }
 
 /**

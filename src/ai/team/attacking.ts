@@ -164,8 +164,10 @@ export function backPostSpot(state: MatchState, p: PlayerState): Vec2 | null {
   if (!owner || owner.team !== p.team || owner.id === p.id || p.role === 'GK') return null
   const dir = state.teams[p.team].attackDir
   const goalY = dir * COURT.halfLength
-  if (Math.abs(owner.pos.x) < 3.5 || (goalY - owner.pos.y) * dir > 13) return null
-  const spot = { x: -Math.sign(owner.pos.x) * 1.9, y: goalY - dir * 2.2 }
+  if (Math.abs(owner.pos.x) < 2.5 || (goalY - owner.pos.y) * dir > 15) return null
+  // A couple of metres off the line on the far side: open for the ball across (past the keeper) and
+  // for the tap-in.
+  const spot = { x: -Math.sign(owner.pos.x) * 2, y: goalY - dir * 2.8 }
   let best: PlayerState | null = null
   for (const t of state.players) {
     if (t.team !== p.team || t.role === 'GK' || t.id === owner.id || deepestOutfield(state, p.team) === t.id)

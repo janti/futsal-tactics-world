@@ -123,6 +123,12 @@ export function predictPassTarget(
   receiver: PlayerState,
   through: boolean,
   attackDir: number,
+  /**
+   * Play it into the stride of a receiver running hard (else to his feet, at most a metre ahead). The
+   * computer passes into the stride of anybody running hard; the human player's assisted pass only
+   * of a teammate making a run (a square ball to a man moving up must not go off ahead of him).
+   */
+  intoStride = receiver.aiState === 'run',
 ): Vec2 {
   const arrival = through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed
   let target = receiver.pos
@@ -141,6 +147,16 @@ export function predictPassTarget(
     } else {
       const off = { x: receiver.vel.x * tt * 0.25, y: receiver.vel.y * tt * 0.25 }
       const l = Math.hypot(off.x, off.y)
+      // At most a metre for a receiver who comes to meet it. One making a run in full stride cannot stop
+      // and come back: the ball goes into his path (else it goes behind him and out).
+      const v = Math.hypot(receiver.vel.x, receiver.vel.y)
+      if (v > 4.5 && intoStride) {
+        const run = { x: receiver.vel.x * tt * 0.55, y: receiver.vel.y * tt * 0.55 }
+        const rl = Math.hypot(run.x, run.y)
+        const rk = rl > 3.5 ? 3.5 / rl : 1
+        target = { x: receiver.pos.x + run.x * rk, y: receiver.pos.y + run.y * rk }
+        continue
+      }
       const k = l > 1 ? 1 / l : 1
       target = { x: receiver.pos.x + off.x * k, y: receiver.pos.y + off.y * k }
     }
@@ -225,7 +241,16 @@ export function planPass(
       : undefined
   let arrival: number = arrivalSpeed ?? charged ?? (through ? PASS.throughArrivalSpeed : PASS.arrivalSpeed)
   if (receiver) {
-    target = predictPassTarget(passer, receiver, through, attackDir)
+    // Into the stride of a deliberate run; the computer also of anybody in full stride out wide
+    // (where a ball behind him runs out of play). The human player's pass otherwise to feet.
+    const human = passer.id === state.controlledId
+    target = predictPassTarget(
+      passer,
+      receiver,
+      through,
+      attackDir,
+      receiver.aiState === 'run' || (!human && Math.abs(receiver.pos.x) > 4.5),
+    )
   } else {
     // Into space along the input direction.
     const aim = len(dir) > 0.2 ? normalize(dir) : fromAngle(passer.facing)

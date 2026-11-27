@@ -81,7 +81,9 @@ export function passInterception(state: MatchState, p: PlayerState): Vec2 | null
     // He only has to get a foot to it: reach the ball's path within about 0.6 m.
     const gap = dist(p.pos, pos)
     const reachAt = gap > 0.6 ? addScaled(pos, normalize(sub(p.pos, pos)), 0.6) : p.pos
-    if (estimateTimeToReach(p, reachAt) + read <= t) return pos
+    // Only with a clear margin: a failed attempt leaves his man free and the defence a man short.
+    // Only with a margin: a failed attempt leaves his man free and the defence a man short.
+    if (estimateTimeToReach(p, reachAt) + read + 0.1 <= t) return pos
   }
   return null
 }
@@ -241,6 +243,12 @@ export function passInterceptable(
   return false
 }
 
+/** A teammate near the touch line running hard towards it: a ball to him is likely to go out. */
+function runningOut(t: PlayerState): boolean {
+  const near = COURT.halfWidth - Math.abs(t.pos.x) < 2.2
+  return near && t.vel.x * Math.sign(t.pos.x) > 2.5
+}
+
 /** How the AI rates the human-controlled player when judging whether he can cut a pass out. */
 export const HUMAN_READ = { reach: 1.1, speedFactor: 0.72, read: 0 } as const
 
@@ -274,6 +282,7 @@ export function safePassOption(
     for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
     if (space < 1.5) continue
     if (passInterceptable(state, p.team, p.pos, t.pos)) continue
+    if (runningOut(t)) continue
     const progress = ((t.pos.y - p.pos.y) * dir) / 10
     const score =
       Math.min(lane, 3) +
@@ -311,8 +320,8 @@ export function bestPassOption(
     const keeper = t.role === 'GK' ? -1.2 + pressure : 0
     // A tightly marked receiver is a bad option even with an open lane.
     const marked = space < 1.3 ? -1.5 : 0
-    // A pass an opponent can cut out is a last resort.
-    const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -2.5 : 0
+    // A pass an opponent can cut out is a last resort; so is one to a man running out of the court.
+    const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -2.5 : runningOut(t) ? -1.5 : 0
     const score =
       open * 0.9 +
       progress * 1.1 +

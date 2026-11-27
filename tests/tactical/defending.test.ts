@@ -282,21 +282,22 @@ describe('attacking pivot', () => {
 
 describe('help when the pivot is beaten', () => {
   it('an ala comes across, or the fixo if nobody is near him', () => {
-    const { sim, s } = openPlay(5, { x: 2, y: -2 })
+    // (Near our goal: a second man helps only within 14 m of it.)
+    const { sim, s } = openPlay(5, { x: 2, y: -8 })
     // Team 0 defends y = -20. Their pivot (4) pressed and is beaten (behind the carrier).
-    sim.player(4).pos = { x: 2, y: 1 }
-    sim.player(1).pos = { x: 0, y: -12 } // fixo
-    sim.player(2).pos = { x: 7, y: -8 } // ala
-    sim.player(3).pos = { x: -7, y: -8 } // ala
+    sim.player(4).pos = { x: 2, y: -5 }
+    sim.player(1).pos = { x: 0, y: -16 } // fixo
+    sim.player(2).pos = { x: 6, y: -12 } // ala
+    sim.player(3).pos = { x: -6, y: -12 } // ala
     // An attacker right next to the fixo: he stays, an ala helps.
-    sim.player(9).pos = { x: 0.5, y: -13 }
+    sim.player(9).pos = { x: 0.5, y: -17 }
     const h1 = pickHelper(s, 0, 4)
     expect(h1 === 2 || h1 === 3).toBe(true)
     // Nobody near the fixo and he is closest: the fixo steps up.
-    sim.player(9).pos = { x: -9, y: -15 }
-    sim.player(2).pos = { x: 9.5, y: -16 }
-    sim.player(3).pos = { x: -9.5, y: -16 }
-    sim.player(1).pos = { x: 1, y: -7 }
+    sim.player(9).pos = { x: -9, y: -18 }
+    sim.player(2).pos = { x: 9.5, y: -18 }
+    sim.player(3).pos = { x: -9.5, y: -18 }
+    sim.player(1).pos = { x: 1, y: -12 }
     expect(pickHelper(s, 0, 4)).toBe(1)
   })
 })
