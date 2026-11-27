@@ -110,8 +110,8 @@
       AI vs AI measurements (`npm run metrics`)
 - [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs
 - [x] Rotation library second round: keeper as last resort, carry before rotating, deeper runs, wait
-      for the run, shots aimed from the ball, Lab drill defence (93 % goals)
-- [ ] Rotation library follow-ups: Lab drill below 90 % for cross run and isolation; defensive AI
+      for the run, shots aimed from the ball, Lab drill defence (99 % goals, every move ≥ 90 %)
+- [ ] Rotation library follow-ups: defensive AI
       reading rotations (zonal/hybrid switching, back-post tracking, keeper far-post balance); rotation
       statistics on the match-end screen; scenario layouts where context selection picks another
       move (wing clearance, paralela, isolation)

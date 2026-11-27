@@ -11,8 +11,10 @@
   towards the area).
 - Shots are aimed from the ball (close-range shots no longer drift onto or past the post); the
   breakaway finish picks the bigger gap beside the keeper.
-- Tactical Lab drill defence (default, with demonstration): the moves end in a goal in 93 % of
-  attempts (40 per scenario; lowest cross run 80 %, isolation 82.5 %).
+- Tactical Lab drill defence (default, with demonstration): the moves end in a goal in 99 % of
+  attempts (three seed sets of 40 per scenario); every move at least 90 %. Found on the way: the
+  practice keeper still walked across with the shot and dived, a teammate in the line deflected the
+  shot, and finishes were sometimes struck firm instead of placed.
 - Measured AI vs AI (36 min per formation, rotations on): 3-1 turnovers 109 → 97, shots 58 → 72;
   4-0 turnovers 104 → 94, final-third entries 36 → 52; 2-2 shots 33 → 41, turnovers 99 → 110.
 

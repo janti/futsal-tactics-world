@@ -90,7 +90,7 @@ export const ROTATION = {
     pivot: 2.8,
     backPost: 3.4,
     wingClearance: 3.5,
-    crossRun: 3.2,
+    crossRun: 4,
     paralela: 3,
     diagonalRun: 3,
     thirdMan: 3,
@@ -320,7 +320,13 @@ export function updateRotations(state: MatchState, emit?: Emit): void {
         endRotation(state, team, false, 'tacticsChanged', emit)
         continue
       }
-      if (state.time > r.until) {
+      // (Not while the pass to one of its runners is on its way: that pass decides the move.)
+      const b = state.ball
+      const passToMover =
+        b.ownerId === null &&
+        b.intendedReceiverId !== null &&
+        r.moves.some((m) => m.id === b.intendedReceiverId)
+      if (state.time > r.until && !passToMover) {
         endRotation(state, team, false, 'timeUp', emit)
         continue
       }

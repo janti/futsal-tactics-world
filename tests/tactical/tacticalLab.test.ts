@@ -138,7 +138,7 @@ describe('Tactical Lab scenarios', () => {
     // (25 scenarios x 12 attempts: about 8 s alone, more with the whole suite in parallel.)
   }, 60000)
 
-  it('drill defence + demonstration: the moves are played to a goal about nine times in ten', () => {
+  it('drill defence + demonstration: the moves are played to a goal at least nine times in ten each', () => {
     // The Lab's default (drill defence, demonstration): the computer defenders move and mark but do
     // not win the ball, the keeper is a practice keeper. Every rotation scenario, 10 attempts each.
     let goals = 0
@@ -148,11 +148,11 @@ describe('Tactical Lab scenarios', () => {
       let g = 0
       for (let k = 0; k < 10; k++)
         if (attempt(id, 300 + k, (k % 2) as TeamId, true, true).outcome === 'goal') g++
-      expect(g, id).toBeGreaterThanOrEqual(7)
+      expect(g, id).toBeGreaterThanOrEqual(9)
       goals += g
       total += 10
     }
-    expect(goals / total).toBeGreaterThanOrEqual(0.9)
+    expect(goals / total).toBeGreaterThanOrEqual(0.95)
   }, 60000)
 
   it('outcome detection: goal, save, out, ball lost, time up', () => {

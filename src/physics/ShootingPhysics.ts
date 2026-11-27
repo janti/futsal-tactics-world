@@ -86,7 +86,8 @@ export function planShot(
     (placed ? 0.55 : 0.7 + p * 0.6) *
     (0.8 + pressure * 0.5) *
     attr(a.composure, 1.2, 0.85)
-  const errX = rng.gaussian() * sigma
+  // (Lab drill: the computer's practised finish scatters less.)
+  const errX = rng.gaussian() * sigma * (drillMargin > 0 ? 0.6 : 1)
   const errZ = rng.gaussian() * sigma * (placed ? 0.12 : 0.4)
   const aim = { x: aimX + errX, y: goalY }
   const aimZ = clamp(shotHeightForPower(p) + errZ, 0, 3.2)

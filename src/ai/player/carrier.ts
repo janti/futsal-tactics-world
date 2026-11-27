@@ -51,8 +51,7 @@ export function carrierBehaviour(
   // it is placed low into the corner.
   const firstTimeDist = dist(p.pos, goal)
   // (Lab drill: a runner through on goal takes it in close first, like any breakaway.)
-  const drillThrough =
-    state.drill && ((firstTimeDist > 6.5 && isBreakaway(state, p, goal)) || Math.abs(p.pos.x) > 3.5)
+  const drillThrough = state.drill && (firstTimeDist > 6.5 || Math.abs(p.pos.x) > 3.5)
   if (
     decide &&
     !drillThrough &&
@@ -372,7 +371,9 @@ export function carrierOptions(
 
   // Shooting band (0.9+): in range with a lane, decided with the player's willingness to shoot.
   // A clear sight of goal (a shot into a defender is blocked), or right in front of it.
-  if (angleOk && c.toGoal < shootRange && (lane > 0.55 || c.toGoal < 6.5)) {
+  // (Lab drill: no shot from a tight angle or from range while the move is still on — he takes it in.)
+  const drillHold = state.drill && (Math.abs(p.pos.x) > 4.5 || c.toGoal > 7)
+  if (!drillHold && angleOk && c.toGoal < shootRange && (lane > 0.55 || c.toGoal < 6.5)) {
     const chance = clamp(0.35 + (shootRange - c.toGoal) / shootRange + attr(a.decisions, 0, 0.2), 0, 0.95)
     if (rng.chance(chance)) {
       // Close in: a quick low placed shot into the corner; further out: a firmer, slightly higher shot.
@@ -391,7 +392,7 @@ export function carrierOptions(
         },
       })
     }
-  } else if (angleOk && c.toGoal < 14.5 && lane > 0.6) {
+  } else if (!state.drill && angleOk && c.toGoal < 14.5 && lane > 0.6) {
     // From distance: worth it when a player screens the keeper's view ("maski"), occasionally
     // otherwise through a wide-open lane.
     const keeper = state.players.find((q) => q.team !== p.team && q.role === 'GK')
@@ -623,7 +624,7 @@ export function carrierOptions(
   const waitForRun =
     (rotationRunPending(state, p) || isolationDefender(state, p) !== null) &&
     c.pressure < 0.6 &&
-    p.aiHoldTimer < 2
+    p.aiHoldTimer < (state.drill ? 3 : 2)
   if (!waitForRun && (c.pressure > 0.45 || p.aiHoldTimer > circulateAfter)) {
     const safe = safePassOption(state, p, c.pressure, rng)
     if (safe)
@@ -993,7 +994,10 @@ function breakawayBehaviour(
     p.aiBreakawayCorner = rng.chance(0.6) ? -nearSide : nearSide
   }
   // Run towards a point in front of goal, slightly off-centre so the angle stays open.
-  const target = { x: clamp(p.pos.x * 0.6, -3, 3), y: goal.y - dir * 5.5 }
+  // (Lab drill: the practised finish cuts in towards the middle first.)
+  const target = state.drill
+    ? { x: clamp(p.pos.x * 0.3, -1.5, 1.5), y: goal.y - dir * 5.5 }
+    : { x: clamp(p.pos.x * 0.6, -3, 3), y: goal.y - dir * 5.5 }
   let heading = normalize(sub(target, p.pos))
   // Round anybody standing in his way (bending past him rather than running into him).
   for (const o of state.players) {
@@ -1023,7 +1027,9 @@ function breakawayBehaviour(
   const shootAt = attr(a.composure, 7.5, 6)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
   // Forced to finish early only with the chaser right on him (he keeps going while he can).
-  const forced = (chaser < 0.9 && toGoal < 9) || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
+  // (Lab drill: past the point but still out wide, he keeps cutting in rather than shoot from the angle.)
+  const passed = (p.pos.y - target.y) * dir > 0 && !(state.drill && Math.abs(p.pos.x) > 3 && toGoal > 3)
+  const forced = (chaser < 0.9 && toGoal < 9) || keeperDist < 3.2 || passed
   if (!angleOk || (toGoal > shootAt && !forced)) return
   // Forced to finish from further out (keeper rushing out, a chaser on him): a teammate free closer
   // in gets the square ball instead of a shot the keeper will save.
@@ -1049,7 +1055,8 @@ function breakawayBehaviour(
   // Corner choice as lateral input (planShot aims at the corner on that side). Close in a placed
   // side-foot; further out it needs pace to beat the keeper.
   // With a chaser on his shoulder he places it (a firm shot under that pressure goes anywhere).
-  const placed = rng.chance(attr(a.finishing, 0.55, 0.85)) || (chaser < 1.5 && toGoal < 10)
+  // (Lab drill: the practised finish is always the placed one.)
+  const placed = rng.chance(attr(a.finishing, 0.55, 0.85)) || (chaser < 1.5 && toGoal < 10) || state.drill
   const power =
     toGoal < 8 || (placed && toGoal < 10) ? (placed ? 0.3 : 0.45) : clamp(0.45 + (toGoal - 8) / 20, 0.45, 0.6)
   // The corner he can see more of: the bigger gap between the keeper and a post (decided now, from
@@ -1130,7 +1137,8 @@ function challengeBehaviour(state: MatchState, p: PlayerState, defender: PlayerS
 /** Lab drill: the team's move was completed in the last 6 s, or he is a runner of the move in progress. */
 function drillMoveDone(state: MatchState, p: PlayerState): boolean {
   const rt = state.rotationTeam[p.team]
-  if (rt.last?.completed && state.time - rt.last.time < 6) return true
+  // (Completed, or its time ran out while the ball went to the runner — not a lost ball.)
+  if (rt.last && rt.last.reason !== 'possessionLost' && state.time - rt.last.time < 6) return true
   return (
     state.rotation[p.team]?.moves.some((m) => m.id === p.id && (m.job === 'run' || m.job === 'post')) ?? false
   )

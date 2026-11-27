@@ -149,6 +149,12 @@ export function goalkeeperBehaviour(
     ball.mode === 'free' && ball.lastTouchTeam !== p.team && reacted
       ? predictGoalThreat(ball, goalLineY, p)
       : null
+  // (The practice keeper is set when the shot is struck: he does not walk across with the ball.)
+  if (practice && ball.isShot && ball.mode === 'free' && ball.lastTouchTeam !== p.team) {
+    p.aiState = 'position' // (standing: no diving reach)
+    p.moveIntent = { x: 0, y: 0 }
+    return
+  }
   if (threat) {
     p.aiState = 'save'
     walkTo(p, threat, true)
@@ -187,6 +193,13 @@ export function goalkeeperBehaviour(
     const n = normalize(sub(twoV1.carrier.pos, goal))
     const out = Math.min(COURT.penaltyAreaRadius - 0.3, twoV1.carrierToGoal - 1.6)
     walkTo(p, addScaled(goal, n, Math.max(1, out)), true)
+    return
+  }
+
+  // The practice keeper (Lab drill) stands on his line, near the middle, following the ball a little.
+  if (practice && ball.lastTouchTeam !== p.team) {
+    p.aiState = 'position'
+    walkTo(p, { x: clamp(ball.pos.x * 0.12, -0.4, 0.4), y: goalLineY + dir * 0.4 }, false)
     return
   }
 

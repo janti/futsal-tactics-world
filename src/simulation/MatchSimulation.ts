@@ -949,14 +949,14 @@ export class MatchSimulation implements AIActions {
       const rel = Math.hypot(b.vel.x - pv.x, b.vel.y - pv.y)
       const pickupR = p.role === 'GK' ? 0.62 : CONTROL.pickupRadius
       // Lab drill: a computer defender lets the attackers' pass or shot go by (a human defender
-      // does not).
+      // does not), and a teammate does not get in the way of the practised shot.
       if (
         s.drill &&
         p.role !== 'GK' &&
         p.id !== s.controlledId &&
         bs > 2 &&
         b.lastTouchTeam !== null &&
-        b.lastTouchTeam !== p.team
+        (b.lastTouchTeam !== p.team || (b.isShot && b.lastTouchId !== p.id && bs > 8))
       )
         continue
       // An opponent's shot hitting an outfield defender is a block: it rebounds off him (leg or
@@ -1114,8 +1114,6 @@ export class MatchSimulation implements AIActions {
         0.995,
       )
     }
-    // Lab drill: the computer keeper is a practice keeper (the finish of the move is what is trained).
-    if (practice) p *= 0.4
     gk.touchCooldown = 0.35 // one attempt
     gk.action = 'save'
     gk.actionTime = 0
@@ -1151,6 +1149,9 @@ export class MatchSimulation implements AIActions {
       const nearTop = Math.sign(crossX) === Math.sign(k.x) && zAtLine > SIDE_SHOT.nearTopHeight
       if (!nearTop) p = Math.max(p, SIDE_SHOT.save + attr(a.reflexes, -0.03, 0.02))
     }
+    // Lab drill: the computer keeper is a practice keeper (the finish of the move is what is trained);
+    // applied last so no other rule lifts it back.
+    if (practice) p *= 0.25
     if (!this.rng.chance(p)) return false
     // Catch when the ball is manageable and the keeper may use the hands (own penalty area);
     // otherwise parry it wide, away from goal.

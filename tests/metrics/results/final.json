@@ -16,7 +16,7 @@
     "keeperPasses": 7,
     "rotationsStarted": 387,
     "rotationsCompleted": 132,
-    "aiMsPerMinute": 533
+    "aiMsPerMinute": 222
   },
   {
     "label": "3-1 rot off",
@@ -35,7 +35,7 @@
     "keeperPasses": 0,
     "rotationsStarted": 0,
     "rotationsCompleted": 0,
-    "aiMsPerMinute": 545
+    "aiMsPerMinute": 205
   },
   {
     "label": "4-0 rot on",
@@ -54,26 +54,26 @@
     "keeperPasses": 3,
     "rotationsStarted": 575,
     "rotationsCompleted": 116,
-    "aiMsPerMinute": 558
+    "aiMsPerMinute": 472
   },
   {
     "label": "4-0 rot off",
     "minutes": 36,
-    "passes": 903,
-    "passCompletion": 0.934,
-    "turnovers": 94,
+    "passes": 840,
+    "passCompletion": 0.929,
+    "turnovers": 91,
     "shots": 17,
-    "goals": 3,
-    "conceded": 9,
-    "finalThirdEntries": 24,
+    "goals": 4,
+    "conceded": 10,
+    "finalThirdEntries": 23,
     "spacing": 5.15,
     "congestion": 0.182,
-    "passOptions": 1.01,
-    "counterShotsConceded": 35,
+    "passOptions": 1.02,
+    "counterShotsConceded": 38,
     "keeperPasses": 1,
     "rotationsStarted": 0,
     "rotationsCompleted": 0,
-    "aiMsPerMinute": 551
+    "aiMsPerMinute": 555
   },
   {
     "label": "2-2 rot on",
@@ -92,25 +92,25 @@
     "keeperPasses": 2,
     "rotationsStarted": 320,
     "rotationsCompleted": 106,
-    "aiMsPerMinute": 542
+    "aiMsPerMinute": 552
   },
   {
     "label": "2-2 rot off",
     "minutes": 36,
-    "passes": 702,
-    "passCompletion": 0.892,
-    "turnovers": 101,
+    "passes": 720,
+    "passCompletion": 0.893,
+    "turnovers": 102,
     "shots": 41,
-    "goals": 9,
+    "goals": 8,
     "conceded": 16,
-    "finalThirdEntries": 48,
-    "spacing": 7.35,
-    "congestion": 0.077,
-    "passOptions": 0.67,
-    "counterShotsConceded": 45,
-    "keeperPasses": 4,
+    "finalThirdEntries": 52,
+    "spacing": 7.32,
+    "congestion": 0.079,
+    "passOptions": 0.66,
+    "counterShotsConceded": 46,
+    "keeperPasses": 5,
     "rotationsStarted": 0,
     "rotationsCompleted": 0,
-    "aiMsPerMinute": 553
+    "aiMsPerMinute": 544
   }
 ]

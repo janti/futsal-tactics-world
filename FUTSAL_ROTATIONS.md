@@ -223,9 +223,9 @@ take 0.1-2.6 µs each.
   ball a little more (91 → 110). Goal counts (5-16 per 36 min) are too small to compare.
 - In normal (context) selection some library scenarios pick another move than the one they were
   built for; the Lab's default demonstration mode shows the scenario's own move.
-- Lab drill (default): 93 % goals over all rotation scenarios (40 attempts each: 777/840 of the
-  rotation scenarios); below 90 %: cross run 80 %, isolation 82.5 %, overlap / wall pass / wing
-  clearance 87.5 %. Against match defending (drill off) the attackers lose the ball often.
+- Lab drill (default): 99 % goals over the 21 rotation scenarios on three seed sets of 40 attempts
+  each (835, 832 and 833 / 840); every scenario at least 90 % (lowest 36/40). Against match defending
+  (drill off) the attackers lose the ball often.
 - Tactical familiarity is a team setting only (no training or career progression yet).
 - No teammate-run command (no input for it yet), no 1-2-1 or flying-goalkeeper formations, no
   stamina drain, substitutions, fouls or dismissals (M7); Coach / Spectator / Career modes are later
@@ -252,8 +252,16 @@ take 0.1-2.6 µs each.
   sprint, double up or count as pressure; the computer keeper is a practice keeper (stays on his line,
   reacts 0.15 s later, 60 % reach, 40 % save chance). The attack plays the move to its end: the runner
   who has arrived gets the ball, and from 18 m in the finish is played like a breakaway. A human
-  defender or keeper is never affected. Test: `tacticalLab.test.ts` (≥ 90 % goals over the rotation
-  scenarios, ≥ 7/10 each).
+  defender or keeper is never affected. Test: `tacticalLab.test.ts` (≥ 95 % goals over the rotation
+  scenarios, ≥ 9/10 each).
+- **Drill finishing details** (third round): the practice keeper is set once a shot is struck (no
+  walking across with the ball, standing reach), stands on his line near the middle, and the
+  practice factor is applied after every other save rule; the computer finisher always places it,
+  cuts in towards the middle first, aims 0.2 m further inside the post with 60 % of the scatter, and
+  takes no shot from beyond 7 m or a tight angle; teammates let the practised shot by; the forced
+  1 v 1 of the isolation is allowed even after an earlier refusal and is not ended by computer
+  defenders. A move no longer times out while the pass to one of its runners is on its way, and the
+  cross run lasts 4 s (both also in matches; measured unchanged).
 
 ## 9. Research references
 
