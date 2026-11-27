@@ -11,9 +11,10 @@ import { DT, HANDS, MAX_FRAME_TIME, RESTART } from '../simulation/SimulationConf
 import type { Command } from '../simulation/Commands'
 import { useUi, type HudState, type LabState } from '../ui/store'
 import { AIDebugOverlay, type DebugLabels } from '../rendering/AIDebugOverlay'
-import { SCENARIOS, applyScenario, scenarioOutcome } from '../lab/scenarios'
+import { SCENARIOS, applyScenario, demoPriorities, scenarioOutcome } from '../lab/scenarios'
+import type { RotationSettings } from '../ai/team/rotationLibrary'
 import type { TeamId } from '../simulation/MatchState'
-import type { TeamTactics } from '../simulation/Tactics'
+import { mergeTactics, type TeamTactics } from '../simulation/Tactics'
 import { DICTIONARIES, translate, type TranslationKey } from '../localization/i18n'
 
 /** Tactical Lab: pause (ticks) between an attempt's outcome and the next start. */
@@ -81,7 +82,11 @@ export class GameSession {
     const defendTeam: TeamId = this.labAttackTeam === 0 ? 1 : 0
     const labTactics: [Partial<TeamTactics>, Partial<TeamTactics>] = [{}, {}]
     if (lab) {
-      labTactics[this.labAttackTeam] = { formation: lab.formation, rotations: lab.rotations }
+      labTactics[this.labAttackTeam] = {
+        formation: lab.formation,
+        rotations: lab.rotations,
+        ...labRotation(lab),
+      }
       labTactics[defendTeam] = { pressing: lab.pressing, rotations: lab.rotations }
     }
     this.sim = new MatchSimulation({
@@ -95,7 +100,9 @@ export class GameSession {
         ? { halfLength: 99 * 60, effectiveClock: true }
         : { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
       difficulty: setup.difficulty,
-      tactics: lab ? labTactics : [{ formation: setup.formation, pressing: setup.pressing }],
+      tactics: lab
+        ? labTactics
+        : [{ formation: setup.formation, pressing: setup.pressing, ...setup.rotation }],
     })
     if (lab) this.startLabAttempt()
     this.renderer = new ThreeRenderer(
@@ -298,11 +305,17 @@ export class GameSession {
   private labChanged(lab: LabState, prev: LabState): void {
     const attack = this.labAttackTeam
     const defend: TeamId = attack === 0 ? 1 : 0
-    if (lab.formation !== prev.formation || lab.rotations !== prev.rotations)
+    if (
+      lab.formation !== prev.formation ||
+      lab.rotations !== prev.rotations ||
+      lab.rotation !== prev.rotation ||
+      lab.demo !== prev.demo ||
+      lab.scenario !== prev.scenario
+    )
       this.pendingCommands.push({
         type: 'SetTactics',
         team: attack,
-        tactics: { formation: lab.formation, rotations: lab.rotations },
+        tactics: { formation: lab.formation, rotations: lab.rotations, ...labRotation(lab) },
       })
     if (lab.pressing !== prev.pressing || lab.rotations !== prev.rotations)
       this.pendingCommands.push({
@@ -312,11 +325,11 @@ export class GameSession {
       })
     if (lab.resetNonce !== prev.resetNonce) {
       // A new scenario brings its own tactics: apply them before placing it.
-      this.sim.state.teams[attack].tactics = {
-        ...this.sim.state.teams[attack].tactics,
+      this.sim.state.teams[attack].tactics = mergeTactics(this.sim.state.teams[attack].tactics, {
         formation: lab.formation,
         rotations: lab.rotations,
-      }
+        ...labRotation(lab),
+      })
       this.sim.state.teams[defend].tactics = {
         ...this.sim.state.teams[defend].tactics,
         pressing: lab.pressing,
@@ -499,4 +512,10 @@ export class GameSession {
     const clearance = s.clearance !== null && s.clearance.team === owner.team
     return { elapsed: s.ball.handsTimer, team: owner.team, kind: clearance ? 'clearance' : 'keeper' }
   }
+}
+
+/** The Lab's rotation settings; in demonstration mode only the scenario's own move may be chosen. */
+function labRotation(lab: LabState): RotationSettings {
+  const kind = SCENARIOS[lab.scenario].rotation
+  return lab.demo && kind ? { ...lab.rotation, priorities: demoPriorities(kind) } : lab.rotation
 }

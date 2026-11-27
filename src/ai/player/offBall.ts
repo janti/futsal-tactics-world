@@ -24,7 +24,8 @@ import {
 } from '../team/attacking'
 import { interceptPoint, passInterception, receivePoint } from '../passing'
 import { isBreakaway, twoOnKeeperMate, twoOnKeeperSpot } from './carrier'
-import { rotationMove } from '../team/rotations'
+import { avoidReserved, moveStarted, rotationMove } from '../team/rotations'
+import { individualTarget } from './individual'
 
 export function offBallDecision(
   state: MatchState,
@@ -141,7 +142,8 @@ export function offBallDecision(
     // Part of a rotation: his job in it (run into space, cover behind, come short, take a post).
     const move = rotationMove(state, p)
     const rot = state.rotation[p.team]
-    if (move && rot) {
+    // A staggered run waits for its moment in the support spot (the other runner goes first).
+    if (move && rot && moveStarted(state, move)) {
       // A runner goes via his first point (e.g. up the middle) before heading for the target.
       p.aiTarget = move.via && !move.viaDone ? move.via : move.target
       if (move.job === 'run' || move.job === 'post') {
@@ -199,7 +201,10 @@ export function offBallDecision(
       return
     }
     p.aiState = 'support'
-    p.aiTarget = supportPosition(state, p, anchor)
+    const spot = supportPosition(state, p, anchor)
+    // Individual movement (V-cut, between the lines) from the support spot; never into a space a
+    // teammate's run has reserved.
+    p.aiTarget = avoidReserved(state, p, individualTarget(state, p, spot) ?? spot)
   } else {
     p.aiState = 'cover'
     p.aiTarget = markingPosition(state, p, [winnerId, helperId])

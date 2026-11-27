@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Milestone 6 — rotation and off-ball movement library
+
+- 25 futsal movement families on one framework (FUTSAL_ROTATIONS.md): wing clearance, pohjakasi,
+  oito (perhonen), cross run, diagonal and parallel rotations, 3- and 4-player rotations, paralela,
+  diagonal run, wall pass, third man, back post, overlap, underlap, pivot layoff, pivot exchange /
+  temporary pivot, double cut, V-cut, opposite movement, wide overload, switch of play, pisada,
+  isolation, between the lines.
+- Moves are chosen by utility against keeping the shape (no rotation when standing still is better),
+  read how the defenders actually react (a marker who follows the clearing run opens the wing for the
+  next man), reserve the spaces they attack, keep rest defence, cancel on possession loss and never
+  move the player you control.
+- Rotation settings in Quick Match and the Tactical Lab: a style preset (Classic 3-1, Fluid 4-0,
+  Direct, Positional, Combination, Balanced compact) or sliders (frequency, freedom, discipline,
+  penetration, passing risk, balance, patience, familiarity) and a priority per movement.
+- Tactical Lab: 13 new situations and a demonstration mode; the AI view shows reserved spaces, the
+  space a move left free, possible passes, the move's score against keeping the shape, the
+  defender's response and how the move ended.
+- Measured AI vs AI (36 min per formation, team under test vs the default 3-1): 3-1 pass completion
+  0.920 → 0.897, turnovers 95 → 109, shots 55 → 58; 4-0 0.928 → 0.919, turnovers 101 → 104, final-third
+  entries 31 → 36; 2-2 0.899 → 0.895, shots 45 → 33. AI time unchanged (≈ 0.27 s per simulated minute).
+
 - HUD: the opponent player on the ball is shown in the bottom right (shirt number, name, role), a
   mirror of the controlled player's card edged in the opponent's colour; it stays up 0.6 s after he
   releases the ball so it does not flicker between touches.

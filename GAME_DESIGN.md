@@ -30,6 +30,17 @@ football on a small pitch.
 | Tackling       | Short lunge with cooldown (no spam); success from tackling vs. ball control/strength/balance; sole control resists                                                                                                                                                                                                                                                  |
 | Switching      | Manual (V, direction-biased) and automatic on own passes. Defending mode is a setting: **nearest player** (default, hysteresis 1 m, 0.4 s cooldown, V overrides for 1.5 s), assisted, or manual                                                                                                                                                                     |
 
+## Team play (rotations)
+
+Teammates and opponents move as coordinated futsal teams: the formation's rotations (pohjakasi,
+oito, quatro…), combinations (1-2, third man, overlap, underlap, paralela, switch of play, back
+post…) and individual movement (V-cuts, between the lines), chosen by the situation — never
+scripted, never moving the player you control. In Quick Match you pick a style preset or tune the
+rotation sliders (frequency, freedom, balance; advanced: all sliders and a priority per movement).
+The Tactical Lab shows every movement (with a demonstration mode) and the AI view (key 7) shows the
+move, its score against keeping the shape, the defender's response and how it ended.
+See FUTSAL_ROTATIONS.md.
+
 ## Game modes
 
 **Quick Match** is complete: choose teams, half length and clock mode; two halves with half-time,

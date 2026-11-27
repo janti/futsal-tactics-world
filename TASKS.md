@@ -102,9 +102,25 @@
 - [x] Stage 4: Tactical Lab (scenario sandbox: twelve situations, watch / attack / defend, tactics,
       speed, outcomes counted) and the AI view over the main view (intentions, marking, rotations,
       pressing jumps)
+- [x] Rotation library (M6 continued; FUTSAL_ROTATIONS.md): 25 movement families on one framework
+      (registry, planners, utility selection against keeping the shape, move states, space
+      reservations, scored rest defence, defender-response reading, cancellation and recovery,
+      statistics and events), team rotation settings and 6 presets in Quick Match and the Lab, 13
+      new Lab scenarios with a demonstration mode, AI view details, FI/EN texts, 30 acceptance tests,
+      AI vs AI measurements (`npm run metrics`)
 - [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs
+- [ ] Rotation library follow-ups: 3-1 turnovers with rotations on (+15 % vs before); defensive AI
+      reading rotations (zonal/hybrid switching, back-post tracking, keeper far-post balance); rotation
+      statistics on the match-end screen; scenario layouts where context selection picks another
+      move (wing clearance, paralela, isolation)
+- [ ] Later with the systems they need: teammate-run command (M7 controls), 1-2-1 and flying-keeper
+      profiles, tactical familiarity from training (M9), substitutions / dismissals invalidating moves
+      (M7: the guards exist)
 
 ## Known bugs / issues
+
+- Rotation library, Lab: in demonstration mode the wing clearance attempt loses the ball in about two
+  attempts of three; the third-man ball and the 1-2 return are the riskiest passes of the library.
 
 - Tactical Lab: in built-up situations the AI attackers lose the ball in 55–75 % of attempts; a carrier
   chased from behind (e.g. after a completed 1-2) passes back instead of driving on.

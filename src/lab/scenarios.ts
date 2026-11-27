@@ -13,6 +13,8 @@ import type { MatchEvent } from '../simulation/Events'
 import { COURT, TICK_RATE } from '../simulation/SimulationConfig'
 import type { Formation, PressingHeight } from '../simulation/Tactics'
 import type { RotationKind } from '../ai/team/rotations'
+import { emptyRotationTeam } from '../ai/team/rotationState'
+import { FAMILY_IDS, KIND_FAMILY, type FamilyId, type FamilyPriority } from '../ai/team/rotationLibrary'
 
 export type ScenarioId =
   | 'breakaway'
@@ -27,6 +29,19 @@ export type ScenarioId =
   | 'pivotRotation'
   | 'backPost'
   | 'buildUpPress'
+  | 'wingClearance'
+  | 'threeCircle'
+  | 'crossRun'
+  | 'paralela'
+  | 'thirdMan'
+  | 'underlap'
+  | 'pivotLayoff'
+  | 'switchPlay'
+  | 'wideOverload'
+  | 'doubleCut'
+  | 'oppositeMove'
+  | 'diagonalRun'
+  | 'isolation'
 
 type OutfieldRole = Exclude<PlayerRole, 'GK'>
 
@@ -35,6 +50,8 @@ interface Spot {
   d: number
   /** Running speed (m/s) towards the goal the attackers attack (negative: towards their own). */
   run?: number
+  /** Facing his own goal (a pivot with his back to goal). */
+  backToGoal?: boolean
 }
 
 export interface Scenario {
@@ -57,6 +74,7 @@ export interface Scenario {
 }
 
 const s = (x: number, d: number, run = 0): Spot => ({ x, d, run })
+const back = (x: number, d: number): Spot => ({ x, d, run: 0, backToGoal: true })
 
 export const SCENARIOS: Record<ScenarioId, Scenario> = {
   breakaway: {
@@ -197,7 +215,193 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     timeLimit: 10,
     rotation: null,
   },
+  // ----- rotation library scenarios (original positions; see FUTSAL_ROTATIONS.md) -----
+  wingClearance: {
+    id: 'wingClearance',
+    // The right wing is marked tight ahead of the ball; the left ala waits deeper on that side.
+    attackers: { FIXO: s(0, 22), ALA_R: s(7, 18), ALA_L: s(3, 24.5), PIVOT: s(-1, 10) },
+    defenders: { ALA_L: s(6.6, 16.6), PIVOT: s(0.5, 18.8), FIXO: s(-0.8, 8.8), ALA_R: s(-4, 19.5) },
+    carrier: 'FIXO',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'wingClearance',
+  },
+  threeCircle: {
+    id: 'threeCircle',
+    // The right wing is shut down the line and the far wing is marked: back into the middle, up the
+    // wing, the far wing comes across.
+    attackers: { ALA_R: s(7, 23), FIXO: s(0, 27), ALA_L: s(-7, 24), PIVOT: s(0, 12) },
+    defenders: { ALA_L: s(6.8, 20.8), PIVOT: s(1.5, 22), ALA_R: s(-6.6, 22.6), FIXO: s(0, 10.8) },
+    carrier: 'ALA_R',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 10,
+    rotation: 'threeCircle',
+  },
+  crossRun: {
+    id: 'crossRun',
+    // 2-2: the carrier has time; the front pair is marked from goal-side and swaps sides.
+    attackers: { FIXO: s(-2, 22), ALA_R: s(4, 24), ALA_L: s(-5, 13), PIVOT: s(4.5, 13) },
+    defenders: { ALA_L: s(4.5, 11.6), ALA_R: s(-5, 11.6), PIVOT: s(-1, 17.5), FIXO: s(0, 7) },
+    carrier: 'FIXO',
+    attackFormation: '2-2',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'crossRun',
+  },
+  paralela: {
+    id: 'paralela',
+    // The right wing has time; the man behind him goes down the line into the space behind.
+    attackers: { ALA_R: s(7, 18), FIXO: s(5, 20.5), ALA_L: s(-6, 20), PIVOT: s(-3, 9) },
+    defenders: { ALA_L: s(4.8, 13.5), PIVOT: s(-3, 7.8), ALA_R: s(-5, 18), FIXO: s(-2, 17.5) },
+    carrier: 'ALA_R',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'paralela',
+  },
+  thirdMan: {
+    id: 'thirdMan',
+    // A to B (the right ala, free) while C (the left ala) is already going beyond him.
+    attackers: { FIXO: s(0, 22), ALA_R: s(5, 17), ALA_L: s(-1, 16), PIVOT: s(-5, 8) },
+    defenders: { ALA_L: s(7.5, 15.5), PIVOT: s(-2, 18), ALA_R: s(-2.5, 15), FIXO: s(-5, 6.8) },
+    carrier: 'FIXO',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'thirdMan',
+  },
+  underlap: {
+    id: 'underlap',
+    // The wide carrier's marker closes the line: the inside channel is the way.
+    attackers: { ALA_R: s(7, 17), FIXO: s(3, 22), ALA_L: s(-5, 20), PIVOT: s(-2.5, 8) },
+    defenders: { ALA_L: s(7.6, 15.6), PIVOT: s(-2.5, 6.8), ALA_R: s(-4.5, 18), FIXO: s(-1, 14) },
+    carrier: 'ALA_R',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'underlap',
+  },
+  pivotLayoff: {
+    id: 'pivotLayoff',
+    // The pivot has it with his back to goal and a man on him: lay-off spot and far post.
+    attackers: { PIVOT: back(0.5, 9), ALA_R: s(4, 14), ALA_L: s(-5, 15), FIXO: s(0, 22) },
+    defenders: { FIXO: s(0.5, 7.8), ALA_L: s(4.5, 12), ALA_R: s(-4.5, 13), PIVOT: s(0, 17) },
+    carrier: 'PIVOT',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 7,
+    rotation: 'pivotLayoff',
+  },
+  switchPlay: {
+    id: 'switchPlay',
+    // The defence has shifted over to the ball on the right; the left wing is free.
+    attackers: { ALA_R: s(6, 20), FIXO: s(1, 24), PIVOT: s(2, 12), ALA_L: s(-6.5, 19) },
+    defenders: { ALA_L: s(5.5, 17.8), PIVOT: s(3, 16.5), FIXO: s(2, 10.8), ALA_R: s(3.5, 21) },
+    carrier: 'ALA_R',
+    attackFormation: '4-0',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'switchPlay',
+  },
+  wideOverload: {
+    id: 'wideOverload',
+    // Ball on the right with one defender there and nobody with the carrier: bring two over.
+    attackers: { ALA_R: s(6.5, 16), FIXO: s(-2, 21), PIVOT: s(-2.5, 11), ALA_L: s(-6, 17) },
+    defenders: { ALA_L: s(6, 13.8), PIVOT: s(-2, 9.5), FIXO: s(-1.5, 17), ALA_R: s(-5, 15) },
+    carrier: 'ALA_R',
+    attackFormation: '2-2',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'wideOverload',
+  },
+  doubleCut: {
+    id: 'doubleCut',
+    // The right ala has time at the edge of the final third: near post and far post at once.
+    attackers: { ALA_R: s(5, 16), PIVOT: s(1, 12), ALA_L: s(-4, 14), FIXO: s(0, 23) },
+    defenders: { ALA_L: s(4, 12.5), PIVOT: s(-3.5, 12.2), FIXO: s(1, 9.5), ALA_R: s(-1, 18) },
+    carrier: 'ALA_R',
+    attackFormation: '4-0',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 7,
+    rotation: 'doubleCut',
+  },
+  oppositeMove: {
+    id: 'oppositeMove',
+    // Two attackers ahead, both marked: one comes short, the other goes in behind.
+    attackers: { FIXO: s(0, 22), PIVOT: s(-3, 12), ALA_L: s(3.5, 14), ALA_R: s(5, 24) },
+    defenders: { FIXO: s(-3, 10.8), ALA_L: s(3.5, 12.6), PIVOT: s(0, 19), ALA_R: s(4.5, 21) },
+    carrier: 'FIXO',
+    attackFormation: '2-2',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'oppositeMove',
+  },
+  diagonalRun: {
+    id: 'diagonalRun',
+    // The carrier is free in midcourt; the left ala attacks the gap across towards goal.
+    attackers: { FIXO: s(0, 21), ALA_L: s(-3, 19), ALA_R: s(6, 19), PIVOT: s(3, 8.5) },
+    defenders: { ALA_R: s(-3, 17.6), FIXO: s(3, 7), ALA_L: s(6.5, 19.5), PIVOT: s(-1.5, 23) },
+    carrier: 'FIXO',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 8,
+    rotation: 'diagonalRun',
+  },
+  isolation: {
+    id: 'isolation',
+    // A wide 1 v 1 near goal; the teammates near him clear the corridor.
+    attackers: { ALA_R: s(6, 14), PIVOT: s(3, 10), ALA_L: s(-4, 14), FIXO: s(0, 22) },
+    defenders: { ALA_L: s(6, 12), PIVOT: s(-3, 9), FIXO: s(2.5, 8.5), ALA_R: s(-4, 18) },
+    carrier: 'ALA_R',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 7,
+    rotation: 'isolation',
+  },
 }
+
+/**
+ * Demonstration: the scenario's own move only (every other family off, its own high), so the Lab
+ * can show it for teaching. Normal matches never do this: they select by context.
+ */
+export function demoPriorities(kind: RotationKind): Partial<Record<FamilyId, FamilyPriority>> {
+  const own = KIND_FAMILY[kind]
+  const out: Partial<Record<FamilyId, FamilyPriority>> = {}
+  for (const f of FAMILY_IDS) out[f] = f === own ? 'high' : 'off'
+  return out
+}
+
+/** Scenarios added with the rotation library (the Lab test runs them in demonstration mode). */
+export const LIBRARY_SCENARIOS: readonly ScenarioId[] = [
+  'wingClearance',
+  'threeCircle',
+  'crossRun',
+  'paralela',
+  'thirdMan',
+  'underlap',
+  'pivotLayoff',
+  'switchPlay',
+  'wideOverload',
+  'doubleCut',
+  'oppositeMove',
+  'diagonalRun',
+  'isolation',
+]
 
 export const SCENARIO_ORDER: readonly ScenarioId[] = [
   'breakaway',
@@ -212,6 +416,7 @@ export const SCENARIO_ORDER: readonly ScenarioId[] = [
   'wallPass',
   'backPost',
   'buildUpPress',
+  ...LIBRARY_SCENARIOS,
 ]
 
 function playerOf(state: MatchState, team: TeamId, role: PlayerRole): PlayerState {
@@ -249,6 +454,8 @@ function resetPlayer(p: PlayerState, pos: Vec2, vel: Vec2, facing: number): void
   p.aiRecoverTimer = 0
   p.aiDecision = ''
   p.aiState = ''
+  p.aiMove = null
+  p.aiMoveReadyAt = 0
 }
 
 /**
@@ -274,6 +481,9 @@ export function applyScenario(state: MatchState, sc: Scenario, attackTeam: TeamI
   state.pressTrigger = [null, null]
   state.rotation = [null, null]
   state.rotationReadyAt = [state.time, state.time]
+  // Fresh rotation bookkeeping (cooldowns, reservations, what was read of the defence), keeping
+  // the statistics the Lab counts.
+  state.rotationTeam = [emptyRotationTeam(), emptyRotationTeam()]
   state.defTransition = [false, false]
   state.possessionTeam = attackTeam
   state.aiPrevPossession = attackTeam
@@ -284,7 +494,7 @@ export function applyScenario(state: MatchState, sc: Scenario, attackTeam: TeamI
 
   for (const [role, sp] of Object.entries(sc.attackers) as [OutfieldRole, Spot][]) {
     const p = playerOf(state, attackTeam, role)
-    resetPlayer(p, at(sp), { x: 0, y: dir * (sp.run ?? 0) }, faceGoal)
+    resetPlayer(p, at(sp), { x: 0, y: dir * (sp.run ?? 0) }, sp.backToGoal ? faceOwn : faceGoal)
   }
   for (const [role, sp] of Object.entries(sc.defenders) as [OutfieldRole, Spot][]) {
     const p = playerOf(state, defendTeam, role)

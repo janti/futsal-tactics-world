@@ -1,5 +1,6 @@
 /** Team attacking movement: support positions, runs in behind, back post, set-piece routine. */
 import { clamp } from '../../core/math/scalar'
+import { moveStarted, rotationMove } from './rotations'
 import { addScaled, closestOnSegment, dist, len, normalize, sub, type Vec2 } from '../../core/math/vec2'
 import { laneOpenness, predictPassTarget, pressureOn } from '../../physics/PassingPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
@@ -110,8 +111,12 @@ const THROUGH_PASS_READ = 0.2
 export function runnerOption(state: MatchState, carrier: PlayerState): PlayerState | null {
   const dir = state.teams[carrier.team].attackDir
   let best: PlayerState | null = null
+  let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== carrier.team || t.id === carrier.id || t.aiState !== 'run' || t.aiRunTimer <= 0) continue
+    // A staggered run that has not gone yet is not an option.
+    const move = rotationMove(state, t)
+    if (move && !moveStarted(state, move)) continue
     if ((t.pos.y - carrier.pos.y) * dir < -1) continue
     if ((t.pos.y - carrier.pos.y) * dir < 2) continue
     const lead = predictPassTarget(carrier, t, true, dir)
@@ -123,7 +128,12 @@ export function runnerOption(state: MatchState, carrier: PlayerState): PlayerSta
       if (o.team !== carrier.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, lead))
     if (space < 3) continue
     if (passInterceptable(state, carrier.team, carrier.pos, lead, THROUGH_PASS_READ)) continue
-    if (!best || t.aiRunTimer > best.aiRunTimer) best = t
+    // The runner with the best reachable lane and the most room (cross runs: not simply the first).
+    const score = Math.min(laneOpenness(state, carrier.team, carrier.pos, lead), 3) + Math.min(space, 6) * 0.3
+    if (score > bestScore) {
+      bestScore = score
+      best = t
+    }
   }
   return best
 }

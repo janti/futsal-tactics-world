@@ -1,4 +1,9 @@
 import { FORMATIONS, PRESSING_HEIGHTS, type Formation, type PressingHeight } from '../simulation/Tactics'
+import {
+  DEFAULT_ROTATION_SETTINGS,
+  sanitizeRotationSettings,
+  type RotationSettings,
+} from '../ai/team/rotationLibrary'
 import { TEAM_LIBRARY } from '../data/teams'
 import { SCENARIOS, type ScenarioId, type ScenarioOutcome } from '../lab/scenarios'
 import {
@@ -71,6 +76,8 @@ export interface QuickMatchSetup {
   /** The human team's formation and pressing height. */
   formation: Formation
   pressing: PressingHeight
+  /** The human team's rotation style, priorities and preset. */
+  rotation: RotationSettings
 }
 
 export interface MatchResult {
@@ -111,6 +118,10 @@ export interface LabState {
   formation: Formation
   rotations: boolean
   pressing: PressingHeight
+  /** The attacking team's rotation style and priorities (kept across scenarios). */
+  rotation: RotationSettings
+  /** Demonstration: only the scenario's own move may be selected (teaching); off = normal selection. */
+  demo: boolean
   /** Bumped to start the scenario again. */
   resetNonce: number
   results: LabResults
@@ -135,6 +146,8 @@ function labFor(id: ScenarioId, prev?: LabState): LabState {
     formation: sc.attackFormation,
     rotations: prev?.rotations ?? true,
     pressing: sc.defendPressing,
+    rotation: prev?.rotation ?? sanitizeRotationSettings(DEFAULT_ROTATION_SETTINGS),
+    demo: prev?.demo ?? false,
     resetNonce: (prev?.resetNonce ?? 0) + 1,
     results: emptyLabResults(),
   }
@@ -197,7 +210,18 @@ export interface UiState {
   /** Change Lab settings; a new scenario resets its tactics and results, a new mode rebuilds the match. */
   setLab(
     patch: Partial<
-      Pick<LabState, 'scenario' | 'mode' | 'speed' | 'autoRepeat' | 'formation' | 'rotations' | 'pressing'>
+      Pick<
+        LabState,
+        | 'scenario'
+        | 'mode'
+        | 'speed'
+        | 'autoRepeat'
+        | 'formation'
+        | 'rotations'
+        | 'pressing'
+        | 'rotation'
+        | 'demo'
+      >
     >,
   ): void
   resetLabScenario(): void
@@ -273,6 +297,7 @@ const DEFAULT_QUICK: QuickMatchSetup = {
   difficulty: 'normal',
   formation: '3-1',
   pressing: 'mid',
+  rotation: sanitizeRotationSettings(DEFAULT_ROTATION_SETTINGS),
 }
 
 function loadQuickMatch(teamCount = TEAM_LIBRARY.length): QuickMatchSetup {
@@ -293,6 +318,7 @@ function loadQuickMatch(teamCount = TEAM_LIBRARY.length): QuickMatchSetup {
         pressing: PRESSING_HEIGHTS.includes(v.pressing as PressingHeight)
           ? (v.pressing as PressingHeight)
           : 'mid',
+        rotation: sanitizeRotationSettings(v.rotation),
       }
       if (q.homeIndex === q.awayIndex) q.awayIndex = (q.homeIndex + 1) % teamCount
       return q
@@ -300,7 +326,7 @@ function loadQuickMatch(teamCount = TEAM_LIBRARY.length): QuickMatchSetup {
   } catch {
     /* use defaults */
   }
-  return { ...DEFAULT_QUICK }
+  return { ...DEFAULT_QUICK, rotation: sanitizeRotationSettings(DEFAULT_ROTATION_SETTINGS) }
 }
 
 function loadKeepAttackingUp(): boolean {

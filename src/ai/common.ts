@@ -1,6 +1,7 @@
 /** Shared AI helpers and constants (difficulty, team geometry queries, shooting lanes). */
 import { clamp } from '../core/math/scalar'
 import { closestOnSegment, dist, len, sub, type Vec2 } from '../core/math/vec2'
+import type { MatchEvent } from '../simulation/Events'
 import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
 import { COURT, POST_X } from '../simulation/SimulationConfig'
 import { baseAnchor } from './positioning/Formation'
@@ -27,6 +28,8 @@ export interface AIActions {
   lobShot(p: PlayerState, target: Vec2, apex: number): void
   /** Goalkeeper throw in an arc from the hands to a teammate (over the opponents). */
   lobThrow(p: PlayerState, receiver: PlayerState, apex: number): void
+  /** AI-layer events (rotations) into the match event stream; optional for test doubles. */
+  emitEvent?(e: MatchEvent): void
 }
 
 /** Goal clearance: the alas start this much deeper (metres) so the keeper has an easier angle out to the wing. */

@@ -2,6 +2,17 @@ import type { Vec2 } from '../core/math/vec2'
 import type { RestartType, TeamId } from './MatchState'
 
 export type MatchEvent =
+  | { type: 'RotationStarted'; tick: number; team: TeamId; kind: string; instance: number; score: number }
+  | { type: 'RotationOpportunity'; tick: number; team: TeamId; kind: string; instance: number }
+  | {
+      type: 'RotationEnded'
+      tick: number
+      team: TeamId
+      kind: string
+      instance: number
+      completed: boolean
+      reason: string
+    }
   | { type: 'PassStarted'; tick: number; playerId: number; receiverId: number | null; through: boolean }
   | { type: 'PassCompleted'; tick: number; playerId: number; receiverId: number }
   | { type: 'BallIntercepted'; tick: number; playerId: number; team: TeamId }

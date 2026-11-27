@@ -1,18 +1,18 @@
 # Roadmap
 
-| #   | Milestone                                                                                                                       | Status  |
-| --- | ------------------------------------------------------------------------------------------------------------------------------- | ------- |
-| 0   | Project foundation (Vite, strict TS, Three.js, React, Zustand, Vitest, lint, docs, RNG, vectors)                                | ✅ Done |
-| 1   | Playable 3D prototype (court, goals, procedural players, ball physics, 78° camera, keyboard, pass, shoot, goals, animations)    | ✅ Done |
-| 2   | Complete basic arcade match (match clock + halves, full restarts, match end, Quick Match menu with team/length choice)          | ✅ Done |
-| 3   | Gameplay physics and controls polish (touch-based dribbling, shielding, interceptions, gamepad completeness, assistance levels) | ✅ Done |
-| 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)               | ✅ Done |
-| 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                       | ✅ Done |
-| 6   | Advanced futsal tactics (all formations, rotations, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay)   | Next    |
-| 7   | Rules and tactical editor (versioned rules engine, fouls, cards, substitutions, stamina, timeouts, flying GK, AI coach)         |         |
-| 8   | Presentation and analysis (arenas, audio, crowd, replays, statistics, analysis, coach/spectator/training modes)                 |         |
-| 9   | Career mode (clubs, players, competitions, saves, transfers, training, finances, multi-season)                                  |         |
-| 10  | Release preparation (performance, compatibility, accessibility, localisation review, offline, deployment)                       |         |
+| #   | Milestone                                                                                                                                                | Status      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| 0   | Project foundation (Vite, strict TS, Three.js, React, Zustand, Vitest, lint, docs, RNG, vectors)                                                         | ✅ Done     |
+| 1   | Playable 3D prototype (court, goals, procedural players, ball physics, 78° camera, keyboard, pass, shoot, goals, animations)                             | ✅ Done     |
+| 2   | Complete basic arcade match (match clock + halves, full restarts, match end, Quick Match menu with team/length choice)                                   | ✅ Done     |
+| 3   | Gameplay physics and controls polish (touch-based dribbling, shielding, interceptions, gamepad completeness, assistance levels)                          | ✅ Done     |
+| 4   | Camera and visual identity (all presets incl. horizontal, Camera Lab, radar, graphics settings UI, polished hall)                                        | ✅ Done     |
+| 5   | Tactical AI foundation (utility AI, phases, spatial grid, time-to-reach model, role assignment, coverage)                                                | ✅ Done     |
+| 6   | Advanced futsal tactics (formations, rotation library of 25 movement families, pivot play, back post, pressing triggers, Tactical Lab, AI debug overlay) | In progress |
+| 7   | Rules and tactical editor (versioned rules engine, fouls, cards, substitutions, stamina, timeouts, flying GK, AI coach)                                  |             |
+| 8   | Presentation and analysis (arenas, audio, crowd, replays, statistics, analysis, coach/spectator/training modes)                                          |             |
+| 9   | Career mode (clubs, players, competitions, saves, transfers, training, finances, multi-season)                                                           |             |
+| 10  | Release preparation (performance, compatibility, accessibility, localisation review, offline, deployment)                                                |             |
 
 ## Acceptance criteria used so far
 

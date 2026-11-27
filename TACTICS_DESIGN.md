@@ -184,13 +184,36 @@ stage 3 called the combinations "rotations" and had no continuous rotation; corr
   past his man passes it back under pursuit from behind instead of driving on (the chaser counts as
   pressure). To be worked on with the Lab.
 
+## Milestone 6, continued: rotation and off-ball movement library
+
+The rotations and combinations of stage 3 became a library of 25 movement families chosen by
+utility against keeping the shape — full reference in **FUTSAL_ROTATIONS.md**.
+
+- Existing kinds kept and upgraded: pohjakasi (and from the wing), perhonen (now the 4-0 oito: the
+  other central player staggers his depth), the 4-player rotation (quatro), wall pass, overlap,
+  pivot switch (now also a temporary pivot in 4-0 / 2-2), back post (now timed to the ball across).
+- New: wing clearance (with branches on the marker's response), 3-player rotation, diagonal and
+  parallel rotations, cross run (staggered), paralela, diagonal run, third man (runner starts before
+  the link has the ball), underlap, pivot layoff, double cut, opposite movement, wide overload,
+  switch of play, pisada (a rolled pass), isolation; individual V-cut and between-the-lines.
+- Selection: normalised factors (space, penetration, lanes, defender displacement, suitability,
+  support, numbers, scoring; minus interception, congestion, transition, stamina, repetition,
+  coordination), weights from the settings, score and time and the opponent's observed defending
+  (man-oriented vs zonal, block height), formation profiles, priorities; hysteresis.
+- Space reservations, scored rest defence, defender-response reading, target reassignment, move
+  states and statistics, rotation events, AI view details.
+- Team settings (8 sliders, per-family priority, 6 presets) in Quick Match and the Lab; the Lab got
+  13 new scenarios and a demonstration mode.
+- Measured before/after (AI vs AI, 36 min per formation): see FUTSAL_ROTATIONS.md §7.
+
 ## Planned
 
 - Formations: 4-0, 2-2, 1-2-1, 2-1-1, 5v4 flying-goalkeeper shapes (2-1-2, 3-2, 1-2-2), numerical
   disadvantage shapes.
 - Separate templates for build-up, mid-court, final third, high press, mid-block, low block and
   transitions, blended by context.
-- More on the same framework: 3-1 circular rotation (redondo), false pivot, the 3-player 4-0 rotation
-  with a fixed fixo, third-man runs, underlap, overload-and-switch.
+- More on the same framework: false pivot, the 3-player 4-0 rotation with a fixed fixo (the 3-1
+  circular rotation, third-man runs, underlap and overload-and-switch are in the library now).
 - Pressing styles (low, mid, high, aggressive) with triggers; man-to-man, zonal and hybrid defending.
-- Tactical editor (0–100 sliders), presets, individual instructions, quick commands, AI coach.
+- Tactical editor (the rotation sliders, priorities and presets exist; the full editor with individual
+  instructions, quick commands and the AI coach is M7).

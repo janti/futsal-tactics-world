@@ -6,6 +6,7 @@ import { HALF_LENGTH_OPTIONS } from '../../simulation/MatchRules'
 import { DIFFICULTIES } from '../../simulation/Difficulty'
 import { useUi } from '../store'
 import { useT } from '../useT'
+import { RotationSettingsPanel } from './RotationSettingsPanel'
 
 function hex(n: number): string {
   return `#${n.toString(16).padStart(6, '0')}`
@@ -151,6 +152,16 @@ export function QuickMatchSetupScreen() {
             ))}
           </div>
         </div>
+
+        <details className="setup-rotations">
+          <summary>{t('rot.section')}</summary>
+          <RotationSettingsPanel
+            testId="setup-rot"
+            value={q.rotation}
+            onChange={(rotation) => setQuickMatch({ rotation })}
+            onFormation={(formation) => setQuickMatch({ formation })}
+          />
+        </details>
 
         <label className="setup-check">
           <input

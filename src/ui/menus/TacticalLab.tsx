@@ -4,6 +4,7 @@ import type { TranslationKey } from '../../localization/i18n'
 import { FORMATIONS, PRESSING_HEIGHTS } from '../../simulation/Tactics'
 import { useUi, type LabMode } from '../store'
 import { useT } from '../useT'
+import { RotationSettingsPanel } from './RotationSettingsPanel'
 
 const MODES: LabMode[] = ['watch', 'attack', 'defend']
 const SPEEDS = [0.25, 0.5, 1]
@@ -105,6 +106,28 @@ export function TacticalLab() {
         />
         <span>{t('tlab.rotations')}</span>
       </label>
+      {lab.rotations && SCENARIOS[lab.scenario].rotation && (
+        <label className="setup-check" title={t('tlab.demo.desc')}>
+          <input
+            type="checkbox"
+            data-testid="tlab-demo"
+            checked={lab.demo}
+            onChange={(e) => setLab({ demo: e.target.checked })}
+          />
+          <span>{t('tlab.demo')}</span>
+        </label>
+      )}
+      {lab.rotations && (
+        <details className="lab-rotations">
+          <summary>{t('rot.section')}</summary>
+          <RotationSettingsPanel
+            testId="tlab-rot"
+            value={lab.rotation}
+            onChange={(rotation) => setLab({ rotation })}
+            onFormation={(formation) => setLab({ formation })}
+          />
+        </details>
+      )}
 
       <div className="lab-row">
         <span>{t('tlab.speed')}</span>
@@ -179,6 +202,9 @@ export function TacticalLab() {
             <li>{t('debug.legend.target')}</li>
             <li>{t('debug.legend.marking')}</li>
             <li>{t('debug.legend.rotation')}</li>
+            <li>{t('debug.legend.reserved')}</li>
+            <li>{t('debug.legend.vacated')}</li>
+            <li>{t('debug.legend.pass')}</li>
           </ul>
         </>
       )}

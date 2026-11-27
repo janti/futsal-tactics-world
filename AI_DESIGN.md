@@ -2,20 +2,22 @@
 
 ## Structure (Milestone 5)
 
-| Layer   | Module                                                              | Responsibility                                                                                                                          |
-| ------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Update  | `ai/BasicAI.ts`                                                     | Per-tick loop: phases, ball winner and helper per team, then each player's behaviour                                                    |
-| Team    | `ai/team/phases.ts`                                                 | Team phase: attack, counter-attack window (2.5 s after winning the ball), defence, transition to defence, set piece, dead               |
-| Team    | `ai/team/defending.ts`                                              | Ball winner, cover defender, diamond marking, 2 v 1, transitions                                                                        |
-| Team    | `ai/team/attacking.ts`                                              | Support positions, runs in behind, back post, set-piece routine                                                                         |
-| Debug   | `rendering/AIDebugOverlay.ts`                                       | AI view (key 7) over the main view: intention lines, states/decisions, marking, rotations, pressing jump                                |
-| Team    | `ai/team/rotations.ts`                                              | Rotations (pohjakasi, perhonen, 4-player) and combinations (1-2, overlap, pivot switch, back post); see TACTICS_DESIGN.md               |
-| Team    | `ai/team/roles.ts`                                                  | Dynamic attacking roles: the four outfield roles go to whoever is nearest their place (all permutations, 0.5 s refresh, 3 m hysteresis) |
-| Player  | `ai/player/carrier.ts`                                              | Utility-scored options for the ball carrier, challenges, breakaways                                                                     |
-| Player  | `ai/player/goalkeeper.ts`                                           | Positioning, saves, narrowing, claiming, distribution                                                                                   |
-| Player  | `ai/player/offBall.ts`                                              | Press, chase, cover, support, runs                                                                                                      |
-| Shared  | `ai/passing.ts`, `ai/movement.ts`, `ai/restarts.ts`, `ai/common.ts` | Pass choice and safety, steering, restarts, helpers                                                                                     |
-| Spatial | `ai/spatial/PitchControl.ts`                                        | Pitch control on 2 m cells (who arrives first, logistic), cached 5x a second                                                            |
+| Layer   | Module                                                                                                             | Responsibility                                                                                                                             |
+| ------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Update  | `ai/BasicAI.ts`                                                                                                    | Per-tick loop: phases, ball winner and helper per team, then each player's behaviour                                                       |
+| Team    | `ai/team/phases.ts`                                                                                                | Team phase: attack, counter-attack window (2.5 s after winning the ball), defence, transition to defence, set piece, dead                  |
+| Team    | `ai/team/defending.ts`                                                                                             | Ball winner, cover defender, diamond marking, 2 v 1, transitions                                                                           |
+| Team    | `ai/team/attacking.ts`                                                                                             | Support positions, runs in behind, back post, set-piece routine                                                                            |
+| Debug   | `rendering/AIDebugOverlay.ts`                                                                                      | AI view (key 7) over the main view: intention lines, states/decisions, marking, rotations, pressing jump                                   |
+| Team    | `ai/team/rotations.ts`                                                                                             | Rotation library runtime: one coordinated move per team, states, defender response, reservations, statistics; see FUTSAL_ROTATIONS.md      |
+| Team    | `ai/team/rotationLibrary.ts`, `rotationPlanners.ts`, `rotationSelect.ts`, `rotationSupport.ts`, `rotationState.ts` | 25 family definitions and settings; planners (trigger + plan); utility selection against keeping the shape; shared geometry; runtime types |
+| Player  | `ai/player/individual.ts`                                                                                          | Individual movements: V-cut, between the lines                                                                                             |
+| Team    | `ai/team/roles.ts`                                                                                                 | Dynamic attacking roles: the four outfield roles go to whoever is nearest their place (all permutations, 0.5 s refresh, 3 m hysteresis)    |
+| Player  | `ai/player/carrier.ts`                                                                                             | Utility-scored options for the ball carrier, challenges, breakaways                                                                        |
+| Player  | `ai/player/goalkeeper.ts`                                                                                          | Positioning, saves, narrowing, claiming, distribution                                                                                      |
+| Player  | `ai/player/offBall.ts`                                                                                             | Press, chase, cover, support, runs                                                                                                         |
+| Shared  | `ai/passing.ts`, `ai/movement.ts`, `ai/restarts.ts`, `ai/common.ts`                                                | Pass choice and safety, steering, restarts, helpers                                                                                        |
+| Spatial | `ai/spatial/PitchControl.ts`                                                                                       | Pitch control on 2 m cells (who arrives first, logistic), cached 5x a second                                                               |
 
 The time-to-reach model (`physics/PlayerPhysics.estimateTimeToReach`) includes reaction, turning
 (half of the turn time beyond 30 degrees), acceleration and top speed, and is shared by all of the
@@ -24,7 +26,7 @@ above. Key 7 shows pitch control and the team phases on the radar.
 **Utility decisions** (`carrierOptions`): every option gets a utility — shooting band 0.9+ (after the
 player's willingness-to-shoot roll), direct pass to a free teammate in a scoring position 0.8+ (1.0+
 when his shot value is clearly better than ours: the square ball), through ball 0.78, challenge 0.7,
-forward pass 0.6+, circulation 0.4, clearance up the wing 0.35 (own third under pressure), last-resort pass 0.25; carrying is the
+forward pass 0.6+, rotation library: 1-2 0.755, third-man link 0.75, pisada 0.745, isolation challenge 0.77, switch of play 0.62, circulation 0.4, clearance up the wing 0.35 (own third under pressure), last-resort pass 0.25; carrying is the
 default. After a forward or circulation pass the passer runs into space for the return (pass and
 move). On a breakaway the carrier finishes from about 8 m, or squares it when forced earlier. `shotValue` is a
 rough expected-goal value from distance, angle, lane and pressure.

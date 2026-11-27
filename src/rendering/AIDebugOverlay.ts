@@ -1,6 +1,7 @@
 import { Vector3, type Camera } from 'three'
 import type { MatchState, TeamId } from '../simulation/MatchState'
 import { pressTriggerActive } from '../ai/team/pressing'
+import { spaceAt } from '../ai/team/rotationSupport'
 
 /** Colour per AI state (the legend in the Lab panel uses the same table). */
 export const AI_STATE_COLORS: Record<string, string> = {
@@ -93,6 +94,65 @@ export class AIDebugOverlay {
       ctx.globalAlpha = 1
     }
 
+    // Reserved spaces (hatched amber rings: the line style tells them apart without colour), the
+    // space a move has left free (green ring) and the possible passes to runners (dotted white).
+    const ring = (x: number, y: number, r: number) => {
+      const [cx, cy] = px(x, y)
+      const [ex] = px(x + r, y)
+      const [, ey] = px(x, y + r)
+      return { cx, cy, rx: Math.max(6, Math.abs(ex - cx)), ry: Math.max(4, Math.abs(ey - cy)) }
+    }
+    for (const team of [0, 1] as const) {
+      for (const res of state.rotationTeam[team].reservations) {
+        const e = ring(res.center.x, res.center.y, res.radius)
+        ctx.save()
+        ctx.beginPath()
+        ctx.ellipse(e.cx, e.cy, e.rx, e.ry, 0, 0, Math.PI * 2)
+        ctx.strokeStyle = 'rgba(233, 187, 72, 0.9)'
+        ctx.lineWidth = 1.5
+        ctx.setLineDash([4, 3])
+        ctx.stroke()
+        ctx.clip()
+        ctx.setLineDash([])
+        ctx.strokeStyle = 'rgba(233, 187, 72, 0.35)'
+        for (let k = -e.rx * 2; k < e.rx * 2; k += 7) {
+          ctx.beginPath()
+          ctx.moveTo(e.cx + k, e.cy - e.ry)
+          ctx.lineTo(e.cx + k + e.ry * 2, e.cy + e.ry)
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+      const r = state.rotation[team]
+      if (!r) continue
+      for (const m of r.moves) {
+        if (!m.origin || (m.job !== 'run' && m.job !== 'cover' && m.job !== 'drop')) continue
+        if (dist2(state.players[m.id]!.pos, m.origin) < 4 || spaceAt(state, team, m.origin) < 2.5) continue
+        const e = ring(m.origin.x, m.origin.y, 1.6)
+        ctx.strokeStyle = '#4ade80'
+        ctx.lineWidth = 2
+        ctx.setLineDash([])
+        ctx.beginPath()
+        ctx.ellipse(e.cx, e.cy, e.rx, e.ry, 0, 0, Math.PI * 2)
+        ctx.stroke()
+      }
+      const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+      if (owner && owner.team === team)
+        for (const m of r.moves) {
+          if ((m.job !== 'run' && m.job !== 'post') || m.id === owner.id) continue
+          const [ax, ay] = px(owner.pos.x, owner.pos.y)
+          const [bx, by] = px(m.target.x, m.target.y)
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'
+          ctx.lineWidth = 1.5
+          ctx.setLineDash([2, 4])
+          ctx.beginPath()
+          ctx.moveTo(ax, ay)
+          ctx.lineTo(bx, by)
+          ctx.stroke()
+          ctx.setLineDash([])
+        }
+    }
+
     // Rotations: participants' paths (thick, amber) with the job at the target.
     for (const team of [0, 1] as const) {
       const r = state.rotation[team]
@@ -114,7 +174,15 @@ export class AIDebugOverlay {
           ;[ax, ay] = [vx, vy]
         }
         arrow(ctx, ax, ay, bx, by)
-        tag(ctx, bx, by + 12, labels.label(`job.${m.job}`), '#e9bb48')
+        const wait = m.startAt !== undefined && m.startAt > state.time
+        const job = labels.label(`job.${m.job}`)
+        tag(
+          ctx,
+          bx,
+          by + 12,
+          wait ? `${job} · ${labels.label('wait')} ${(m.startAt! - state.time).toFixed(1)} s` : job,
+          '#e9bb48',
+        )
       }
     }
 
@@ -174,6 +242,19 @@ export class AIDebugOverlay {
       ctx.fillStyle = '#e9eef5'
       ctx.fillText(line, 20, y + 1)
       y += 23
+      // The selection: score against keeping the shape, the defender's response, alternatives that
+      // lost, how the last move ended.
+      const detail = selectionLine(state, team, labels)
+      if (detail) {
+        ctx.font = '500 11px system-ui, sans-serif'
+        const dw = ctx.measureText(detail).width
+        ctx.fillStyle = 'rgba(14, 22, 31, 0.7)'
+        ctx.fillRect(10, y - 13, dw + 22, 17)
+        ctx.fillStyle = '#c9d4e0'
+        ctx.fillText(detail, 20, y)
+        ctx.font = '600 12px system-ui, sans-serif'
+        y += 21
+      }
     }
   }
 
@@ -189,6 +270,29 @@ function teamLine(state: MatchState, team: TeamId, labels: DebugLabels): string 
   const t = state.pressTrigger[team]
   if (t && pressTriggerActive(state, team))
     parts.push(`${labels.label('press')}: ${labels.label(`cue.${t.kind}`)}`)
+  return parts.join('  ·  ')
+}
+
+function selectionLine(state: MatchState, team: TeamId, labels: DebugLabels): string {
+  const rt = state.rotationTeam[team]
+  const r = state.rotation[team]
+  const parts: string[] = []
+  if (r) {
+    parts.push(
+      `${labels.label(`rstatus.${r.status}`)} ${r.score.toFixed(2)} > ${labels.label('stay')} ${r.stay.toFixed(2)}`,
+    )
+    if (r.response !== 'pending') parts.push(labels.label(`response.${r.response}`))
+    if (r.branch) parts.push(r.branch)
+    if (r.rejected.length)
+      parts.push(
+        r.rejected
+          .slice(0, 2)
+          .map((x) => `${labels.label(`rotation.${x.kind}`)} ${x.score.toFixed(2)}`)
+          .join(', '),
+      )
+  } else if (rt.last && state.time - rt.last.time < 4) {
+    parts.push(`${labels.label(`rotation.${rt.last.kind}`)}: ${labels.label(`reason.${rt.last.reason}`)}`)
+  }
   return parts.join('  ·  ')
 }
 

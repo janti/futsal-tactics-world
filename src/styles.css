@@ -689,3 +689,48 @@ button.primary:focus-visible {
   color: var(--text2);
   max-width: 34em;
 }
+
+/* Rotation settings (Quick Match setup and Tactical Lab) */
+.setup-rotations,
+.lab-rotations {
+  margin: 0.4rem 0;
+}
+.setup-rotations > summary,
+.lab-rotations > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.rotation-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+}
+.rotation-slider {
+  display: grid;
+  grid-template-columns: 11rem 1fr 2.2rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+.rotation-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.rotation-priorities {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem 0.75rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  font-size: 0.8rem;
+}
+.rotation-priorities > .setup-label {
+  grid-column: 1 / -1;
+}
+.rotation-priority {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+  align-items: center;
+}

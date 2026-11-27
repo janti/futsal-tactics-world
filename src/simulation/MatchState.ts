@@ -3,7 +3,9 @@ import type { Difficulty } from './Difficulty'
 import type { Vec2 } from '../core/math/vec2'
 import type { ControlOptions } from './ControlOptions'
 import type { MatchRules, TeamStats } from './MatchRules'
-import type { Rotation, RotationKind, RotationStats } from '../ai/team/rotations'
+import type { Rotation, RotationStats } from '../ai/team/rotations'
+import type { MovementKind } from '../ai/team/rotationLibrary'
+import type { IndividualMove, RotationTeamState } from '../ai/team/rotationState'
 
 export type TeamId = 0 | 1
 export type AttackDir = 1 | -1
@@ -130,6 +132,10 @@ export interface PlayerState {
   /** AI: the carrier's last decision (utility option kind), for debugging. */
   aiDecision: string
   aiState: string
+  /** Individual movement in progress (V-cut, between the lines), or null. */
+  aiMove: IndividualMove | null
+  /** Earliest simulation time for his next individual movement. */
+  aiMoveReadyAt: number
 }
 
 export type BufferedAction =
@@ -303,7 +309,9 @@ export interface MatchState {
   /** Simulation time from which each team may start its next rotation. */
   rotationReadyAt: [number, number]
   /** Rotations started / completed per team and kind (analysis, tests, the debug overlay). */
-  rotationStats: [Record<RotationKind, RotationStats>, Record<RotationKind, RotationStats>]
+  rotationStats: [Record<MovementKind, RotationStats>, Record<MovementKind, RotationStats>]
+  /** Rotation library bookkeeping per team: selection, reservations, observed defending, credits. */
+  rotationTeam: [RotationTeamState, RotationTeamState]
   /** AI bookkeeping: possession seen on the previous AI update. */
   aiPrevPossession: TeamId | null
   /** Strength of the computer opponent (affects only the non-human team). */

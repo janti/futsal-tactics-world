@@ -62,5 +62,6 @@ describe('AI vs AI match flow (headless)', () => {
     let goals = 0
     for (const seed of [1, 2, 3, 4, 5, 6]) goals += runAiMatch(seed, 240).counts.GoalScored ?? 0
     expect(goals).toBeGreaterThan(0)
-  })
+    // (24 minutes of AI football: about 5 s alone, more when the whole suite runs in parallel.)
+  }, 60000)
 })

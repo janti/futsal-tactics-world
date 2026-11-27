@@ -10,9 +10,15 @@ import { screenFactor } from '../../simulation/MatchSimulation'
 import { type AIActions, spaceAhead, shootingLane, isLastMan, deepestOutfield } from '../common'
 import { runnerOption } from '../team/attacking'
 import {
+  isolationDefender,
+  pisadaOption,
   rotationMove,
   rotationPassTarget,
+  startPisada,
   startWallPass,
+  switchPlayTarget,
+  thirdManLinkTarget,
+  thirdManRunner,
   wallPassOption,
   wallPassRunner,
 } from '../team/rotations'
@@ -57,7 +63,8 @@ export function carrierBehaviour(
   // The wall of a 1-2: the ball goes straight back into the runner's path (first time). If the way
   // back has been shut he keeps it (the rotation then runs out).
   const wall = wallPassRunner(state, p)
-  if (wall && p.aiHoldTimer < 0.6) {
+  // Not blindly: only once the runner is past the man he went round (else the ball goes into him).
+  if (wall && p.aiHoldTimer < 0.6 && runnerPastDefender(state, p, wall.runner)) {
     const lead = {
       x: wall.runner.pos.x * 0.4 + wall.target.x * 0.6,
       y: wall.runner.pos.y * 0.4 + wall.target.y * 0.6,
@@ -65,6 +72,21 @@ export function carrierBehaviour(
     if (!passInterceptable(state, p.team, p.pos, lead)) {
       p.aiDecision = 'wallReturn'
       actions.pass(p, sub(lead, p.pos), true, wall.runner)
+      return
+    }
+  }
+
+  // The link of a third-man combination: the runner who started before the ball came is played in
+  // first time. With the way shut he keeps it (the move then runs out).
+  const third = thirdManRunner(state, p)
+  if (third && p.aiHoldTimer < 0.6) {
+    const lead = {
+      x: third.runner.pos.x * 0.35 + third.target.x * 0.65,
+      y: third.runner.pos.y * 0.35 + third.target.y * 0.65,
+    }
+    if (!passInterceptable(state, p.team, p.pos, lead)) {
+      p.aiDecision = 'thirdManPass'
+      actions.pass(p, sub(lead, p.pos), true, third.runner)
       return
     }
   }
@@ -259,6 +281,17 @@ export function carrierBehaviour(
   }
 }
 
+/** The 1-2 runner has got level with or past every defender between him and his run target. */
+function runnerPastDefender(state: MatchState, wall: PlayerState, runner: PlayerState): boolean {
+  const dir = state.teams[runner.team].attackDir
+  for (const o of state.players) {
+    if (o.team === runner.team || o.role === 'GK') continue
+    // A defender right on the runner, goal-side of him: the return would run into him.
+    if (dist(o.pos, runner.pos) < 1.6 && (o.pos.y - runner.pos.y) * dir > 0.2) return false
+  }
+  return dist(wall.pos, runner.pos) > 2
+}
+
 export type CarrierOptionKind =
   | 'shoot'
   | 'longShot'
@@ -276,6 +309,10 @@ export type CarrierOptionKind =
   | 'wallPass'
   | 'pivotDrop'
   | 'rotationPass'
+  | 'thirdMan'
+  | 'switchPlay'
+  | 'pisada'
+  | 'isolation'
   | 'escape'
 
 export interface CarrierOption {
@@ -423,13 +460,51 @@ export function carrierOptions(
     if (wp && rng.chance(attr(a.creativity, 0.35, 0.7)))
       out.push({
         kind: 'wallPass',
-        utility: 0.74,
+        // (Just above the third-man ball into the same link: his own run past the man in front of
+        // him is the more immediate chance.)
+        utility: 0.755,
         act: (x) => {
           startWallPass(state, p, wp.wall, wp.run)
           x.pass(p, sub(wp.wall.pos, p.pos), false, wp.wall)
         },
       })
   }
+
+  // Third man: the ball into the link while the third man is already on his way.
+  const link = thirdManLinkTarget(state, p)
+  if (link && !out.some((o) => o.utility >= 0.78))
+    out.push({ kind: 'thirdMan', utility: 0.75, act: (x) => x.pass(p, sub(link.pos, p.pos), false, link) })
+
+  // Switch of play: the opponents have shifted over; the ball goes across (or via the deep man).
+  const sw = switchPlayTarget(state, p)
+  if (sw && p.aiHoldTimer > 0.2)
+    out.push({ kind: 'switchPlay', utility: 0.62, act: (x) => x.pass(p, sub(sw.pos, p.pos), false, sw) })
+
+  // Pisada: pressed, he rolls it with the sole into the path of a teammate coming past him.
+  if (!out.some((o) => o.utility >= 0.76)) {
+    const pis = pisadaOption(state, p)
+    if (pis && rng.chance(attr(a.soleControl, 0.15, 0.45)))
+      out.push({
+        kind: 'pisada',
+        utility: 0.745,
+        act: (x) => {
+          startPisada(state, p, pis.mate, pis.point)
+          p.sole = true
+          // Into his stride (he is running), softly: a short roll, not a through ball upfield.
+          x.pass(p, sub(pis.point, p.pos), false, pis.mate, undefined, 3)
+        },
+      })
+  }
+
+  // Isolation: the corridor has been cleared for his 1 v 1 — take the man on (if it is still 1 v 1).
+  const iso = isolationDefender(state, p)
+  if (
+    iso &&
+    p.aiChallengeTimer >= 0 &&
+    !out.some((o) => o.utility >= 0.78) &&
+    startChallenge(state, p, iso, rng, true)
+  )
+    out.push({ kind: 'isolation', utility: 0.77, act: () => undefined })
 
   // Pivot rotation: the pivot comes short to show; free and with a clear lane he gets it to feet.
   const rot = state.rotation[p.team]
@@ -940,6 +1015,8 @@ function startChallenge(
   p: PlayerState,
   defender: PlayerState | null,
   rng: SeededRandom,
+  /** Isolation: the team cleared the space for it, so he goes (no chance roll). */
+  force = false,
 ): boolean {
   if (!defender || defender.role === 'GK' || isLastMan(state, p)) return false
   const dir = state.teams[p.team].attackDir
@@ -954,7 +1031,7 @@ function startChallenge(
   // One decision per possession (the first time a defender stands in front of him).
   if (p.aiChallengeTimer < 0) return false
   const a = p.profile.attributes
-  if (!rng.chance(attr(a.dribbling, 0.22, 0.6))) {
+  if (!force && !rng.chance(attr(a.dribbling, 0.22, 0.6))) {
     p.aiChallengeTimer = -1
     return false
   }

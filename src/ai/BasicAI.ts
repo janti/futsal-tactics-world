@@ -38,7 +38,7 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
   updateDefensiveTransitions(state)
   updateTeamPhases(state)
   updatePressTriggers(state)
-  updateRotations(state)
+  updateRotations(state, actions.emitEvent ? (e) => actions.emitEvent!(e) : undefined)
   const chasers: [number | null, number | null] = [pickBallWinner(state, 0), pickBallWinner(state, 1)]
   const helpers: [number | null, number | null] = [
     pickHelper(state, 0, chasers[0]),

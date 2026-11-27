@@ -3,6 +3,14 @@
  * command during the match and are read by the AI every tick.
  */
 
+import {
+  DEFAULT_STYLE,
+  type FamilyId,
+  type FamilyPriority,
+  type PresetId,
+  type RotationStyle,
+} from '../ai/team/rotationLibrary'
+
 /**
  * Attacking formation (outfield players; the keeper is not counted):
  * - `3-1`: fixo at the back, two alas, a pivot up front (the classic diamond).
@@ -22,14 +30,37 @@ export type PressingHeight = 'low' | 'mid' | 'high'
 export interface TeamTactics {
   formation: Formation
   pressing: PressingHeight
-  /** Attacking rotations (wall pass, overlap, pivot / 4-0 / back-post rotation) on or off. */
+  /** Attacking rotations and off-ball movement library on or off (off: the basic tactical AI). */
   rotations: boolean
+  /** Rotation settings 0-100 (see RotationStyle). */
+  style: RotationStyle
+  /** Per movement family priority (missing = normal). */
+  priorities: Partial<Record<FamilyId, FamilyPriority>>
+  /** The preset the settings came from (null: custom). */
+  preset: PresetId | null
 }
 
 export const FORMATIONS: readonly Formation[] = ['3-1', '4-0', '2-2']
 export const PRESSING_HEIGHTS: readonly PressingHeight[] = ['low', 'mid', 'high']
 
-export const DEFAULT_TACTICS: TeamTactics = { formation: '3-1', pressing: 'mid', rotations: true }
+export const DEFAULT_TACTICS: TeamTactics = {
+  formation: '3-1',
+  pressing: 'mid',
+  rotations: true,
+  style: { ...DEFAULT_STYLE },
+  priorities: {},
+  preset: null,
+}
+
+/** Merge a partial tactics change (style values merge key by key; priorities replace). */
+export function mergeTactics(base: TeamTactics, change: Partial<TeamTactics>): TeamTactics {
+  return {
+    ...base,
+    ...change,
+    style: { ...base.style, ...change.style },
+    priorities: change.priorities ? { ...change.priorities } : { ...base.priorities },
+  }
+}
 
 /** Pressing parameters per height. */
 export const PRESSING = {

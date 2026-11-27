@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
 import { MatchSimulation } from '../../src/simulation/MatchSimulation'
 import {
+  LIBRARY_SCENARIOS,
+  demoPriorities,
   SCENARIOS,
   SCENARIO_ORDER,
   applyScenario,
@@ -23,11 +25,12 @@ function labSim(seed: number, humanTeam: TeamId | null = null) {
 }
 
 /** One attempt of a scenario, computer against computer; the outcome and whether its rotation started. */
-function attempt(id: ScenarioId, seed: number, attackTeam: TeamId) {
+function attempt(id: ScenarioId, seed: number, attackTeam: TeamId, demo = false) {
   const sc = SCENARIOS[id]
   const sim = labSim(seed)
   const def: TeamId = attackTeam === 0 ? 1 : 0
   sim.state.teams[attackTeam].tactics.formation = sc.attackFormation
+  if (demo && sc.rotation) sim.state.teams[attackTeam].tactics.priorities = demoPriorities(sc.rotation)
   sim.state.teams[def].tactics.pressing = sc.defendPressing
   sim.step()
   applyScenario(sim.state, sc, attackTeam)
@@ -120,15 +123,19 @@ describe('Tactical Lab scenarios', () => {
     for (const id of SCENARIO_ORDER) {
       const sc = SCENARIOS[id]
       if (!sc.rotation) continue
+      // The original scenarios with the normal (context) selection; the library's own ones in
+      // demonstration mode (in normal selection the AI may prefer another move there).
+      const demo = LIBRARY_SCENARIOS.includes(id)
       let rotated = 0
-      for (let k = 0; k < n; k++) if (attempt(id, 100 + k, (k % 2) as TeamId).rotated) rotated++
+      for (let k = 0; k < n; k++) if (attempt(id, 100 + k, (k % 2) as TeamId, demo).rotated) rotated++
       expect(rotated, id).toBeGreaterThanOrEqual(n * 0.6)
     }
     let goals = 0
     for (let k = 0; k < n; k++)
       if (attempt('twoOnKeeper', 200 + k, (k % 2) as TeamId).outcome === 'goal') goals++
     expect(goals).toBeGreaterThanOrEqual(n * 0.7)
-  })
+    // (25 scenarios x 12 attempts: about 8 s alone, more with the whole suite in parallel.)
+  }, 60000)
 
   it('outcome detection: goal, save, out, ball lost, time up', () => {
     const sc = SCENARIOS.breakaway

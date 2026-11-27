@@ -14,8 +14,8 @@ import { SeededRandom, deriveSeed } from '../core/random/SeededRandom'
 import { add, addScaled, angleOf, dist, fromAngle, len, normalize, sub, type Vec2 } from '../core/math/vec2'
 import { assistControlledPlayer, outsideClearanceArea, updateAI, type AIActions } from '../ai/BasicAI'
 import { baseAnchor } from '../ai/positioning/Formation'
-import { emptyRotationStats } from '../ai/team/rotations'
-import { DEFAULT_TACTICS, type TeamTactics } from './Tactics'
+import { emptyRotationStats, emptyRotationTeam } from '../ai/team/rotations'
+import { DEFAULT_TACTICS, mergeTactics, type TeamTactics } from './Tactics'
 import { checkOutOfPlay, isGoal, stepBall } from '../physics/BallPhysics'
 import { lobVelocity, planPass } from '../physics/PassingPhysics'
 import {
@@ -171,7 +171,7 @@ export class MatchSimulation implements AIActions {
     const s = this.state
     for (const c of commands) {
       if (c.type === 'SetControlOptions') s.control = { ...s.control, ...c.options }
-      if (c.type === 'SetTactics') s.teams[c.team].tactics = { ...s.teams[c.team].tactics, ...c.tactics }
+      if (c.type === 'SetTactics') s.teams[c.team].tactics = mergeTactics(s.teams[c.team].tactics, c.tactics)
     }
     if (s.controlledId === null) return
     const p = this.player(s.controlledId)
@@ -1685,6 +1685,11 @@ export class MatchSimulation implements AIActions {
     if (!current || current.t > ranked[0]!.t + 0.5) this.setControlled(ranked[0]!.p.id)
   }
 
+  /** AI layer events (rotations); same stream as the simulation's own. */
+  emitEvent(e: MatchEvent): void {
+    this.emit(e)
+  }
+
   private emit(e: MatchEvent): void {
     this.events.push(e)
     this.recordStats(e)
@@ -1795,6 +1800,8 @@ export function createInitialState(setup: MatchSetup): MatchState {
         aiMarkId: null,
         aiRunTarget: { x: 0, y: 0 },
         aiRecoverTimer: 0,
+        aiMove: null,
+        aiMoveReadyAt: 0,
         aiDecision: '',
         aiState: '',
       })
@@ -1810,7 +1817,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
       secondaryColor: d.secondaryColor,
       numberColor: d.numberColor,
       attackDir: i === 0 ? (1 as const) : (-1 as const),
-      tactics: { ...DEFAULT_TACTICS, ...d.tactics, ...setup.tactics?.[i] },
+      tactics: mergeTactics(mergeTactics(DEFAULT_TACTICS, d.tactics ?? {}), setup.tactics?.[i] ?? {}),
     }
   }
   return {
@@ -1868,6 +1875,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
     rotation: [null, null],
     rotationReadyAt: [0, 0],
     rotationStats: [emptyRotationStats(), emptyRotationStats()],
+    rotationTeam: [emptyRotationTeam(), emptyRotationTeam()],
     possessionSinceTick: 0,
     teamPhase: ['setPiece', 'setPiece'],
     aiPrevPossession: null,

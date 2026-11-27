@@ -1,101 +1,78 @@
 /**
- * Attacking movement (Milestone 6). Two families share one slot per team (`state.rotation[team]`):
+ * Attacking movement (Milestone 6): the runtime of the rotation library. One coordinated move per
+ * team at a time (`state.rotation[team]`); individual movements (V-cut, between the lines) live in
+ * offBall.ts and respect it.
  *
- * **Rotations**: the continuous off-ball movement of a formation. The ball goes to a side, a player
- * moves up into space following the pattern and the receiver looks for him (or the pivot); if
- * nothing is on, the ball is moved on to a side again and the next cycle starts, and the players end
- * up back in the shape (the dynamic roles fill it from where everybody is):
- * - `baseEight`, pohjakasi (3-1): the middle man of the back three passes to a wing, runs first up
- *   the middle and then out to that wing; the wing carries the ball inside into the middle and looks
- *   for the pivot or the runner, else passes to a side (the other wing, or back to the runner) and,
- *   now the middle man, makes the run himself.
- * - `baseEightWing`, pohjakasi from the wing (3-1): a wing passes into the middle and runs diagonally
- *   up into the middle; the middle man switches the ball at once to the other wing and moves across
- *   into the wing the runner left. The far wing plays the runner (a 1-2), opens the play, or carries
- *   inside / passes on, and everybody is back in place.
- * - `butterfly`, perhonen (4-0): a central player passes to his wing, runs up through the centre and
- *   comes back out to that wing; the receiver carries inside into the central lane he left and
- *   passes to his neighbour or to a wing. Played on one side, then the other (the two wings).
- * - `fourCircle`, the 4-player rotation (4-0): a pass from one central player to the other; the
- *   passer goes out wide to keep the width and the ala on his side moves in between the lines.
+ * **Rotations** (patterns) are the continuous off-ball movement of a formation: the ball goes to a
+ * side, a player moves up into space and the receiver looks for him (or the pivot); if nothing is
+ * on, the ball goes to a side again and the next cycle starts. **Combinations** are two- to
+ * four-man moves started where space opens. Definitions: rotationLibrary.ts; triggers and targets:
+ * rotationPlanners.ts; choice against keeping the shape: rotationSelect.ts.
  *
- * **Combinations**: two- or three-man moves where space opens: `wallPass` (1-2), `overlap`,
- * `backPost` (back post and front of the area, swapping) and `pivot` (3-1: the pivot marked tight
- * comes short and the far ala takes his place).
+ * Life of a move: selected (candidate -> preparing -> committed in one step: participants, targets,
+ * reserved spaces, balance checked) -> `preparing` (a familiarity-dependent moment before the runs
+ * go) -> `executing` -> `opportunity` (a runner free with an open lane) -> completed (the ball
+ * reached a runner) or cancelled (time up, possession lost, the ball to somebody outside the move,
+ * no space, the human took over a participant, tactics changed). Then the team recovers / cools
+ * down; rotations flow straight on into the next cycle.
  *
- * Every move has named participants with a job and a target (a runner may first go via a point), a
- * trigger, a time limit and balance (one outfield player stays behind the ball). It ends completed
- * when the ball reaches a runner (a rotation also on a pass into the pivot), or is cancelled when the
- * time runs out, the ball goes to somebody outside the move, possession is lost or the ball goes dead.
- * A combination is followed by a short pause; the rotations flow on from one cycle to the next.
+ * The defenders are never told anything: the runtime only reads what they do (did the marker
+ * follow the runner?) and branches on it.
  */
+import { dist, type Vec2 } from '../../core/math/vec2'
 import { clamp } from '../../core/math/scalar'
-import { closestOnSegment, dist, type Vec2 } from '../../core/math/vec2'
-import { laneOpenness, pressureOn } from '../../physics/PassingPhysics'
+import { laneOpenness } from '../../physics/PassingPhysics'
 import { estimateTimeToReach } from '../../physics/PlayerPhysics'
+import type { MatchEvent } from '../../simulation/Events'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
-import { COURT } from '../../simulation/SimulationConfig'
-import { deepestOutfield } from '../common'
 import { passInterceptable } from '../passing'
+import {
+  FAMILIES,
+  KIND_FAMILY,
+  PATTERN_KINDS,
+  s01,
+  type IndividualKind,
+  type PatternKind,
+  type RotationKind,
+} from './rotationLibrary'
+import {
+  COMBINATION_PLANNERS,
+  PATTERN_PLANNERS,
+  ROTATION_ZONE,
+  justPassed,
+  vacatedWing,
+  backPostSpots,
+  type Plan,
+} from './rotationPlanners'
+import { SELECT, rankPlans, stayScore, familyAllowed } from './rotationSelect'
+import type { EndReason, Rotation, RotationMove, RotationStats, RotationTeamState } from './rotationState'
+import {
+  attackDir,
+  balanceOk,
+  defenderInFront,
+  depthToGoal,
+  free,
+  inCourt,
+  markerOf,
+  movable,
+  outfield,
+  pivotOf,
+  spaceAt,
+  styleOf,
+} from './rotationSupport'
 
-export type PatternKind = 'baseEight' | 'baseEightWing' | 'butterfly' | 'fourCircle'
-export type CombinationKind = 'wallPass' | 'overlap' | 'pivot' | 'backPost'
-export type RotationKind = PatternKind | CombinationKind
-export const PATTERN_KINDS: readonly PatternKind[] = ['baseEight', 'baseEightWing', 'butterfly', 'fourCircle']
-export const ROTATION_KINDS: readonly RotationKind[] = [
-  ...PATTERN_KINDS,
-  'wallPass',
-  'overlap',
-  'pivot',
-  'backPost',
-]
+export type { PatternKind, CombinationKind, RotationKind, MovementKind } from './rotationLibrary'
+export { PATTERN_KINDS, ROTATION_KINDS, MOVEMENT_KINDS } from './rotationLibrary'
+export type { RotationJob, RotationMove, Rotation, RotationStats, EndReason } from './rotationState'
+export { emptyRotationStats, emptyRotationTeam } from './rotationState'
 
 /** A rotation of the formation (continuous off-ball movement), not a combination. */
 export function isPattern(kind: RotationKind): kind is PatternKind {
   return (PATTERN_KINDS as readonly string[]).includes(kind)
 }
 
-/**
- * `run`: attacks space and is the one the ball should reach (its arrival completes the move);
- * `wall`: the 1-2 partner; `cover`: fills the space left behind; `drop`: comes short to show;
- * `post`: takes a spot in front of goal and strikes first time; `carry`: the receiver carries the
- * ball to the target (inside, into the middle); `switch`: the receiver plays it on at once to
- * `passTo`.
- */
-export type RotationJob = 'run' | 'wall' | 'cover' | 'drop' | 'post' | 'carry' | 'switch'
-
-export interface RotationMove {
-  id: number
-  job: RotationJob
-  target: Vec2
-  /** A runner goes this way first (e.g. up the middle before going out to the wing). */
-  via?: Vec2
-  viaDone?: boolean
-  /** `switch`: the teammate the ball goes on to. */
-  passTo?: number
-}
-
-export interface Rotation {
-  kind: RotationKind
-  /** The carrier the rotation is built round (the wall pass: the passer, who is also the runner). */
-  carrierId: number
-  moves: RotationMove[]
-  /** Simulation time it started / ends at the latest. */
-  started: number
-  until: number
-  /** Back-post rotation: the men have swapped. */
-  swapped: boolean
-  /** Wall pass: the wall has had the ball. */
-  wallTouched: boolean
-}
-
-export interface RotationStats {
-  started: number
-  completed: number
-}
-
 export const ROTATION = {
-  /** Seconds after a rotation before the team starts another. */
+  /** Seconds after a combination before the team starts another (at the default frequency). */
   cooldown: 2,
   /** Time limit per kind (seconds). */
   duration: {
@@ -103,27 +80,36 @@ export const ROTATION = {
     baseEightWing: 4.5,
     butterfly: 4.5,
     fourCircle: 4,
+    threeCircle: 4.5,
+    diagonalRotation: 4.5,
+    parallelRotation: 4.5,
     wallPass: 2.2,
     overlap: 3,
     pivot: 2.8,
     backPost: 3.4,
-  },
+    wingClearance: 3.5,
+    crossRun: 3.2,
+    paralela: 3,
+    diagonalRun: 3,
+    thirdMan: 3,
+    underlap: 3,
+    pivotLayoff: 2.5,
+    doubleCut: 3,
+    oppositeMove: 3,
+    wideOverload: 4,
+    switchPlay: 3,
+    pisada: 1.5,
+    isolation: 3,
+  } satisfies Record<RotationKind, number>,
   /** Rotations happen between these distances (m) from the goal attacked (build-up and midcourt). */
-  zone: { near: 12, far: 36 },
+  zone: ROTATION_ZONE,
   /** Back-post rotation: the men swap after this long without the ball across. */
   backPostSwap: 1.5,
-} as const satisfies Record<string, unknown>
-
-export function emptyRotationStats(): Record<RotationKind, RotationStats> {
-  const out = {} as Record<RotationKind, RotationStats>
-  for (const k of ROTATION_KINDS) out[k] = { started: 0, completed: 0 }
-  return out
-}
-
-const inCourt = (v: Vec2): Vec2 => ({
-  x: clamp(v.x, -COURT.halfWidth + 0.8, COURT.halfWidth - 0.8),
-  y: clamp(v.y, -COURT.halfLength + 1.2, COURT.halfLength - 1.2),
-})
+  /** The defender response is read this long after the start (s). */
+  responseAt: 1,
+  /** Shots and goals this long after a move are credited to it (s). */
+  creditWindow: 5,
+} as const
 
 /** The rotation move this player has (null if he is not part of an active rotation). */
 export function rotationMove(state: MatchState, p: PlayerState): RotationMove | null {
@@ -132,35 +118,122 @@ export function rotationMove(state: MatchState, p: PlayerState): RotationMove | 
   return r.moves.find((m) => m.id === p.id) ?? null
 }
 
+/** The run of this move has started (staggered runs wait for `startAt`). */
+export function moveStarted(state: MatchState, m: RotationMove): boolean {
+  return m.startAt === undefined || state.time >= m.startAt
+}
+
+type Emit = (e: MatchEvent) => void
+
+/** Team-level selection details passed to startRotation (defaults for direct starts and tests). */
+interface StartInfo {
+  score?: number
+  stay?: number
+  trigger?: string
+  rejected?: { kind: RotationKind; score: number }[]
+}
+
 export function startRotation(
   state: MatchState,
   team: TeamId,
   kind: RotationKind,
   carrierId: number,
   moves: RotationMove[],
+  info: StartInfo = {},
+  emit?: Emit,
 ): Rotation {
+  const rt = state.rotationTeam[team]
+  const st = styleOf(state, team)
+  // Preparing: a moment before the runs go — shorter for a team that knows its moves and for
+  // tactically sharp players; the passer of a rotation goes at once (his own pass is the cue).
+  const pattern = isPattern(kind)
+  for (const m of moves) {
+    m.origin = { ...state.players[m.id]!.pos }
+    if (m.job !== 'run' && m.job !== 'post') continue
+    const p = state.players[m.id]!
+    const delay =
+      ((1 - s01(st.familiarity)) * 0.35 + (1 - p.profile.attributes.tacticalIntelligence / 100) * 0.2) *
+      (pattern ? 0.3 : 1)
+    if (delay > 0.05) m.startAt = Math.max(m.startAt ?? state.time, state.time + delay)
+  }
+  const preparing = moves.some((m) => m.startAt !== undefined && m.startAt > state.time)
   const r: Rotation = {
     kind,
+    instance: rt.nextInstance++,
     carrierId,
     moves,
     started: state.time,
     until: state.time + ROTATION.duration[kind],
     swapped: false,
     wallTouched: false,
+    status: preparing ? 'preparing' : 'executing',
+    score: info.score ?? 0,
+    stay: info.stay ?? 0,
+    trigger: info.trigger ?? 'direct',
+    markers: [],
+    response: 'pending',
+    branch: null,
+    rejected: info.rejected ?? [],
+    opportunityCounted: false,
+    displacedCounted: false,
   }
+  for (const m of moves) {
+    if (m.job !== 'run' && m.job !== 'post') continue
+    const p = state.players[m.id]!
+    const mk = markerOf(state, p)
+    if (mk >= 0) r.markers.push({ runner: m.id, marker: mk, from: { ...state.players[mk]!.pos } })
+  }
+  if (r.markers.length === 0) r.response = 'none'
   state.rotation[team] = r
   state.rotationStats[team][kind].started++
+  const famId = KIND_FAMILY[kind]
+  rt.recent.push({ family: famId, time: state.time })
+  while (rt.recent.length > 12) rt.recent.shift()
+  rt.phase = 'active'
+  reserve(state, team, r)
+  emit?.({ type: 'RotationStarted', tick: state.tick, team, kind, instance: r.instance, score: r.score })
   return r
 }
 
-function endRotation(state: MatchState, team: TeamId, completed: boolean): void {
+function endRotation(
+  state: MatchState,
+  team: TeamId,
+  completed: boolean,
+  reason: EndReason,
+  emit?: Emit,
+): void {
   const r = state.rotation[team]
   if (!r) return
-  if (completed) state.rotationStats[team][r.kind].completed++
+  const rt = state.rotationTeam[team]
+  const stats = state.rotationStats[team][r.kind]
+  if (completed) stats.completed++
+  else stats.cancelled++
+  stats.reasons[reason] = (stats.reasons[reason] ?? 0) + 1
   clearRuns(state, r)
+  rt.reservations = rt.reservations.filter((x) => x.instance !== r.instance)
   state.rotation[team] = null
-  // A combination is followed by a pause; the rotations flow straight on into the next cycle.
-  state.rotationReadyAt[team] = isPattern(r.kind) ? state.time : state.time + ROTATION.cooldown
+  const st = styleOf(state, team)
+  const freq = 1.5 - s01(st.frequency)
+  // A combination is followed by a pause (longer for a disciplined team that resets its shape); the
+  // rotations flow straight on into the next cycle.
+  const pause = isPattern(r.kind) ? 0 : ROTATION.cooldown * freq * (0.85 + s01(st.discipline) * 0.3)
+  state.rotationReadyAt[team] = state.time + pause
+  rt.phase = pause > 0 ? 'cooldown' : 'idle'
+  rt.recoverUntil = state.time + pause
+  const fam = FAMILIES[KIND_FAMILY[r.kind]]
+  rt.familyReadyAt[fam.id] = state.time + fam.cooldown * freq
+  rt.last = { kind: r.kind, reason, completed, time: state.time }
+  rt.creditKind = r.kind
+  rt.creditUntil = state.time + ROTATION.creditWindow
+  emit?.({
+    type: 'RotationEnded',
+    tick: state.tick,
+    team,
+    kind: r.kind,
+    instance: r.instance,
+    completed,
+    reason,
+  })
 }
 
 /** The runs of a move end with it (a runner who did not get the ball goes back to the shape). */
@@ -171,7 +244,46 @@ function clearRuns(state: MatchState, r: Rotation): void {
   }
 }
 
-/** Team rotations are allowed: in possession, open play, the team's tactics allow them. */
+// --------------------------------------------------------------------------- reservations
+
+function reserve(state: MatchState, team: TeamId, r: Rotation): void {
+  const rt = state.rotationTeam[team]
+  for (const m of r.moves) {
+    if (m.job === 'carry' || m.job === 'switch' || m.job === 'link' || m.job === 'wall') continue
+    const p = state.players[m.id]!
+    rt.reservations.push({
+      playerId: m.id,
+      instance: r.instance,
+      purpose: m.job,
+      center: { ...m.target },
+      radius: 2.5,
+      eta: (m.startAt ?? state.time) + estimateTimeToReach(p, m.target),
+      until: r.until,
+      priority: m.job === 'run' || m.job === 'post' ? 2 : 1,
+    })
+  }
+}
+
+/** A reserved space (of another player) contains `pos`; the reservation, or null. */
+export function reservedAt(state: MatchState, team: TeamId, pos: Vec2, forId: number) {
+  for (const r of state.rotationTeam[team].reservations)
+    if (r.playerId !== forId && dist(r.center, pos) < r.radius) return r
+  return null
+}
+
+/** Move a support target out of teammates' reserved spaces (the reservation steers, never blocks). */
+export function avoidReserved(state: MatchState, p: PlayerState, target: Vec2): Vec2 {
+  const res = reservedAt(state, p.team, target, p.id)
+  if (!res) return target
+  const dx = target.x - res.center.x
+  const dy = target.y - res.center.y
+  const d = Math.hypot(dx, dy) || 1
+  const k = res.radius + 0.3
+  return inCourt({ x: res.center.x + (dx / d) * k, y: res.center.y + (dy / d) * k })
+}
+
+// --------------------------------------------------------------------------- the update
+
 function mayRotate(state: MatchState, team: TeamId): boolean {
   if (state.phase !== 'play' || state.possessionTeam !== team || state.clearance) return false
   if (!state.teams[team].tactics.rotations) return false
@@ -180,205 +292,467 @@ function mayRotate(state: MatchState, team: TeamId): boolean {
 }
 
 /** Start, advance and end rotations (once per tick, before the AI decisions). */
-export function updateRotations(state: MatchState): void {
+export function updateRotations(state: MatchState, emit?: Emit): void {
   for (const team of [0, 1] as const) {
+    const rt = state.rotationTeam[team]
+    trackOutcomes(state, team, rt)
+    trackIndividual(state, team)
+    updateDefenceRead(state, team, rt)
+    rt.reservations = rt.reservations.filter((x) => x.until > state.time)
+    if (rt.phase === 'cooldown' && state.time >= rt.recoverUntil) rt.phase = 'idle'
     const r = state.rotation[team]
     if (r) {
-      if (state.phase !== 'play' || state.possessionTeam !== team || state.time > r.until) {
-        endRotation(state, team, false)
+      if (state.phase !== 'play') {
+        endRotation(state, team, false, 'ballDead', emit)
         continue
       }
+      if (state.possessionTeam !== team) {
+        // Possession really lost (a pass between teammates keeps the team in possession).
+        state.rotationStats[team][r.kind].turnovers++
+        rt.lossAt = state.time
+        rt.lossKind = r.kind
+        endRotation(state, team, false, 'possessionLost', emit)
+        continue
+      }
+      if (!state.teams[team].tactics.rotations) {
+        endRotation(state, team, false, 'tacticsChanged', emit)
+        continue
+      }
+      if (state.time > r.until) {
+        endRotation(state, team, false, 'timeUp', emit)
+        continue
+      }
+      if (!dropHumanMoves(state, team, r)) {
+        endRotation(state, team, false, 'humanControl', emit)
+        continue
+      }
+      if (r.status === 'preparing' && r.moves.every((m) => moveStarted(state, m))) r.status = 'executing'
+      readResponse(state, team, r, emit)
+      if (!state.rotation[team]) continue
+      reassignTargets(state, team, r)
+      updateOpportunity(state, team, r, emit)
       if (!isPattern(r.kind)) {
-        advanceCombination(state, team, r)
+        advanceCombination(state, team, r, emit)
         continue
       }
-      if (advancePattern(state, team, r)) continue
+      if (advancePattern(state, team, r, emit)) {
+        // A combination may take over a rotation in progress where it clearly does better.
+        maybeReplace(state, team, r, emit)
+        continue
+      }
       // The cycle ended with a pass: that pass may start the next cycle at once (below).
     }
-    if (state.time < state.rotationReadyAt[team] || !mayRotate(state, team)) continue
-    // At most one starts: the rotation the pass just made, else a combination where space opened.
-    void (
-      tryBaseEight(state, team) ||
-      tryBaseEightWing(state, team) ||
-      tryButterfly(state, team) ||
-      tryFourCircle(state, team) ||
-      tryBackPost(state, team) ||
-      tryOverlap(state, team) ||
-      tryPivot(state, team)
-    )
+    if (!mayRotate(state, team)) continue
+    // The pause after a combination holds back combinations; the formation's rotation goes on.
+    const comboReady = state.time >= state.rotationReadyAt[team]
+    const passNow = justPassed(state, team) !== null
+    if (!passNow && (!comboReady || state.time < rt.nextSelectAt)) continue
+    if (comboReady) rt.nextSelectAt = state.time + SELECT.interval
+    select(state, team, passNow, comboReady, emit)
   }
 }
 
-/** Combinations: completion, cancellation, the back-post swap. */
-function advanceCombination(state: MatchState, team: TeamId, r: Rotation): void {
+function select(state: MatchState, team: TeamId, passNow: boolean, comboReady: boolean, emit?: Emit): void {
+  const rt = state.rotationTeam[team]
+  const planners = [...(passNow ? PATTERN_PLANNERS : []), ...(comboReady ? COMBINATION_PLANNERS : [])]
+  const ranked = rankPlans(state, team, planners, rt)
+  const stay = stayScore(state, team)
+  rt.lastEval = {
+    time: state.time,
+    stay,
+    candidates: ranked.slice(0, 4).map((x) => ({ kind: x.plan.kind, score: x.score })),
+  }
+  const best = ranked[0]
+  // The formation's rotation is its normal movement: it goes on unless keeping still is clearly
+  // better (a continuity margin); a combination must beat keeping the shape outright.
+  const bar = isPattern(best?.plan.kind ?? 'wallPass') ? stay - SELECT.patternContinuity : stay
+  if (!best || best.score <= bar) return
+  start(state, team, best.plan, best.score, stay, ranked, emit)
+}
+
+function start(
+  state: MatchState,
+  team: TeamId,
+  plan: Plan,
+  score: number,
+  stay: number,
+  ranked: { plan: Plan; score: number }[],
+  emit?: Emit,
+): void {
+  startRotation(
+    state,
+    team,
+    plan.kind,
+    plan.carrierId,
+    plan.moves,
+    {
+      score,
+      stay,
+      trigger: plan.trigger,
+      rejected: ranked
+        .filter((x) => x.plan !== plan)
+        .slice(0, 3)
+        .map((x) => ({ kind: x.plan.kind, score: x.score })),
+    },
+    emit,
+  )
+}
+
+/** During a rotation, at the selection rate: a combination that beats it clearly takes over. */
+function maybeReplace(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): void {
+  const rt = state.rotationTeam[team]
+  if (state.time < rt.nextSelectAt) return
+  rt.nextSelectAt = state.time + SELECT.interval
+  const ranked = rankPlans(state, team, COMBINATION_PLANNERS, rt)
+  const best = ranked[0]
+  const stay = stayScore(state, team)
+  if (!best || best.score <= Math.max(stay, r.score) + SELECT.replaceMargin) return
+  // The rotation runs into the combination (not counted as a failure of either).
+  const stats = state.rotationStats[team][r.kind]
+  stats.reasons.replaced = (stats.reasons.replaced ?? 0) + 1
+  clearRuns(state, r)
+  rt.reservations = rt.reservations.filter((x) => x.instance !== r.instance)
+  state.rotation[team] = null
+  start(state, team, best.plan, best.score, stay, ranked, emit)
+}
+
+/**
+ * The human player is never moved by a rotation: if control switched to a participant, his job is
+ * dropped. Returns false when no run is left (the move is over).
+ */
+function dropHumanMoves(state: MatchState, team: TeamId, r: Rotation): boolean {
+  const human = state.controlledId
+  if (human === null || state.humanTeam !== team) return true
+  if (!r.moves.some((m) => m.id === human)) return true
+  r.moves = r.moves.filter((m) => m.id !== human)
+  state.rotationTeam[team].reservations = state.rotationTeam[team].reservations.filter(
+    (x) => x.playerId !== human,
+  )
+  return r.moves.some((m) => m.job === 'run' || m.job === 'post' || m.job === 'drop')
+}
+
+// ------------------------------------------------------------------- defenders and space
+
+/** About a second in: what did the runners' markers do? Branches react to it. */
+function readResponse(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): void {
+  if (r.response !== 'pending' || state.time - r.started < ROTATION.responseAt) return
+  const first = r.markers[0]!
+  const runner = state.players[first.runner]!
+  const marker = state.players[first.marker]!
+  if (dist(marker.pos, runner.pos) < 2.8) r.response = 'followed'
+  else if (dist(marker.pos, first.from) < 2) r.response = 'held'
+  else if (markerOf(state, runner, 2.5) >= 0) r.response = 'handedOver'
+  else r.response = 'none'
+  // Space created: a runner's marker pulled well away from where he stood (decoys count too).
+  if (!r.displacedCounted && r.markers.some((m) => dist(state.players[m.marker]!.pos, m.from) > 3)) {
+    r.displacedCounted = true
+    state.rotationStats[team][r.kind].displaced++
+  }
+  if (r.kind === 'wingClearance') wingClearanceBranch(state, team, r, emit)
+  if (r.kind === 'crossRun' && r.response === 'handedOver') r.branch = 'marksExchanged'
+}
+
+/**
+ * Wing clearance branches: A the marker followed the clearing man -> the filler attacks the wing he
+ * left; B the marker stayed -> the clearing man is the option (no change); C the marks were handed
+ * over -> whoever has more space; D nothing useful -> cancel and recycle.
+ */
+function wingClearanceBranch(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): void {
+  const clearer = r.moves.find((m) => m.job === 'run')
+  const filler = r.moves.find((m) => m.job === 'cover')
+  if (!clearer || !filler) return
+  const vacated = vacatedWing(state, team, clearer.origin ?? clearer.target)
+  const vacatedSpace = spaceAt(state, team, vacated)
+  const clearerSpace = spaceAt(state, team, state.players[clearer.id]!.pos)
+  const attackVacated = () => {
+    filler.job = 'run'
+    filler.target = vacated
+    r.branch = 'attackVacated'
+  }
+  if (r.response === 'followed' && vacatedSpace > 2.2) attackVacated()
+  else if (r.response === 'held') r.branch = 'passToClearer'
+  else if (r.response === 'handedOver') {
+    if (vacatedSpace > clearerSpace && vacatedSpace > 2.5) attackVacated()
+    else r.branch = 'passToClearer'
+  } else if (vacatedSpace > 2.5) attackVacated()
+  if (!r.branch && clearerSpace < 1.5 && vacatedSpace < 2.2) {
+    r.branch = 'noSpace'
+    endRotation(state, team, false, 'noSpace', emit)
+  }
+}
+
+/**
+ * Space closed or taken: a runner still on his way whose target an opponent has stepped into (or the
+ * human player has moved into) picks the freest point nearby instead.
+ */
+function reassignTargets(state: MatchState, team: TeamId, r: Rotation): void {
+  const human =
+    state.humanTeam === team && state.controlledId !== null ? state.players[state.controlledId]! : null
+  const rt = state.rotationTeam[team]
+  for (const m of r.moves) {
+    if (m.job !== 'run' || !moveStarted(state, m)) continue
+    const p = state.players[m.id]!
+    if (dist(p.pos, m.target) < 3) continue
+    const closed = !free(state, team, m.target, 1.2)
+    const humanThere = human !== null && dist(human.pos, m.target) < 2
+    if (!closed && !humanThere) continue
+    let best: Vec2 | null = null
+    let bestSpace = -Infinity
+    // (Out of the human's way: far enough that he is not in the new spot either.)
+    const ringR = humanThere ? 3.5 : 2.5
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2
+      const q = inCourt({ x: m.target.x + Math.cos(a) * ringR, y: m.target.y + Math.sin(a) * ringR })
+      if (depthToGoal(state, team, q) < 3.5) continue
+      if (human && dist(human.pos, q) < 3) continue
+      const sp = spaceAt(state, team, q)
+      if (sp > bestSpace) {
+        bestSpace = sp
+        best = q
+      }
+    }
+    if (!best) continue
+    m.target = best
+    for (const res of rt.reservations)
+      if (res.playerId === m.id && res.instance === r.instance) res.center = { ...best }
+  }
+}
+
+/** A runner free with an open lane from the carrier: the opportunity the move was for. */
+function updateOpportunity(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): void {
+  if (r.opportunityCounted) return
+  const c = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  if (!c || c.team !== team) return
+  for (const m of r.moves) {
+    if ((m.job !== 'run' && m.job !== 'post') || m.id === c.id || !moveStarted(state, m)) continue
+    const p = state.players[m.id]!
+    if (dist(p.pos, m.target) > 3 || spaceAt(state, team, p.pos) < 2.3) continue
+    if (laneOpenness(state, team, c.pos, p.pos) < 1.3 || passInterceptable(state, team, c.pos, p.pos))
+      continue
+    r.status = 'opportunity'
+    r.opportunityCounted = true
+    state.rotationStats[team][r.kind].opportunities++
+    emit?.({ type: 'RotationOpportunity', tick: state.tick, team, kind: r.kind, instance: r.instance })
+    return
+  }
+}
+
+/**
+ * What the team has seen of the opponent's defending (positions only), once a second while it has
+ * the ball: do markers go with attackers who move (man-oriented) or hold their zones; how high is the
+ * block.
+ */
+function updateDefenceRead(state: MatchState, team: TeamId, rt: RotationTeamState): void {
+  const read = rt.read
+  if (state.phase !== 'play' || state.possessionTeam !== team) {
+    read.snap = []
+    return
+  }
+  if (state.time - read.lastAt < 1) return
+  read.lastAt = state.time
+  for (const s of read.snap) {
+    const a = state.players[s.attacker]!
+    if (s.marker < 0 || dist(a.pos, s.pos) < 2) continue
+    const follows = dist(state.players[s.marker]!.pos, a.pos) < 3 ? 1 : 0
+    read.follow = read.follow * 0.85 + follows * 0.15
+    read.samples++
+  }
+  read.snap = []
+  const owner = state.ball.ownerId
+  for (const p of outfield(state, team))
+    if (p.id !== owner) read.snap.push({ attacker: p.id, pos: { ...p.pos }, marker: markerOf(state, p, 3) })
+  const dir = attackDir(state, team)
+  const opp = state.players.filter((o) => o.team !== team && o.role !== 'GK')
+  if (opp.length) {
+    const depth = opp.reduce((s, o) => s + (o.pos.y * dir + 20) / 40, 0) / opp.length
+    read.block = read.block * 0.8 + depth * 0.2
+  }
+}
+
+/** Shots, goals and counter-attacks credited to the move in progress or just ended. */
+function trackOutcomes(state: MatchState, team: TeamId, rt: RotationTeamState): void {
+  const b = state.ball
+  const shotNow = b.isShot && b.lastTouchTeam === team
+  if (shotNow && !rt.shotSeen) {
+    const credit = state.rotation[team]?.kind ?? (state.time < rt.creditUntil ? rt.creditKind : null)
+    if (credit) state.rotationStats[team][credit].shotsAfter++
+    const other = state.rotationTeam[1 - team]!
+    if (other.lossKind && state.time - other.lossAt < 8)
+      state.rotationStats[1 - team]![other.lossKind].counterShots++
+  }
+  rt.shotSeen = shotNow
+  if (state.score[team] > rt.goalsSeen) {
+    const credit = state.rotation[team]?.kind ?? (state.time < rt.creditUntil ? rt.creditKind : null)
+    if (credit) state.rotationStats[team][credit].goalsAfter++
+  }
+  rt.goalsSeen = state.score[team]
+}
+
+/** An individual movement whose player got the ball (while it ran or just after) succeeded. */
+function trackIndividual(state: MatchState, team: TeamId): void {
+  const id = state.ball.ownerId
+  if (id === null) return
+  const p = state.players[id]!
+  const mv = p.aiMove
+  if (p.team !== team || !mv || mv.received || state.time > mv.until + 1) return
+  mv.received = true
+  recordIndividual(state, team, mv.kind, 'completed')
+}
+
+/** Individual movement statistics (V-cut, between the lines). */
+export function recordIndividual(
+  state: MatchState,
+  team: TeamId,
+  kind: IndividualKind,
+  what: 'started' | 'completed' | 'cancelled',
+): void {
+  state.rotationStats[team][kind][what]++
+}
+
+// --------------------------------------------------------------------- advancing the moves
+
+/** Combinations: completion, cancellation, the back-post swap, link and switch hand-overs. */
+function advanceCombination(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): void {
   const owner = state.ball.ownerId
   if (r.kind === 'wallPass' && owner !== null) {
-    const wall = r.moves.find((m) => m.job === 'wall')!.id
-    if (owner === wall) r.wallTouched = true
-    // The 1-2 is complete when the passer has it back from the wall.
-    else if (owner === r.carrierId && r.wallTouched) endRotation(state, team, true)
-    else if (owner !== r.carrierId) endRotation(state, team, false)
+    const wall = r.moves.find((m) => m.job === 'wall')
+    if (!wall) return endRotation(state, team, false, 'otherReceiver', emit)
+    if (owner === wall.id) r.wallTouched = true
+    else if (owner === r.carrierId && r.wallTouched) endRotation(state, team, true, 'returned', emit)
+    else if (owner !== r.carrierId) endRotation(state, team, false, 'otherReceiver', emit)
     return
+  }
+  if (r.kind === 'isolation') return advanceIsolation(state, team, r, emit)
+  // The carrier has played it to somebody outside the move: over now (so the pass can start the
+  // next rotation at once).
+  const b = state.ball
+  if (
+    owner === null &&
+    b.mode === 'free' &&
+    b.lastTouchId === r.carrierId &&
+    b.lastTouchTeam === team &&
+    !b.isShot
+  ) {
+    const to = b.intendedReceiverId
+    if (to !== null && !r.moves.some((m) => m.id === to))
+      return endRotation(state, team, false, 'otherReceiver', emit)
   }
   if (owner !== null && owner !== r.carrierId) {
     const m = r.moves.find((x) => x.id === owner)
-    // The ball reached a runner (or the man at the post): done. The wall keeps it going.
-    if (m && (m.job === 'run' || m.job === 'post' || (m.job === 'drop' && r.kind === 'pivot')))
-      endRotation(state, team, true)
-    else if (!m) endRotation(state, team, false)
+    if (!m) return endRotation(state, team, false, 'otherReceiver', emit)
+    if (m.job === 'link' || m.job === 'switch') {
+      // Third man / switch via the deep man: the ball is on its way through him.
+      r.wallTouched = true
+      r.carrierId = owner
+      return
+    }
+    const done =
+      m.job === 'run' ||
+      m.job === 'post' ||
+      (m.job === 'drop' &&
+        (r.kind === 'pivot' ||
+          r.kind === 'pivotLayoff' ||
+          r.kind === 'oppositeMove' ||
+          r.kind === 'wideOverload')) ||
+      (m.job === 'cover' && r.kind === 'wideOverload')
+    if (done) {
+      if (r.kind === 'wideOverload' && m.job === 'cover') r.branch = 'switched'
+      endRotation(state, team, true, 'reachedRunner', emit)
+    } else endRotation(state, team, false, 'otherReceiver', emit)
     return
   }
-  if (r.kind === 'backPost' && !r.swapped && state.time - r.started > ROTATION.backPostSwap) {
+  if (r.kind === 'backPost' && !r.swapped && state.time - r.started > ROTATION.backPostSwap)
     swapBackPost(state, team, r)
+}
+
+/** Isolation: done when the dribbler gets past his man or shoots; off if a second defender comes. */
+function advanceIsolation(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): void {
+  const owner = state.ball.ownerId
+  const c = state.players[r.carrierId]!
+  if (owner !== c.id) {
+    if (state.ball.isShot) return endRotation(state, team, true, 'reachedRunner', emit)
+    if (owner !== null) return endRotation(state, team, false, 'otherReceiver', emit)
+    return
+  }
+  const dir = attackDir(state, team)
+  const close = state.players.filter((o) => o.team !== team && o.role !== 'GK' && dist(o.pos, c.pos) < 3.5)
+  if (close.length >= 2) {
+    r.branch = 'helpArrived'
+    return endRotation(state, team, false, 'noSpace', emit)
+  }
+  if (close.length === 0 || close.every((o) => (o.pos.y - c.pos.y) * dir < -0.8)) {
+    r.branch = 'beatenMan'
+    endRotation(state, team, true, 'reachedRunner', emit)
   }
 }
 
 /**
  * Rotations: runners pass their via point; the carrier's pass ends the cycle (completed if it went
- * to a runner or into the pivot, otherwise the pass to a side starts the next cycle); near goal the
- * back-post combination can take over. Returns false once the rotation has ended.
+ * to a runner or into the pivot, otherwise the pass to a side starts the next cycle). Returns false
+ * once the rotation has ended.
  */
-function advancePattern(state: MatchState, team: TeamId, r: Rotation): boolean {
+function advancePattern(state: MatchState, team: TeamId, r: Rotation, emit?: Emit): boolean {
   for (const m of r.moves)
     if (m.via && !m.viaDone && dist(state.players[m.id]!.pos, m.via) < 1.6) m.viaDone = true
   const b = state.ball
   const owner = b.ownerId
   const pivot = pivotOf(state, team)
   if (owner !== null && owner !== r.carrierId) {
-    // Somebody else has it: a runner or the pivot (the rotation did its job), else it is over.
     const m = r.moves.find((x) => x.id === owner)
-    endRotation(state, team, m?.job === 'run' || (pivot !== null && owner === pivot.id))
+    const done = m?.job === 'run' || (pivot !== null && owner === pivot.id)
+    endRotation(
+      state,
+      team,
+      done,
+      done ? (m?.job === 'run' ? 'reachedRunner' : 'pivot') : 'otherReceiver',
+      emit,
+    )
     return false
   }
   if (owner === null && b.mode === 'free' && b.lastTouchId === r.carrierId && b.lastTouchTeam === team) {
     const receiver = b.intendedReceiverId
     const sw = r.moves.find((m) => m.job === 'switch' && m.id === r.carrierId)
     if (sw && receiver !== null && receiver === sw.passTo) {
-      // The quick switch to the far wing: he moves across into the wing the runner left, and the far
-      // wing has the ball now.
+      // The quick switch to the far wing: he moves across into the wing the runner left.
       sw.job = 'cover'
       r.carrierId = receiver
       return true
     }
-    // The carrier played it on: the cycle is over (a pass to a side starts the next one).
     const m = r.moves.find((x) => x.id === receiver)
-    endRotation(state, team, m?.job === 'run' || (pivot !== null && receiver === pivot.id))
+    const done = m?.job === 'run' || (pivot !== null && receiver === pivot.id)
+    endRotation(state, team, done, done ? (m?.job === 'run' ? 'reachedRunner' : 'pivot') : 'cycle', emit)
     return false
   }
-  // The ball has come to a wing near goal: the back-post combination takes over. (Not the overlap:
-  // the rotation already has a man going up the wing.)
-  if (tryBackPost(state, team)) clearRuns(state, r)
   return true
 }
 
-// ---------------------------------------------------------------------------------- helpers
-
-function carrierOf(state: MatchState, team: TeamId): PlayerState | null {
-  const id = state.ball.ownerId
-  if (id === null || state.ball.inHands) return null
-  const c = state.players[id]!
-  return c.team === team && c.role !== 'GK' ? c : null
-}
-
-function outfield(state: MatchState, team: TeamId): PlayerState[] {
-  return state.players.filter((p) => p.team === team && p.role !== 'GK')
-}
-
-/** The 3-1 pivot: our most advanced outfield player (null in the 4-0 / 2-2). */
-function pivotOf(state: MatchState, team: TeamId): PlayerState | null {
-  if (state.teams[team].tactics.formation !== '3-1') return null
-  const dir = state.teams[team].attackDir
-  const all = outfield(state, team)
-  return all.length ? all.reduce((a, t) => ((t.pos.y - a.pos.y) * dir > 0 ? t : a)) : null
-}
-
-/**
- * The pass `team` has just played (the ball still near the passer): passer and receiver, both outfield
- * players, the receiver in the rotation zone. Null otherwise.
- */
-function justPassed(state: MatchState, team: TeamId): { passer: PlayerState; receiver: PlayerState } | null {
-  const b = state.ball
-  if (
-    b.mode !== 'free' ||
-    b.lastTouchTeam !== team ||
-    b.intendedReceiverId === null ||
-    b.lastTouchId === null
-  )
-    return null
-  const passer = state.players[b.lastTouchId]!
-  const receiver = state.players[b.intendedReceiverId]!
-  if (passer.team !== team || receiver.team !== team || passer.role === 'GK' || receiver.role === 'GK')
-    return null
-  if (passer.id === receiver.id || dist(b.pos, passer.pos) > 6) return null
-  const dir = state.teams[team].attackDir
-  const depth = (dir * COURT.halfLength - receiver.pos.y) * dir
-  if (depth < ROTATION.zone.near || depth > ROTATION.zone.far) return null
-  return { passer, receiver }
-}
-
-/** Lanes across the court: the middle (|x| under 3 m) and the wings (3.5 m and more). */
-const isMiddle = (p: PlayerState) => Math.abs(p.pos.x) < 3
-const isWing = (p: PlayerState) => Math.abs(p.pos.x) >= 3.5
-
-/** No outfield opponent within `r` of `pos`. */
-function free(state: MatchState, team: TeamId, pos: Vec2, r: number, ignoreId = -1): boolean {
-  for (const o of state.players)
-    if (o.team !== team && o.role !== 'GK' && o.id !== ignoreId && dist(o.pos, pos) < r) return false
-  return true
-}
-
-/** No outfield opponent (other than `ignore`) within `r` of the straight path from `a` to `b`. */
-function pathFree(
-  state: MatchState,
-  team: TeamId,
-  a: Vec2,
-  b: Vec2,
-  r: number,
-  ignore: number | readonly number[] = -1,
-): boolean {
-  const skip = typeof ignore === 'number' ? [ignore] : ignore
-  for (const o of state.players) {
-    if (o.team === team || o.role === 'GK' || skip.includes(o.id)) continue
-    if (dist(closestOnSegment(a, b, o.pos).point, o.pos) < r) return false
-  }
-  return true
-}
-
-/** The opponent marking `q`: the nearest outfield opponent within 3.5 m (-1 if none). */
-function markerOf(state: MatchState, q: PlayerState): number {
-  let id = -1
-  let md = 3.5
-  for (const o of state.players)
-    if (o.team !== q.team && o.role !== 'GK' && dist(o.pos, q.pos) < md) {
-      md = dist(o.pos, q.pos)
-      id = o.id
+function swapBackPost(state: MatchState, team: TeamId, r: Rotation): void {
+  const c = state.players[r.carrierId]!
+  const s = backPostSpots(state, team, c)
+  r.swapped = true
+  for (const m of r.moves) {
+    if (m.job === 'post') {
+      m.job = 'run'
+      m.target = s.top
+    } else if (m.job === 'run') {
+      m.job = 'post'
+      m.target = s.back
     }
-  return id
+  }
 }
 
-/** Opponent outfield player closest in front of `p` (towards the goal he attacks), within range. */
-function defenderInFront(state: MatchState, p: PlayerState, maxAhead: number, maxLat: number) {
-  const dir = state.teams[p.team].attackDir
-  let best: PlayerState | null = null
-  for (const o of state.players) {
-    if (o.team === p.team || o.role === 'GK') continue
-    const ahead = (o.pos.y - p.pos.y) * dir
-    if (ahead < 0.5 || ahead > maxAhead || Math.abs(o.pos.x - p.pos.x) > maxLat) continue
-    if (!best || dist(o.pos, p.pos) < dist(best.pos, p.pos)) best = o
-  }
-  return best
-}
+// ------------------------------------------------------------------ carrier-side helpers
 
 /**
- * Balance: with these players gone forward, somebody else still stays behind the ball (an outfield
- * player deeper than `ballY` who is not part of the move).
+ * The carrier may start his own combination (1-2, pisada) over the move in progress: always over a
+ * rotation; over a combination built round him that has not yet produced its opportunity (the ball
+ * carrier takes a better immediate chance instead of completing a move).
  */
-function balanced(state: MatchState, team: TeamId, ballY: number, busy: number[]): boolean {
-  const dir = state.teams[team].attackDir
-  return outfield(state, team).some((t) => !busy.includes(t.id) && (t.pos.y - ballY) * dir < -0.5)
+function carrierMayOverride(state: MatchState, p: PlayerState): boolean {
+  const r = state.rotation[p.team]
+  if (!r || isPattern(r.kind)) return true
+  return r.carrierId === p.id && r.status !== 'opportunity' && r.kind !== 'wallPass' && r.kind !== 'pisada'
 }
-
-// ------------------------------------------------------------------------------- wall pass
 
 /** About how long the ball takes into the wall and back to the runner (seconds). */
 const WALL_PASS_BALL_TIME = 1.2
@@ -388,44 +762,34 @@ const WALL_MARKER_REACTION = 0.5
 /**
  * Wall pass (carrier-initiated): a defender close in front of the carrier, a free teammate 3.5-9 m
  * away to the side or a little ahead with a clear lane, and space behind the defender for the run.
- * Returns the wall and the run target, or null.
  */
 export function wallPassOption(
   state: MatchState,
   p: PlayerState,
 ): { wall: PlayerState; run: Vec2; defender: PlayerState } | null {
-  const current = state.rotation[p.team]
-  // (A rotation in progress gives way to a 1-2; another combination does not.)
-  if (p.role === 'GK' || (current && !isPattern(current.kind)) || !state.teams[p.team].tactics.rotations)
-    return null
-  if (state.time < state.rotationReadyAt[p.team]) return null
+  if (p.role === 'GK' || !state.teams[p.team].tactics.rotations || !carrierMayOverride(state, p)) return null
+  if (!state.rotation[p.team] && state.time < state.rotationReadyAt[p.team]) return null
+  if (!familyAllowed(state, p.team, 'wallPass', state.rotationTeam[p.team])) return null
   const dir = state.teams[p.team].attackDir
-  const goalY = dir * COURT.halfLength
+  const goalY = dir * 20
   const depth = (goalY - p.pos.y) * dir
-  // From midway in his own half up to the edge of the area.
   if (depth > 30 || depth < 9) return null
   const defender = defenderInFront(state, p, 4, 2.2)
   if (!defender) return null
   let best: { wall: PlayerState; run: Vec2; score: number } | null = null
-  for (const w of outfield(state, p.team)) {
+  for (const w of movable(state, p.team)) {
     if (w.id === p.id) continue
     const d = dist(w.pos, p.pos)
     const forward = (w.pos.y - p.pos.y) * dir
     if (d < 3.5 || d > 9 || forward < -2.5 || forward > 6) continue
-    if (!free(state, p.team, w.pos, 1.6)) continue
+    // The wall must be able to play it back first time: free of his own man.
+    if (!free(state, p.team, w.pos, 2.4)) continue
     if (passInterceptable(state, p.team, p.pos, w.pos)) continue
-    // The run: past the defender on the wall's side, into the space behind him.
     const side = Math.sign(w.pos.x - p.pos.x) || 1
-    const run = inCourt({
-      x: clamp(defender.pos.x + side * 1.8, -8.5, 8.5),
-      y: defender.pos.y + dir * 3.5,
-    })
+    const run = inCourt({ x: clamp(defender.pos.x + side * 1.8, -8.5, 8.5), y: defender.pos.y + dir * 3.5 })
     if ((goalY - run.y) * dir < 3) continue
-    // Space at the end of the run (the beaten defender aside) and a clear way back from the wall.
     if (!free(state, p.team, run, 2.4, defender.id)) continue
-    // He must not be beaten to it: the ball goes in and back (about a second) while he runs, and no
-    // covering man may get there clearly before him (arriving together, the runner on the move wins). The wall's own marker is busy with the wall, who
-    // is about to get the ball: he reacts to the return late.
+    // Not beaten to it: a covering man must not get there clearly first (the wall's marker reacts late).
     const mine = estimateTimeToReach(p, run)
     const wallMarker = markerOf(state, w)
     const beaten = state.players.some(
@@ -438,8 +802,7 @@ export function wallPassOption(
     )
     if (beaten) continue
     if (passInterceptable(state, p.team, w.pos, run, 0.25, (o) => o.id === defender.id)) continue
-    // Balance: somebody other than the two stays behind the ball.
-    if (!balanced(state, p.team, p.pos.y, [p.id, w.id])) continue
+    if (!balanceOk(state, p.team, p.pos.y, [p.id, w.id])) continue
     const score = laneOpenness(state, p.team, p.pos, w.pos) - Math.abs(d - 5.5) * 0.2
     if (!best || score > best.score) best = { wall: w, run, score }
   }
@@ -447,13 +810,26 @@ export function wallPassOption(
 }
 
 /** Start the wall pass (called by the carrier as he plays the ball into the wall). */
-export function startWallPass(state: MatchState, p: PlayerState, wall: PlayerState, run: Vec2): void {
-  // A rotation in progress ends here (the 1-2 is where it was going).
-  if (state.rotation[p.team]) endRotation(state, p.team, false)
-  startRotation(state, p.team, 'wallPass', p.id, [
-    { id: p.id, job: 'run', target: run },
-    { id: wall.id, job: 'wall', target: { ...wall.pos } },
-  ])
+export function startWallPass(
+  state: MatchState,
+  p: PlayerState,
+  wall: PlayerState,
+  run: Vec2,
+  emit?: Emit,
+): void {
+  if (state.rotation[p.team]) endRotation(state, p.team, false, 'replaced', emit)
+  startRotation(
+    state,
+    p.team,
+    'wallPass',
+    p.id,
+    [
+      { id: p.id, job: 'run', target: run },
+      { id: wall.id, job: 'wall', target: { ...wall.pos } },
+    ],
+    { trigger: 'defenderInFront' },
+    emit,
+  )
 }
 
 /** The wall with the ball: the runner of his 1-2 (to be found first time), else null. */
@@ -464,220 +840,132 @@ export function wallPassRunner(
   const r = state.rotation[p.team]
   if (!r || r.kind !== 'wallPass' || state.ball.ownerId !== p.id) return null
   if (!r.moves.some((m) => m.id === p.id && m.job === 'wall')) return null
-  const runner = state.players[r.carrierId]!
-  const run = r.moves.find((m) => m.job === 'run')!.target
-  return { runner, target: run }
+  const run = r.moves.find((m) => m.job === 'run')
+  if (!run) return null
+  return { runner: state.players[r.carrierId]!, target: run.target }
 }
 
-// ---------------------------------------------------------------------------------- overlap
+/** Third man: the carrier's ball into the link (B), while the third man is going. */
+export function thirdManLinkTarget(state: MatchState, p: PlayerState): PlayerState | null {
+  const r = state.rotation[p.team]
+  if (!r || r.kind !== 'thirdMan' || r.carrierId !== p.id || r.wallTouched) return null
+  const link = r.moves.find((m) => m.job === 'link')
+  if (!link) return null
+  const b = state.players[link.id]!
+  if (passInterceptable(state, p.team, p.pos, b.pos) || spaceAt(state, p.team, b.pos) < 1.6) return null
+  return b
+}
 
-function tryOverlap(state: MatchState, team: TeamId): boolean {
-  const c = carrierOf(state, team)
-  if (!c) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  const depth = (goalY - c.pos.y) * dir
-  // In the build-up a 3-1 or 4-0 team keeps its rotation going; the overlap comes further up.
-  const t = state.teams[team].tactics
-  const maxDepth = t.formation === '2-2' ? 27 : 22
-  if (Math.abs(c.pos.x) < 4.5 || depth > maxDepth || depth < 8) return false
-  // Held up: his marker in front of him, or he has had it a while without going forward.
-  const marker = defenderInFront(state, c, 4.5, 2.5)
-  if (!marker && c.aiHoldTimer < 0.8) return false
-  const side = Math.sign(c.pos.x)
-  // The overlapper: behind him (2-9 m) on that side of the court or the middle.
-  let runner: PlayerState | null = null
-  for (const t of outfield(state, team)) {
-    if (t.id === c.id) continue
-    const behind = (c.pos.y - t.pos.y) * dir
-    if (behind < 2 || behind > 9 || t.pos.x * side < -1.5) continue
-    if (!runner || dist(t.pos, c.pos) < dist(runner.pos, c.pos)) runner = t
+/** The link with the ball: the third man and his target (played first time), else null. */
+export function thirdManRunner(
+  state: MatchState,
+  p: PlayerState,
+): { runner: PlayerState; target: Vec2 } | null {
+  const r = state.rotation[p.team]
+  if (!r || r.kind !== 'thirdMan' || state.ball.ownerId !== p.id) return null
+  const link = r.moves.find((m) => m.job === 'link')
+  if (!link || link.id !== p.id) return null
+  const run = r.moves.find((m) => m.job === 'run')
+  if (!run) return null
+  return { runner: state.players[run.id]!, target: run.target }
+}
+
+/** Switch of play: the carrier's switch — straight across, or into the deep man who plays it on. */
+export function switchPlayTarget(state: MatchState, p: PlayerState): PlayerState | null {
+  const r = state.rotation[p.team]
+  if (!r || r.kind !== 'switchPlay' || r.carrierId !== p.id || r.wallTouched) return null
+  const far = r.moves.find((m) => m.job === 'run')
+  if (!far) return null
+  const f = state.players[far.id]!
+  const via = r.moves.find((m) => m.job === 'switch')
+  if (!via && dist(f.pos, p.pos) < 18 && !passInterceptable(state, p.team, p.pos, f.pos)) return f
+  if (via) {
+    const d = state.players[via.id]!
+    if (!passInterceptable(state, p.team, p.pos, d.pos)) return d
   }
-  if (!runner) return false
-  const target = inCourt({ x: side * 8.2, y: c.pos.y + dir * Math.min(6.5, depth - 4) })
-  const via = { x: side * 8.4, y: c.pos.y }
-  // The carrier's own marker is busy with him: the run goes round the outside of him.
-  const ignore = marker?.id ?? -1
-  if (
-    !pathFree(state, team, runner.pos, via, 1.8, ignore) ||
-    !pathFree(state, team, via, target, 2.2, ignore)
-  )
-    return false
-  if (!free(state, team, target, 2.6, ignore)) return false
-  // Cover: if the overlapper was the deepest, the nearest other teammate drops into his place.
-  const moves: RotationMove[] = [{ id: runner.id, job: 'run', target }]
-  if (deepestOutfield(state, team) === runner.id) {
-    const spot = { x: runner.pos.x * 0.4, y: runner.pos.y }
-    const others = outfield(state, team).filter((t) => t.id !== c.id && t.id !== runner!.id)
-    if (others.length === 0) return false
-    const cover = others.reduce((a, t) => (dist(t.pos, spot) < dist(a.pos, spot) ? t : a))
-    moves.push({ id: cover.id, job: 'cover', target: spot })
-  } else if (!balanced(state, team, c.pos.y, [c.id, runner.id])) return false
-  startRotation(state, team, 'overlap', c.id, moves)
-  return true
+  return null
 }
 
-// --------------------------------------------------------------------------- pivot rotation
-
-function tryPivot(state: MatchState, team: TeamId): boolean {
-  if (state.teams[team].tactics.formation !== '3-1') return false
-  const c = carrierOf(state, team)
-  if (!c) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  const mates = outfield(state, team).filter((t) => t.id !== c.id)
-  if (mates.length < 3) return false
-  // The pivot: our most advanced player, well ahead of the ball in the attacking half.
-  const pivot = mates.reduce((a, t) => ((t.pos.y - a.pos.y) * dir > 0 ? t : a))
-  const ahead = (pivot.pos.y - c.pos.y) * dir
-  if (ahead < 7 || pivot.pos.y * dir < 3) return false
-  // Marked tight: a defender within 1.8 m of him, goal-side.
-  const marked = state.players.some(
-    (o) =>
-      o.team !== team &&
-      o.role !== 'GK' &&
-      dist(o.pos, pivot.pos) < 1.8 &&
-      (o.pos.y - pivot.pos.y) * dir > -0.3,
-  )
-  if (!marked || pressureOn(state, c) > 0.6) return false
-  // The far ala: on the other side of the court from the ball, not the deepest, ahead of the ball.
-  const ballSide = Math.sign(c.pos.x) || 1
-  const deepest = deepestOutfield(state, team)
-  const cands = mates.filter(
-    (t) => t.id !== pivot.id && t.id !== deepest && t.pos.x * ballSide < 1 && (t.pos.y - c.pos.y) * dir > -3,
-  )
-  if (cands.length === 0) return false
-  const ala = cands.reduce((a, t) => (t.pos.x * ballSide < a.pos.x * ballSide ? t : a))
-  // The pivot comes short into the space in front of the ball; the ala goes where the pivot was.
-  const drop = inCourt({
-    x: clamp(pivot.pos.x * 0.5 + c.pos.x * 0.3, -7, 7),
-    y: c.pos.y + dir * clamp(ahead * 0.45, 4.5, 7),
-  })
-  const runTo = inCourt({
-    x: clamp(pivot.pos.x - ballSide * 1.5, -5, 5),
-    y: goalY - dir * Math.max(4.5, (goalY - pivot.pos.y) * dir),
-  })
-  // His own marker is the one he runs away from, and the pivot's marker goes with the pivot as he
-  // comes short: neither is in the way of the run.
-  if (!pathFree(state, team, ala.pos, runTo, 1.5, [markerOf(state, ala), markerOf(state, pivot)]))
-    return false
-  if (!balanced(state, team, c.pos.y, [c.id, pivot.id, ala.id])) return false
-  startRotation(state, team, 'pivot', c.id, [
-    { id: pivot.id, job: 'drop', target: drop },
-    { id: ala.id, job: 'run', target: runTo },
-  ])
-  return true
+/** Isolation: the carrier has the corridor cleared for his 1 v 1 (the defender to beat), else null. */
+export function isolationDefender(state: MatchState, p: PlayerState): PlayerState | null {
+  const r = state.rotation[p.team]
+  if (!r || r.kind !== 'isolation' || r.carrierId !== p.id) return null
+  return defenderInFront(state, p, 4.5, 2.5)
 }
 
-// ------------------------------------------------------------------------------- rotations
-
-/** Pohjakasi (3-1): the middle man of the back three passes to a wing. */
-function tryBaseEight(state: MatchState, team: TeamId): boolean {
-  if (state.teams[team].tactics.formation !== '3-1') return false
-  const pass = justPassed(state, team)
-  if (!pass) return false
-  const { passer, receiver } = pass
-  const pivot = pivotOf(state, team)
-  if (!pivot || passer.id === pivot.id || receiver.id === pivot.id) return false
-  if (!isMiddle(passer) || !isWing(receiver)) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  const side = Math.sign(receiver.pos.x)
-  // First up the middle, then out to the wing he passed to, ahead of the receiver.
-  const via = inCourt({ x: passer.pos.x * 0.3 + side * 0.6, y: passer.pos.y + dir * 4 })
-  const ahead = Math.max(1.5, Math.min(4.5, (goalY - receiver.pos.y) * dir - 7))
-  const target = inCourt({ x: side * 7.8, y: receiver.pos.y + dir * ahead })
-  // The receiver carries it inside into the middle the passer left.
-  const carry = inCourt({ x: side * 0.8, y: receiver.pos.y + dir * 1.5 })
-  startRotation(state, team, 'baseEight', receiver.id, [
-    { id: passer.id, job: 'run', target, via },
-    { id: receiver.id, job: 'carry', target: carry },
-  ])
-  return true
+function opponentEtaTo(state: MatchState, team: TeamId, pos: Vec2): number {
+  let best = Infinity
+  for (const o of state.players)
+    if (o.team !== team && o.role !== 'GK') best = Math.min(best, estimateTimeToReach(o, pos))
+  return best
 }
 
-/** Pohjakasi from the wing (3-1): a wing passes into the middle and runs up into the middle. */
-function tryBaseEightWing(state: MatchState, team: TeamId): boolean {
-  if (state.teams[team].tactics.formation !== '3-1') return false
-  const pass = justPassed(state, team)
-  if (!pass) return false
-  const { passer, receiver } = pass
-  const pivot = pivotOf(state, team)
-  if (!pivot || passer.id === pivot.id || receiver.id === pivot.id) return false
-  if (!isWing(passer) || !isMiddle(receiver)) return false
-  const side = Math.sign(passer.pos.x)
-  // The far wing: the third man of the base, on the other side.
-  const far = outfield(state, team).find(
-    (t) => t.id !== passer.id && t.id !== receiver.id && t.id !== pivot.id && t.pos.x * side < 0,
+/** Seconds a pisada roll takes to reach the teammate's path (short, soft). */
+const PISADA_LEAD = 0.45
+
+/**
+ * Pisada (sole layoff): the carrier, pressed, rolls the ball with the sole into the path of a
+ * teammate coming past him close by; the ball is a normal pass (it can be cut out).
+ */
+export function pisadaOption(state: MatchState, p: PlayerState): { mate: PlayerState; point: Vec2 } | null {
+  if (p.role === 'GK' || !state.teams[p.team].tactics.rotations || !carrierMayOverride(state, p)) return null
+  if (!familyAllowed(state, p.team, 'pisada', state.rotationTeam[p.team])) return null
+  if (spaceAt(state, p.team, p.pos) > 2.6) return null
+  let presser: PlayerState | null = null
+  for (const o of state.players)
+    if (o.team !== p.team && o.role !== 'GK' && (!presser || dist(o.pos, p.pos) < dist(presser.pos, p.pos)))
+      presser = o
+  for (const t of movable(state, p.team)) {
+    if (t.id === p.id) continue
+    const d = dist(t.pos, p.pos)
+    const speed = Math.hypot(t.vel.x, t.vel.y)
+    if (d < 1.2 || d > 4 || speed < 2.5) continue
+    // Coming past: moving across or beyond the carrier, not away from him.
+    const rel = { x: p.pos.x - t.pos.x, y: p.pos.y - t.pos.y }
+    if ((rel.x * t.vel.x + rel.y * t.vel.y) / (d * speed) < 0.1) continue
+    const point = inCourt({
+      x: t.pos.x + t.vel.x * (PISADA_LEAD + 0.25),
+      y: t.pos.y + t.vel.y * (PISADA_LEAD + 0.25),
+    })
+    if (dist(point, p.pos) > 3 || spaceAt(state, p.team, point) < 2.5) continue
+    // He gets there clearly before anybody else can (the roll is slow).
+    if (estimateTimeToReach(t, point) + 0.3 > opponentEtaTo(state, p.team, point)) continue
+    // Left behind him, away from the presser (his body between the presser and the ball).
+    if (presser) {
+      const a = { x: point.x - p.pos.x, y: point.y - p.pos.y }
+      const b = { x: presser.pos.x - p.pos.x, y: presser.pos.y - p.pos.y }
+      if (a.x * b.x + a.y * b.y > 0) continue
+    }
+    if (passInterceptable(state, p.team, p.pos, point)) continue
+    return { mate: t, point }
+  }
+  return null
+}
+
+export function startPisada(
+  state: MatchState,
+  p: PlayerState,
+  mate: PlayerState,
+  point: Vec2,
+  emit?: Emit,
+): void {
+  if (state.rotation[p.team]) endRotation(state, p.team, false, 'replaced', emit)
+  startRotation(
+    state,
+    p.team,
+    'pisada',
+    p.id,
+    [{ id: mate.id, job: 'run', target: point }],
+    { trigger: 'mateComingPast' },
+    emit,
   )
-  if (!far) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  const up = Math.max(2, Math.min(6.5, (goalY - passer.pos.y) * dir - 7))
-  const target = inCourt({ x: side * 1.2, y: passer.pos.y + dir * up })
-  startRotation(state, team, 'baseEightWing', receiver.id, [
-    { id: passer.id, job: 'run', target },
-    // Switches it to the far wing at once, then moves across into the wing the runner left.
-    { id: receiver.id, job: 'switch', target: { ...passer.pos }, passTo: far.id },
-  ])
-  return true
-}
-
-/** Perhonen (4-0): a central player passes to his wing. */
-function tryButterfly(state: MatchState, team: TeamId): boolean {
-  if (state.teams[team].tactics.formation !== '4-0') return false
-  const pass = justPassed(state, team)
-  if (!pass) return false
-  const { passer, receiver } = pass
-  if (Math.abs(passer.pos.x) >= 4 || Math.abs(receiver.pos.x) < 4.5) return false
-  const side = Math.sign(receiver.pos.x)
-  // His own wing (or from the very middle either side).
-  if (passer.pos.x * side < -1) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  // Up through the centre, then back out to the wing he passed to.
-  const up = Math.max(2, Math.min(5, (goalY - passer.pos.y) * dir - 8))
-  const via = inCourt({ x: passer.pos.x * 0.2, y: passer.pos.y + dir * up })
-  const target = inCourt({ x: side * 7.6, y: receiver.pos.y + dir * 1.5 })
-  // The receiver carries it inside into the central lane he left.
-  const carry = inCourt({ x: side * 2.2, y: passer.pos.y + dir * 0.5 })
-  startRotation(state, team, 'butterfly', receiver.id, [
-    { id: passer.id, job: 'run', target, via },
-    { id: receiver.id, job: 'carry', target: carry },
-  ])
-  return true
-}
-
-/** The 4-player rotation (4-0): one central player passes to the other. */
-function tryFourCircle(state: MatchState, team: TeamId): boolean {
-  if (state.teams[team].tactics.formation !== '4-0') return false
-  const pass = justPassed(state, team)
-  if (!pass) return false
-  const { passer, receiver } = pass
-  if (Math.abs(passer.pos.x) >= 4 || Math.abs(receiver.pos.x) >= 4) return false
-  if (Math.abs(passer.pos.x - receiver.pos.x) < 2.5) return false
-  const sideP = Math.sign(passer.pos.x - receiver.pos.x) || 1
-  // The ala on the passer's side (away from the ball) moves in between the lines; the passer goes out
-  // to his wing to keep the width.
-  const ala = outfield(state, team).find(
-    (t) => t.id !== passer.id && t.id !== receiver.id && t.pos.x * sideP > 3.5,
-  )
-  if (!ala) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  const up = Math.max(2, Math.min(6.5, (goalY - receiver.pos.y) * dir - 6))
-  startRotation(state, team, 'fourCircle', receiver.id, [
-    { id: ala.id, job: 'run', target: inCourt({ x: sideP * 2.4, y: receiver.pos.y + dir * up }) },
-    { id: passer.id, job: 'cover', target: inCourt({ x: sideP * 7.4, y: passer.pos.y + dir * 0.5 }) },
-  ])
-  return true
 }
 
 /**
  * The pass that keeps a rotation going, for a carrier in the rotation zone with nothing better on:
- * the 3-1 middle man to a wing (pohjakasi), a 3-1 wing into the middle (pohjakasi from the wing), a
- * 4-0 central player to his wing (perhonen) or to the other central player (4-player rotation), a 4-0
- * wing back to a central player. The most open safe target, or null.
+ * the 3-1 middle man to a wing, a 3-1 wing into the middle, a 4-0 central player to his wing or to
+ * the other central player, a 4-0 wing back to a central player. The most open safe target, or null.
+ * A team accepting more passing risk plays it into a narrower lane.
  */
 export function rotationPassTarget(state: MatchState, p: PlayerState): PlayerState | null {
   const team = p.team
@@ -685,27 +973,24 @@ export function rotationPassTarget(state: MatchState, p: PlayerState): PlayerSta
   if (!t.rotations || (t.formation !== '3-1' && t.formation !== '4-0') || p.role === 'GK') return null
   const r = state.rotation[team]
   if (r && (!isPattern(r.kind) || r.carrierId !== p.id)) return null
-  const dir = state.teams[team].attackDir
-  const depth = (dir * COURT.halfLength - p.pos.y) * dir
+  const depth = depthToGoal(state, team, p.pos)
   if (depth < ROTATION.zone.near || depth > ROTATION.zone.far) return null
   const pivot = pivotOf(state, team)
   if (pivot && p.id === pivot.id) return null
+  const minLane = 1.2 - s01(styleOf(state, team).passingRisk) * 0.4
   let best: PlayerState | null = null
   let bestScore = -Infinity
   for (const q of outfield(state, team)) {
     if (q.id === p.id || (pivot && q.id === pivot.id)) continue
     if (Math.abs(q.pos.y - p.pos.y) > 9 || dist(q.pos, p.pos) < 3) continue
     if (t.formation === '3-1') {
-      if (isMiddle(p) ? !isWing(q) : !isMiddle(q)) continue
+      if (Math.abs(p.pos.x) < 3 ? Math.abs(q.pos.x) < 3.5 : Math.abs(q.pos.x) >= 3) continue
     } else if (Math.abs(p.pos.x) < 4) {
-      // A 4-0 central player: his own wing (perhonen) or the other central man (4-player rotation).
       if (Math.abs(q.pos.x) >= 4.5 && q.pos.x * p.pos.x < -1) continue
     } else if (Math.abs(q.pos.x) >= 4) continue
-    // An easy ball: to a free man (nobody within 2.5 m), a clear lane, safe from interception,
-    // preferably short.
     if (!free(state, team, q.pos, 2.5) || passInterceptable(state, team, p.pos, q.pos)) continue
     const lane = laneOpenness(state, team, p.pos, q.pos)
-    if (lane < 1) continue
+    if (lane < minLane) continue
     const score = Math.min(lane, 3) - Math.abs(dist(q.pos, p.pos) - 8) * 0.08
     if (score > bestScore) {
       bestScore = score
@@ -715,52 +1000,7 @@ export function rotationPassTarget(state: MatchState, p: PlayerState): PlayerSta
   return best
 }
 
-// ------------------------------------------------------------------------- back-post rotation
-
-function backPostSpots(state: MatchState, team: TeamId, c: PlayerState) {
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  const side = Math.sign(c.pos.x) || 1
-  return {
-    back: { x: -side * 2, y: goalY - dir * 2.8 },
-    top: { x: -side * 2.5, y: goalY - dir * 8 },
-    front: { x: side * 0.8, y: goalY - dir * 6 },
-  }
-}
-
-function tryBackPost(state: MatchState, team: TeamId): boolean {
-  const c = carrierOf(state, team)
-  if (!c) return false
-  const dir = state.teams[team].attackDir
-  const goalY = dir * COURT.halfLength
-  if (Math.abs(c.pos.x) < 3 || (goalY - c.pos.y) * dir > 14) return false
-  const deepest = deepestOutfield(state, team)
-  const mates = outfield(state, team).filter((t) => t.id !== c.id && t.id !== deepest)
-  if (mates.length < 2) return false
-  const s = backPostSpots(state, team, c)
-  const a = mates.reduce((x, t) => (dist(t.pos, s.back) < dist(x.pos, s.back) ? t : x))
-  const rest = mates.filter((t) => t.id !== a.id)
-  const b = rest.reduce((x, t) => (dist(t.pos, s.front) < dist(x.pos, s.front) ? t : x))
-  if (dist(a.pos, s.back) > 14) return false
-  startRotation(state, team, 'backPost', c.id, [
-    { id: a.id, job: 'post', target: s.back },
-    { id: b.id, job: 'run', target: s.front },
-  ])
-  return true
-}
-
-function swapBackPost(state: MatchState, team: TeamId, r: Rotation): void {
-  const c = state.players[r.carrierId]!
-  const s = backPostSpots(state, team, c)
-  r.swapped = true
-  // The back-post man comes out to the top of the area; the front man goes across to the back post.
-  for (const m of r.moves) {
-    if (m.job === 'post') {
-      m.job = 'run'
-      m.target = s.top
-    } else if (m.job === 'run') {
-      m.job = 'post'
-      m.target = s.back
-    }
-  }
+export type { RotationStats as RotationKindStats }
+export function statsOf(state: MatchState, team: TeamId): Record<string, RotationStats> {
+  return state.rotationStats[team]
 }

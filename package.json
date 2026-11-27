@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "lint": "oxlint src tests",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "metrics": "vitest run --config vitest.metrics.config.ts"
   },
   "dependencies": {
     "react": "19.3.1",

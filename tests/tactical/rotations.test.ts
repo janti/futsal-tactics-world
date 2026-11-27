@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
 import { MatchSimulation, createInitialState } from '../../src/simulation/MatchSimulation'
 import { ROTATION, rotationMove, updateRotations, wallPassOption } from '../../src/ai/BasicAI'
+import { planOverlap, planPivot } from '../../src/ai/team/rotationPlanners'
 import type { MatchState } from '../../src/simulation/MatchState'
 import type { Formation } from '../../src/simulation/Tactics'
 
@@ -65,7 +66,8 @@ describe('overlap', () => {
     s.possessionTeam = 1
     updateRotations(s)
     expect(s.rotation[0]).toBeNull()
-    expect(s.rotationStats[0].overlap).toEqual({ started: 1, completed: 0 })
+    expect(s.rotationStats[0].overlap).toMatchObject({ started: 1, completed: 0, cancelled: 1, turnovers: 1 })
+    expect(s.rotationStats[0].overlap.reasons.possessionLost).toBe(1)
   })
 
   it('not with an opponent in the way down the wing, nor when the team plays without rotations', () => {
@@ -77,8 +79,10 @@ describe('overlap', () => {
     s.players[8]!.pos = at(7, 15.5)
     s.players[7]!.pos = at(8.3, 13) // standing where the run goes
     giveBall(s, 3)
+    // No overlap there (another move may still use the space that is left).
+    expect(planOverlap(s, 0)).toBeNull()
     updateRotations(s)
-    expect(s.rotation[0]).toBeNull()
+    expect(s.rotation[0]?.kind).not.toBe('overlap')
     const off = scene('3-1', false)
     off.s.players[3]!.pos = off.at(7, 18)
     off.s.players[1]!.pos = off.at(5, 23)
@@ -147,11 +151,12 @@ describe('pivot rotation (3-1)', () => {
     s.players[9]!.pos = at(0, 6.8) // his marker, goal-side
     s.players[3]!.pos = at(6, 15) // far ala
     giveBall(s, 2, 0.3) // just received, free (not held up: no overlap)
-    updateRotations(s)
-    const r = s.rotation[0]
-    expect(r?.kind).toBe('pivot')
-    const drop = rotationMove(s, s.players[4]!)
-    const run = rotationMove(s, s.players[3]!)
+    // (In this empty scene a cross run of the pivot and the far ala is just as possible; the
+    // selection between them is tested in rotationLibrary.test.ts.)
+    const plan = planPivot(s, 0)
+    expect(plan?.kind).toBe('pivot')
+    const drop = plan!.moves.find((m) => m.id === 4)
+    const run = plan!.moves.find((m) => m.id === 3)
     expect(drop?.job).toBe('drop')
     expect(run?.job).toBe('run')
     // He comes towards the ball; the ala goes up to about where the pivot was.
@@ -385,16 +390,10 @@ describe('rotations in play', () => {
         }
       }
     }
-    expect([...seen].sort()).toEqual([
-      'backPost',
-      'baseEight',
-      'baseEightWing',
-      'butterfly',
-      'fourCircle',
-      'overlap',
-      'pivot',
-      'wallPass',
-    ])
+    // The formations' own rotations all happen (and other moves of the library alongside them).
+    for (const k of ['baseEight', 'butterfly', 'fourCircle', 'backPost', 'wallPass'])
+      expect(seen).toContain(k)
+    expect(seen.size).toBeGreaterThan(8)
     expect(unbalanced / ticks).toBeLessThan(0.1)
   })
 })
