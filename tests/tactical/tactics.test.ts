@@ -17,16 +17,23 @@ const sim = (tactics?: [Partial<TeamTactics>?, Partial<TeamTactics>?], seed = 1)
 describe('team tactics in the match state', () => {
   it('default tactics, the setup overrides them, a team plays its own style, a command changes them', () => {
     expect(sim().state.teams[0].tactics).toEqual(DEFAULT_TACTICS)
-    expect(sim([{ formation: '4-0' }]).state.teams[0].tactics).toEqual({ formation: '4-0', pressing: 'mid' })
+    expect(sim([{ formation: '4-0' }]).state.teams[0].tactics).toEqual({
+      formation: '4-0',
+      pressing: 'mid',
+      rotations: true,
+    })
     const tam = TEAM_LIBRARY.find((t) => t.id === 'TAM')!
     const m = new MatchSimulation({ seed: 1, home: TEAM_LIBRARY[0]!, away: tam, humanTeam: null })
     expect(m.state.teams[1].tactics.formation).toBe('4-0')
     m.step([{ type: 'SetTactics', team: 1, tactics: { pressing: 'low' } }])
-    expect(m.state.teams[1].tactics).toEqual({ formation: '4-0', pressing: 'low' })
+    expect(m.state.teams[1].tactics).toEqual({ formation: '4-0', pressing: 'low', rotations: true })
   })
 })
 
-/** Average gap between the most advanced and the second most advanced outfield player in possession. */
+/**
+ * Average gap between the most advanced and the second most advanced outfield player in possession —
+ * the shape itself, so moments in a rotation (runs break the line on purpose) are left out.
+ */
 function topGap(formation: TeamTactics['formation']): number {
   let gap = 0
   let n = 0
@@ -35,7 +42,7 @@ function topGap(formation: TeamTactics['formation']): number {
     const s = m.state
     for (let i = 0; i < TICK_RATE * 90; i++) {
       m.step()
-      if (s.phase !== 'play' || s.possessionTeam !== 0 || i % 30) continue
+      if (s.phase !== 'play' || s.possessionTeam !== 0 || s.rotation[0] || i % 30) continue
       const dir = s.teams[0].attackDir
       const ys = s.players
         .filter((p) => p.team === 0 && p.role !== 'GK')
@@ -60,7 +67,7 @@ describe('formations', () => {
 
   it('2-2 defends in a box: two in front, two behind, one of each pair on either side', () => {
     const ball = { x: 0, y: 6 }
-    const t: TeamTactics = { formation: '2-2', pressing: 'mid' }
+    const t: TeamTactics = { formation: '2-2', pressing: 'mid', rotations: true }
     const a = (role: 'FIXO' | 'ALA_L' | 'ALA_R' | 'PIVOT') => diamondAnchor(role, 1, ball, t)
     // Front pair (ALA_L, pivot) ahead of the back pair (fixo, ALA_R).
     expect(Math.min(a('ALA_L').y, a('PIVOT').y)).toBeGreaterThan(Math.max(a('FIXO').y, a('ALA_R').y) + 2)
@@ -70,12 +77,16 @@ describe('formations', () => {
 })
 
 describe('pressing height', () => {
-  /** Average distance of the defending team's outfield players from their own goal in their build-up. */
+  /**
+   * Average distance of the defending team's outfield players from their own goal in their build-up.
+   * The defending team plays without its own attacking rotations: right after it loses the ball its
+   * runners are still up the court, which would mix recovery runs into the pressing shape.
+   */
   function defDepth(pressing: TeamTactics['pressing']): number {
     let depth = 0
     let n = 0
     for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const m = sim([{ pressing }], seed)
+      const m = sim([{ pressing, rotations: false }], seed)
       const s = m.state
       for (let i = 0; i < TICK_RATE * 90; i++) {
         m.step()
@@ -105,7 +116,7 @@ describe('pressing height', () => {
   it('the top of the block follows the pressing height', () => {
     const ball = { x: 0, y: 18 } // by the opponents' goal
     const top = (pressing: TeamTactics['pressing']) =>
-      diamondAnchor('PIVOT', 1, ball, { formation: '3-1', pressing }).y
+      diamondAnchor('PIVOT', 1, ball, { formation: '3-1', pressing, rotations: true }).y
     expect(top('low')).toBeLessThan(top('mid') - 5)
     expect(top('high')).toBeGreaterThan(top('mid') + 2)
   })

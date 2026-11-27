@@ -24,6 +24,7 @@ import {
 } from '../team/attacking'
 import { interceptPoint, passInterception, receivePoint } from '../passing'
 import { isBreakaway, twoOnKeeperMate, twoOnKeeperSpot } from './carrier'
+import { rotationMove } from '../team/rotations'
 
 export function offBallDecision(
   state: MatchState,
@@ -135,6 +136,22 @@ export function offBallDecision(
       p.aiState = 'run'
       p.aiTarget = follow
       p.aiSetPieceTimer = 1.5 // a rebound or loose ball he gets is struck at once (tap-in)
+      return
+    }
+    // Part of a rotation: his job in it (run into space, cover behind, come short, take a post).
+    const move = rotationMove(state, p)
+    const rot = state.rotation[p.team]
+    if (move && rot) {
+      p.aiTarget = move.target
+      if (move.job === 'run' || move.job === 'post') {
+        p.aiState = 'run'
+        // A runner the carrier can find (runnerOption); he finishes a ball in front of goal first time.
+        p.aiRunTarget = move.target
+        p.aiRunTimer = Math.max(p.aiRunTimer, Math.min(2.5, rot.until - state.time))
+        p.aiRunCooldown = Math.max(p.aiRunCooldown, 5)
+        if (move.job === 'post' || (move.target.y - dir * COURT.halfLength) * dir > -9)
+          p.aiSetPieceTimer = Math.max(p.aiSetPieceTimer, 1.3)
+      } else p.aiState = 'support'
       return
     }
     if (p.aiRunTimer > 0 && owner && owner.team === p.team) {

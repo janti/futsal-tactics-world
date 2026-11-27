@@ -14,6 +14,7 @@ import { SeededRandom, deriveSeed } from '../core/random/SeededRandom'
 import { add, addScaled, angleOf, dist, fromAngle, len, normalize, sub, type Vec2 } from '../core/math/vec2'
 import { assistControlledPlayer, outsideClearanceArea, updateAI, type AIActions } from '../ai/BasicAI'
 import { baseAnchor } from '../ai/positioning/Formation'
+import { emptyRotationStats } from '../ai/team/rotations'
 import { DEFAULT_TACTICS, type TeamTactics } from './Tactics'
 import { checkOutOfPlay, isGoal, stepBall } from '../physics/BallPhysics'
 import { lobVelocity, planPass } from '../physics/PassingPhysics'
@@ -1864,6 +1865,9 @@ export function createInitialState(setup: MatchSetup): MatchState {
     clearance: null,
     defTransition: [false, false],
     pressTrigger: [null, null],
+    rotation: [null, null],
+    rotationReadyAt: [0, 0],
+    rotationStats: [emptyRotationStats(), emptyRotationStats()],
     possessionSinceTick: 0,
     teamPhase: ['setPiece', 'setPiece'],
     aiPrevPossession: null,

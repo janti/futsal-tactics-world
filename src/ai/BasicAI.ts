@@ -18,6 +18,7 @@ import { goalkeeperBehaviour } from './player/goalkeeper'
 import { offBallDecision } from './player/offBall'
 import { restartBehaviour } from './restarts'
 import { updateTeamPhases } from './team/phases'
+import { updateRotations } from './team/rotations'
 export * from './common'
 export * from './movement'
 export * from './team/defending'
@@ -29,6 +30,7 @@ export * from './player/offBall'
 export * from './restarts'
 export * from './team/phases'
 export * from './team/pressing'
+export * from './team/rotations'
 export * from './team/roles'
 export * from './spatial/PitchControl'
 
@@ -36,6 +38,7 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
   updateDefensiveTransitions(state)
   updateTeamPhases(state)
   updatePressTriggers(state)
+  updateRotations(state)
   const chasers: [number | null, number | null] = [pickBallWinner(state, 0), pickBallWinner(state, 1)]
   const helpers: [number | null, number | null] = [
     pickHelper(state, 0, chasers[0]),

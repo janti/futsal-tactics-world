@@ -43,14 +43,52 @@
   back pass 112 (27 %), touch line 23 (70 %); a high press reacts to more cues and wins more, a low
   block to fewer.
 
+## Milestone 6, stage 3: rotations
+
+- `ai/team/rotations.ts`: a rotation is a short team move with named participants, each with a job
+  (`run` into space, `wall` for a 1-2, `cover` behind, `drop` short, `post` in front of goal) and a
+  target (`state.rotation[team]`). Started by a trigger, it ends **completed** when the ball reaches
+  a runner (the wall pass: when the passer has it back from the wall), and is **cancelled** when the
+  time runs out (2.2–3.4 s), the ball goes to somebody outside the move, possession is lost or the
+  ball goes dead. Then a 2 s pause before the next one; the runners who did not get the ball go back
+  to the shape (the dynamic roles fill it from where everybody is).
+- **Balance**: one outfield player who is not running always stays behind the ball. The deepest
+  player is never a runner unless somebody is told to cover his place (overlap, 4-0 rotation).
+- The rotations:
+  - **Wall pass (1-2)**, chosen by the carrier (more often by a creative player): a defender close in
+    front, a free teammate 3.5–9 m away with a clear lane and space behind the defender. He plays it
+    in and runs past the defender on the wall's side; the wall returns it first time into his path.
+  - **Overlap**: a wide carrier held up by his marker; the teammate 2–9 m behind on that side runs
+    round the outside down the wing (the carrier's own marker is ignored — he is the one being gone
+    round); the through ball finds him once he is past.
+  - **Pivot rotation** (3-1): the pivot marked tight comes short into the space in front of the ball
+    (he gets it to feet when free); the far ala runs into the space he left and becomes the pivot.
+  - **4-0 rotation**: a pass from the middle out to the wing — the passer follows it on the inside past
+    the receiver, the far man tucks in behind into his place.
+  - **Back-post rotation**: the ball on a wing within 14 m of goal — one man attacks the back post
+    (first-time finish), another the front of the area; after 1.5 s without the ball across they swap
+    (the back-post man comes out to the top, the other goes across to the back post).
+- `TeamTactics.rotations` switches them on or off (on by default; the stage 5 quick tactics will
+  expose it). Started/completed counts per team and kind: `state.rotationStats`.
+- Measured AI vs AI (8 × 3 min per formation, both teams, started / completed):
+  - 3-1: wall pass 74 / 22, overlap 208 / 82, pivot 57 / 26, back post 154 / 59; shots 225 → 214,
+    goals 49 → 42 (within the noise between runs).
+  - 4-0: wall pass 98 / 36, overlap 240 / 102, 4-0 rotation 177 / 64, back post 91 / 30; shots
+    61 → 87, goals 10 → 16 — the flat four needed the movement most.
+  - 2-2: wall pass 52 / 21, overlap 166 / 75, back post 214 / 91; shots 188 → 202, goals 43 → 42.
+- Side effect fixed on the way: with players up the court after a rotation the keeper's arced throws
+  were cut out more often. The keeper now counts the throw's time in the air (a receiver already on
+  the spot has to wait for it; the human player arriving as it drops takes it) and, with the ball in
+  his hands and every throw risky, waits up to 2.5 s for somebody to get free. AI passes taken by the
+  test bot (12 matches): without rotations 11.9 % → 10.2 %, with rotations 15.0 % → 12.7 %.
+
 ## Planned
 
 - Formations: 4-0, 2-2, 1-2-1, 2-1-1, 5v4 flying-goalkeeper shapes (2-1-2, 3-2, 1-2-2), numerical
   disadvantage shapes.
 - Separate templates for build-up, mid-court, final third, high press, mid-block, low block and
   transitions, blended by context.
-- Rotations: position exchange, figure-eight, diagonal, third-player, wall pass, overlap, underlap,
-  pivot rotation, back-post rotation, parallel run, overload-and-switch — each with preconditions,
-  participants, triggers, timing, balance requirements, completion and cancellation.
+- More rotations on the same framework: position exchange, figure-eight, diagonal, third-player,
+  underlap, parallel run, overload-and-switch.
 - Pressing styles (low, mid, high, aggressive) with triggers; man-to-man, zonal and hybrid defending.
 - Tactical editor (0–100 sliders), presets, individual instructions, quick commands, AI coach.

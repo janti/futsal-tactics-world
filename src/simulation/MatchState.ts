@@ -3,6 +3,7 @@ import type { Difficulty } from './Difficulty'
 import type { Vec2 } from '../core/math/vec2'
 import type { ControlOptions } from './ControlOptions'
 import type { MatchRules, TeamStats } from './MatchRules'
+import type { Rotation, RotationKind, RotationStats } from '../ai/team/rotations'
 
 export type TeamId = 0 | 1
 export type AttackDir = 1 | -1
@@ -297,6 +298,12 @@ export interface MatchState {
    * tight — until `until` (state.time). Null when none is active.
    */
   pressTrigger: [PressTrigger | null, PressTrigger | null]
+  /** Attacking rotation in progress per team (Milestone 6, stage 3; see ai/team/rotations.ts). */
+  rotation: [Rotation | null, Rotation | null]
+  /** Simulation time from which each team may start its next rotation. */
+  rotationReadyAt: [number, number]
+  /** Rotations started / completed per team and kind (analysis, tests, the debug overlay). */
+  rotationStats: [Record<RotationKind, RotationStats>, Record<RotationKind, RotationStats>]
   /** AI bookkeeping: possession seen on the previous AI update. */
   aiPrevPossession: TeamId | null
   /** Strength of the computer opponent (affects only the non-human team). */

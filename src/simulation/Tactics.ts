@@ -22,12 +22,14 @@ export type PressingHeight = 'low' | 'mid' | 'high'
 export interface TeamTactics {
   formation: Formation
   pressing: PressingHeight
+  /** Attacking rotations (wall pass, overlap, pivot / 4-0 / back-post rotation) on or off. */
+  rotations: boolean
 }
 
 export const FORMATIONS: readonly Formation[] = ['3-1', '4-0', '2-2']
 export const PRESSING_HEIGHTS: readonly PressingHeight[] = ['low', 'mid', 'high']
 
-export const DEFAULT_TACTICS: TeamTactics = { formation: '3-1', pressing: 'mid' }
+export const DEFAULT_TACTICS: TeamTactics = { formation: '3-1', pressing: 'mid', rotations: true }
 
 /** Pressing parameters per height. */
 export const PRESSING = {

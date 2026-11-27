@@ -9,6 +9,7 @@ import { COURT } from '../../simulation/SimulationConfig'
 import { screenFactor } from '../../simulation/MatchSimulation'
 import { type AIActions, spaceAhead, shootingLane, isLastMan, deepestOutfield } from '../common'
 import { runnerOption } from '../team/attacking'
+import { startWallPass, wallPassOption, wallPassRunner } from '../team/rotations'
 import {
   progressivePass,
   forwardChance,
@@ -43,6 +44,21 @@ export function carrierBehaviour(
       // A tap-in (back post, square ball) goes into the side the keeper is not covering.
       const aim = firstTimeDist < 6 ? { x: 0, y: dir } : sub(goal, p.pos)
       actions.shoot(p, aim, firstTimeDist < 8.5 ? 0.3 : 0.5)
+      return
+    }
+  }
+
+  // The wall of a 1-2: the ball goes straight back into the runner's path (first time). If the way
+  // back has been shut he keeps it (the rotation then runs out).
+  const wall = wallPassRunner(state, p)
+  if (wall && p.aiHoldTimer < 0.6) {
+    const lead = {
+      x: wall.runner.pos.x * 0.4 + wall.target.x * 0.6,
+      y: wall.runner.pos.y * 0.4 + wall.target.y * 0.6,
+    }
+    if (!passInterceptable(state, p.team, p.pos, lead, 0.2)) {
+      p.aiDecision = 'wallReturn'
+      actions.pass(p, sub(lead, p.pos), true, wall.runner)
       return
     }
   }
@@ -212,6 +228,8 @@ export type CarrierOptionKind =
   | 'layoff'
   | 'kickOut'
   | 'backPost'
+  | 'wallPass'
+  | 'pivotDrop'
 
 export interface CarrierOption {
   kind: CarrierOptionKind
@@ -350,6 +368,39 @@ export function carrierOptions(
         x.pass(p, sub(lay.pos, p.pos), false, lay)
       },
     })
+
+  // Wall pass (1-2): a defender in front, a free teammate beside him and space behind the defender —
+  // play it in and run past (more often for a creative player; a strong option is still preferred).
+  if (!out.some((o) => o.utility >= 0.76)) {
+    const wp = wallPassOption(state, p)
+    if (wp && rng.chance(attr(a.creativity, 0.35, 0.7)))
+      out.push({
+        kind: 'wallPass',
+        utility: 0.74,
+        act: (x) => {
+          startWallPass(state, p, wp.wall, wp.run)
+          x.pass(p, sub(wp.wall.pos, p.pos), false, wp.wall)
+        },
+      })
+  }
+
+  // Pivot rotation: the pivot comes short to show; free and with a clear lane he gets it to feet.
+  const rot = state.rotation[p.team]
+  if (rot?.kind === 'pivot' && rot.carrierId === p.id) {
+    const drop = rot.moves.find((m) => m.job === 'drop')
+    const pivotMan = drop ? state.players[drop.id]! : null
+    if (
+      pivotMan &&
+      dist(pivotMan.pos, drop!.target) < 2.5 &&
+      !passInterceptable(state, p.team, p.pos, pivotMan.pos) &&
+      state.players.every((o) => o.team === p.team || o.role === 'GK' || dist(o.pos, pivotMan.pos) > 1.5)
+    )
+      out.push({
+        kind: 'pivotDrop',
+        utility: 0.72,
+        act: (x) => x.pass(p, sub(pivotMan.pos, p.pos), false, pivotMan),
+      })
+  }
 
   // Take the defender on (wing or middle; never the last man). Decided once per possession.
   if (!out.some((o) => o.utility >= 0.78) && startChallenge(state, p, c.nearest, rng))

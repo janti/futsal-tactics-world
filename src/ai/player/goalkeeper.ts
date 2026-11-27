@@ -6,7 +6,7 @@ import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import { laneOpenness, predictPassTarget, pressureOn } from '../../physics/PassingPhysics'
 import { rollingLaunchSpeed } from '../../physics/BallPhysics'
 import type { MatchState, PlayerState } from '../../simulation/MatchState'
-import { COURT, PASS, PLAYER, POST_X, SCREEN, THROW } from '../../simulation/SimulationConfig'
+import { BALL, COURT, PASS, PLAYER, POST_X, SCREEN, THROW } from '../../simulation/SimulationConfig'
 import type { AIActions } from '../common'
 import { walkTo } from '../movement'
 import { TWO_V_ONE, twoVersusOne } from '../team/defending'
@@ -30,6 +30,9 @@ export function freeShootingChance(state: MatchState, shooter: PlayerState, goal
   }
   return true
 }
+
+/** Seconds (of the four) a keeper with the ball in his hands waits while every throw is risky. */
+export const KEEPER_WAIT_FOR_OPTION = 2.5
 
 export function goalkeeperBehaviour(
   state: MatchState,
@@ -59,6 +62,7 @@ export function goalkeeperBehaviour(
     if (decide && p.aiHoldTimer > holdTime) {
       let best: PlayerState | null = null
       let bestScore = -Infinity
+      let bestRisky = false
       for (const t of state.players) {
         if (t.team !== p.team || t.id === p.id) continue
         const open = clamp(laneOpenness(state, p.team, p.pos, t.pos), 0, 3)
@@ -77,15 +81,19 @@ export function goalkeeperBehaviour(
         if (score > bestScore) {
           bestScore = score
           best = t
+          bestRisky = risky < 0
         }
       }
+      // Ball in the hands and every throw one an opponent can cut out (teammates still recovering, e.g.
+      // after a rotation up the court): wait for somebody to get free — well within the four seconds.
+      if (ball.inHands && bestRisky && ball.handsTimer < KEEPER_WAIT_FOR_OPTION) return
       // A throw beyond a few metres, or one an opponent could cut out along the floor, goes in an arc.
       const lob =
         best !== null &&
         ball.inHands &&
         (dist(best.pos, p.pos) > 8.5 || passInterceptable(state, p.team, p.pos, best.pos))
       if (best && lob) {
-        actions.lobThrow(p, best, clamp(2 + dist(best.pos, p.pos) * 0.12, 2.4, 4.2))
+        actions.lobThrow(p, best, lobApex(dist(best.pos, p.pos)))
       } else if (best && ball.inHands) {
         // From the hands: the same controlled throw a human keeper makes (aim at where the receiver
         // will be; bowl short throws, throw long ones overarm).
@@ -252,23 +260,33 @@ function predictGoalThreat(ball: MatchState['ball'], goalLineY: number, gk: Play
   return null
 }
 
+/** Apex height (m) of the keeper's arced throw over `d` metres. */
+function lobApex(d: number): number {
+  return clamp(2 + d * 0.12, 2.4, 4.2)
+}
+
 /**
- * An arced throw to `t` is contested when an opponent (the human player is quick to read it) can get
- * to where it comes down before it lands or before `t` gets there.
+ * An arced throw to `t` is contested when an opponent can get to where it comes down by the time it
+ * gets there: the ball is in the air for a second or more, so a receiver already on the spot has to
+ * wait for it — an opponent arriving as it drops (the human player sprints in) takes it off him.
  */
 function lobContested(state: MatchState, keeper: PlayerState, t: PlayerState): boolean {
-  const d = dist(t.pos, keeper.pos)
+  // Where it comes down: short of where the receiver will be (as lobThrow aims it).
+  const aim = addScaled(t.pos, t.vel, 0.5)
   const landing = {
-    x: keeper.pos.x + (t.pos.x - keeper.pos.x) * 0.85,
-    y: keeper.pos.y + (t.pos.y - keeper.pos.y) * 0.85,
+    x: keeper.pos.x + (aim.x - keeper.pos.x) * 0.85,
+    y: keeper.pos.y + (aim.y - keeper.pos.y) * 0.85,
   }
-  void d
-  // Contested when an opponent gets to where it comes down clearly before the receiver does.
-  const mine = estimateTimeToReach(t, landing)
+  const apex = lobApex(dist(aim, keeper.pos))
+  const g = BALL.gravity
+  const flight = Math.sqrt((2 * Math.max(0.1, apex - THROW.releaseHeight)) / g) + Math.sqrt((2 * apex) / g)
+  // The ball is his once it has come down and he has it under control.
+  const mine = Math.max(estimateTimeToReach(t, landing), flight) + 0.25
   for (const o of state.players) {
     if (o.team === keeper.team || o.role === 'GK') continue
-    const theirs = estimateTimeToReach(o, landing) * (o.id === state.controlledId ? 0.85 : 1)
-    if (theirs < mine - 0.1) return true
+    const human = o.id === state.controlledId
+    const theirs = estimateTimeToReach(o, landing) * (human ? 0.85 : 1)
+    if (theirs < mine + (human ? 0.2 : -0.1)) return true
   }
   return false
 }

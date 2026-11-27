@@ -59,6 +59,20 @@
   player). Measured AI vs AI: about 60 shots and 9-12 goals per 36 min (6-8 m shots: about half go
   in). Against the pressing test bot the AI still scores little.
 
+### Milestone 6 — stage 3: rotations
+
+- Attacking rotations (`ai/team/rotations.ts`): wall pass (1-2), overlap down the wing, pivot rotation
+  (3-1: the pivot comes short, the far ala takes his place), 4-0 rotation (pass out wide and follow
+  it on the inside, the far man tucks in) and back-post rotation (back post and front of the area,
+  swapping after 1.5 s). Each has a trigger, participants with jobs, a time limit, balance (one man
+  always stays behind the ball) and ends completed or cancelled; a 2 s pause between rotations.
+- Team tactics have a `rotations` switch (on by default); started/completed counts are kept per team.
+- Measured AI vs AI: a 4-0 team shoots 61 → 87 times in 8 matches (goals 10 → 16); 3-1 and 2-2 about
+  unchanged in shots and goals, with the movement now coming from the rotations.
+- Keeper distribution: an arced throw counts its time in the air (an opponent arriving as it drops
+  takes it), and with every throw risky the keeper waits up to 2.5 s for a free man. AI passes cut out
+  by the test bot: 15.0 % → 12.7 % (with rotations).
+
 ### Milestone 6 — stage 2: pressing triggers
 
 - The defending team waits for a cue and then jumps for about a second and a half: a back pass
