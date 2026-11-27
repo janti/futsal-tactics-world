@@ -70,17 +70,48 @@
     (the back-post man comes out to the top, the other goes across to the back post).
 - `TeamTactics.rotations` switches them on or off (on by default; the stage 5 quick tactics will
   expose it). Started/completed counts per team and kind: `state.rotationStats`.
-- Measured AI vs AI (8 × 3 min per formation, both teams, started / completed):
-  - 3-1: wall pass 74 / 22, overlap 208 / 82, pivot 57 / 26, back post 154 / 59; shots 225 → 214,
-    goals 49 → 42 (within the noise between runs).
-  - 4-0: wall pass 98 / 36, overlap 240 / 102, 4-0 rotation 177 / 64, back post 91 / 30; shots
-    61 → 87, goals 10 → 16 — the flat four needed the movement most.
-  - 2-2: wall pass 52 / 21, overlap 166 / 75, back post 214 / 91; shots 188 → 202, goals 43 → 42.
+- Measured AI vs AI (8 × 3 min per formation, both teams, started / completed; after the stage 4
+  fixes below):
+  - 3-1: wall pass 35 / 15, overlap 192 / 72, pivot 105 / 47, back post 160 / 59; shots 219, goals
+    50 (without rotations 225 / 49 — about unchanged).
+  - 4-0: wall pass 28 / 7, overlap 185 / 88, 4-0 rotation 340 / 102, back post 80 / 25; shots 82,
+    goals 16 (without rotations 61 / 10) — the flat four needed the movement most.
+  - 2-2: wall pass 19 / 6, overlap 186 / 77, back post 203 / 75; shots 209, goals 41 (188 / 43).
 - Side effect fixed on the way: with players up the court after a rotation the keeper's arced throws
   were cut out more often. The keeper now counts the throw's time in the air (a receiver already on
   the spot has to wait for it; the human player arriving as it drops takes it) and, with the ball in
   his hands and every throw risky, waits up to 2.5 s for somebody to get free. AI passes taken by the
   test bot (12 matches): without rotations 11.9 % → 10.2 %, with rotations 15.0 % → 12.7 %.
+
+## Milestone 6, stage 4: Tactical Lab and the AI view
+
+- **Tactical Lab** (title screen → Tactical Lab): set situations placed straight into a running match
+  (`lab/scenarios.ts`, headless, so the tests use the same scenarios): breakaway (1 v 0), two on the
+  keeper (2 v 0), counter-attack 3 v 2, overlap, wall pass, pivot rotation (3-1), 4-0 rotation, back
+  post, build-up against a high press. Positions are written from the attackers' point of view and
+  mirrored onto either team.
+- The panel: the situation, you (watch / attack — you have the carrier / defend — you get the defender
+  nearest the ball), the attacking formation, the defenders' pressing height, rotations on/off, speed
+  (0.25× / 0.5× / 1×), start again (R) and automatically after each attempt. Every attempt ends as
+  goal, saved, out, ball lost or time up (per scenario limit, 6–10 s); the outcomes and, for the
+  rotation scenarios, how often the rotation started and was completed are counted.
+- **AI view** (key 7, also in the Lab panel) drawn over the main view: each computer player's state
+  (run, support, press, to the ball, mark, intercept…) above his head — the carrier also his decision
+  — and a dashed line to where he is going, a solid line from each defender to the man he marks, the
+  rotation in progress (amber arrows with each participant's job), a ring round the target of a
+  pressing jump, and a line per team with its phase, rotation (time left) and pressing cue. Pitch
+  control stays on the radar.
+- What the Lab showed, and fixed on the way: the pivot and 4-0 rotations hardly ever started because
+  the run was "blocked" by the runner's own marker (or the pivot's) — markers now do not block the run
+  they are being run away from; the wall pass was often played into a covering man who arrived at the
+  end of the run with the ball — now the runner must not be beaten to the spot (the wall's own marker
+  reacts 0.5 s late). Wall pass completion in play 30 % → 43 %.
+- Lab results (20 attempts each, computer vs computer): breakaway 14 goals, 2 v 0 18 goals; the
+  rotation scenarios start their rotation in 14–20 attempts out of 20.
+- Open finding: in the built-up situations (counter 3 v 2, rotations, build-up) the attackers lose the
+  ball in 55–75 % of the attempts. One cause seen in the wall pass: the runner who has the ball back
+  past his man passes it back under pursuit from behind instead of driving on (the chaser counts as
+  pressure). To be worked on with the Lab.
 
 ## Planned
 

@@ -342,10 +342,69 @@ test('camera and visuals: radar, horizontal camera, Camera Lab and graphics sett
   await expect(page.getByTestId('camera-lab')).toBeVisible()
   await page.getByTestId('lab-orientation-vertical').click()
   await page.getByTestId('lab-visibleLength').fill('35')
+  // Player size is at hand in the lab too (the same remembered setting).
+  await page.getByTestId('lab-player-scale').selectOption('1.06')
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('ftw.playerScale'))).toBe('1.06')
+  await page.getByTestId('lab-player-scale').selectOption('1.12')
   await expect.poll(() => page.evaluate(() => localStorage.getItem('ftw.camera'))).toBe('custom')
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('ftw.customCamera') ?? '{}'))
   expect(stored.visibleLength).toBe(35)
   await page.keyboard.press('Digit6')
   await expect(page.getByTestId('camera-lab')).toBeHidden()
   expect(await page.evaluate(() => localStorage.getItem('ftw.graphics'))).toBe('medium')
+
+  // Player size still applies after the Camera Lab: the drawn models follow the setting both ways.
+  const playerScales = () =>
+    page.evaluate(() => {
+      type Obj = { type: string; children: Obj[]; scale: { y: number } }
+      const scene = window.__FTW__!.scene as Obj
+      const out: number[] = []
+      const walk = (o: Obj) => {
+        // Player roots: scaled groups (height / 178 x the visual size) with one child, the body.
+        if (o.type === 'Group' && o.children.length === 1 && Math.abs(o.scale.y - 1) > 1e-3)
+          out.push(o.scale.y)
+        o.children.forEach(walk)
+      }
+      walk(scene)
+      return out.reduce((a, b) => a + b, 0) / out.length
+    })
+  const big = await playerScales()
+  await page.keyboard.press('Escape')
+  await page.getByTestId('pause-menu').getByTestId('setting-player-scale').selectOption('1')
+  await expect.poll(playerScales).toBeLessThan(big / 1.1)
+  await page.getByTestId('pause-menu').getByTestId('setting-player-scale').selectOption('1.12')
+  await expect.poll(playerScales).toBeCloseTo(big, 5)
+})
+
+test('Tactical Lab: scenario, modes, AI view, attempts counted', async ({ page }) => {
+  test.setTimeout(120_000)
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto('/?gfx=low')
+  await page.getByTestId('tactical-lab-open').click()
+  await expect(page.getByTestId('tactical-lab')).toBeVisible()
+  // The breakaway: short attempts, started again automatically.
+  await page.getByTestId('tlab-scenario').selectOption('breakaway')
+  await expect.poll(() => page.evaluate(() => window.__FTW__!.getState().ball.ownerId)).not.toBeNull()
+  await expect
+    .poll(async () => Number(await page.getByTestId('tlab-attempts').textContent()), { timeout: 60_000 })
+    .toBeGreaterThanOrEqual(1)
+  // AI view on: the overlay canvas is shown.
+  await page.getByTestId('tlab-ai-debug').check()
+  await expect(page.getByTestId('ai-debug-overlay')).toBeVisible()
+  // Defend: the match is rebuilt with you on the defending team (the opponents have the ball).
+  await page.getByTestId('tlab-mode-defend').click()
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const s = window.__FTW__!.getState()
+        return s.humanTeam === 0 && s.possessionTeam === 1 && s.players[s.controlledId!]!.team === 0
+      }),
+    )
+    .toBe(true)
+  // Leave the lab from the pause menu.
+  await page.keyboard.press('Escape')
+  await page.getByTestId('pause-menu').getByTestId('quit').click()
+  await expect(page.getByTestId('tactical-lab-open')).toBeVisible()
+  expect(errors).toEqual([])
 })

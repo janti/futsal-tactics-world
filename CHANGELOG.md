@@ -59,6 +59,18 @@
   player). Measured AI vs AI: about 60 shots and 9-12 goals per 36 min (6-8 m shots: about half go
   in). Against the pressing test bot the AI still scores little.
 
+### Milestone 6 — stage 4: Tactical Lab and AI view
+
+- Tactical Lab (title screen): nine set situations — breakaway, 2 v 0, 3 v 2 counter, overlap, wall
+  pass, pivot rotation, 4-0 rotation, back post, build-up against a high press — played again and
+  again. Watch, attack (you have the ball) or defend; change the formation, pressing height and
+  rotations, the speed (0.25×–1×); R starts again. Outcomes (goal, saved, out, ball lost, time up) and
+  rotations started/completed are counted. Scenarios are headless and used by the tests too.
+- AI view (key 7) over the main view: every computer player's state and decision, where he is going,
+  who marks whom, the rotation in progress with each player's job, pressing jumps, team phases.
+- Found with the Lab and fixed: pivot and 4-0 rotations were blocked by the runner's own marker; wall
+  passes were played into a covering man reaching the end of the run first (completion 30 % → 43 %).
+
 ### Milestone 6 — stage 3: rotations
 
 - Attacking rotations (`ai/team/rotations.ts`): wall pass (1-2), overlap down the wing, pivot rotation

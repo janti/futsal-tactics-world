@@ -9,7 +9,15 @@ import { MatchSimulation } from '../simulation/MatchSimulation'
 import { copySnapshot, createSnapshot, writeSnapshot, type MatchSnapshot } from '../simulation/MatchSnapshot'
 import { DT, HANDS, MAX_FRAME_TIME, RESTART } from '../simulation/SimulationConfig'
 import type { Command } from '../simulation/Commands'
-import { useUi, type HudState } from '../ui/store'
+import { useUi, type HudState, type LabState } from '../ui/store'
+import { AIDebugOverlay, type DebugLabels } from '../rendering/AIDebugOverlay'
+import { SCENARIOS, applyScenario, scenarioOutcome } from '../lab/scenarios'
+import type { TeamId } from '../simulation/MatchState'
+import type { TeamTactics } from '../simulation/Tactics'
+import { DICTIONARIES, translate, type TranslationKey } from '../localization/i18n'
+
+/** Tactical Lab: pause (ticks) between an attempt's outcome and the next start. */
+const LAB_REPEAT_PAUSE_TICKS = Math.round(1.4 / DT)
 
 /** Ticks the opponent carrier's card stays up after he releases the ball (0.6 s). */
 const OPPONENT_CARD_HOLD_TICKS = Math.round(0.6 / DT)
@@ -26,6 +34,8 @@ export interface DebugHook {
   drawCalls: number
   /** Dev builds only: the live camera, for visual inspection (e.g. camera.zoom). */
   camera?: unknown
+  /** Dev builds only: the 3D scene (e.g. to check the players' drawn size). */
+  scene?: unknown
 }
 
 declare global {
@@ -54,30 +64,47 @@ export class GameSession {
   /** Commands from the UI (e.g. settings changes), injected into the next simulation tick. */
   private pendingCommands: Command[] = []
   private readonly radar: Radar
-  /** Key 7: AI debug overlay on the radar (pitch control, team phases). */
-  private aiDebug = false
+  /** Key 7: AI debug overlay over the main view (and pitch control on the radar). */
+  private readonly aiOverlay: AIDebugOverlay
   /** The opponent player last on the ball (HUD card) and the tick he last had it. */
   private lastOpponentCarrier: number | null = null
   private lastOpponentCarrierTick = 0
+  /** Tactical Lab: the team with the attacking situation, and the attempt in progress. */
+  private readonly labAttackTeam: TeamId = 0
+  private labAttempt = { ticks: 0, done: false, doneTick: 0, rotStarted: 0, rotCompleted: 0 }
 
   constructor(container: HTMLElement, seed: number) {
     const setup = useUi.getState().quickMatch
+    const lab = useUi.getState().lab
+    // Tactical Lab: the human attacks (team 0 has the situation), defends (team 1 has it) or watches.
+    if (lab) this.labAttackTeam = lab.mode === 'defend' ? 1 : 0
+    const defendTeam: TeamId = this.labAttackTeam === 0 ? 1 : 0
+    const labTactics: [Partial<TeamTactics>, Partial<TeamTactics>] = [{}, {}]
+    if (lab) {
+      labTactics[this.labAttackTeam] = { formation: lab.formation, rotations: lab.rotations }
+      labTactics[defendTeam] = { pressing: lab.pressing, rotations: lab.rotations }
+    }
     this.sim = new MatchSimulation({
       seed,
       home: TEAM_LIBRARY[setup.homeIndex] ?? TEAM_LIBRARY[0]!,
       away: TEAM_LIBRARY[setup.awayIndex] ?? TEAM_LIBRARY[1]!,
-      humanTeam: 0,
+      humanTeam: lab?.mode === 'watch' ? null : 0,
       control: useUi.getState().controls,
-      rules: { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
+      // The lab never reaches half-time.
+      rules: lab
+        ? { halfLength: 99 * 60, effectiveClock: true }
+        : { halfLength: setup.halfMinutes * 60, effectiveClock: setup.effectiveClock },
       difficulty: setup.difficulty,
-      tactics: [{ formation: setup.formation, pressing: setup.pressing }],
+      tactics: lab ? labTactics : [{ formation: setup.formation, pressing: setup.pressing }],
     })
+    if (lab) this.startLabAttempt()
     this.renderer = new ThreeRenderer(
       container,
       this.sim.state,
       graphicsFromUrl(window.location.search, useUi.getState().graphics),
     )
     this.radar = new Radar(container)
+    this.aiOverlay = new AIDebugOverlay(container)
     this.input = new InputManager(window, useUi.getState().keyBindings)
     this.prev = createSnapshot(this.sim.state)
     this.curr = createSnapshot(this.sim.state)
@@ -89,6 +116,8 @@ export class GameSession {
     this.renderer.setPlayerScale(ui.playerScale)
     const [home, away] = this.sim.state.teams
     this.radar.setTeamColors(hex(home.primaryColor), hex(away.primaryColor))
+    this.aiOverlay.setTeamColors(hex(home.primaryColor), hex(away.primaryColor))
+    this.aiOverlay.setVisible(ui.aiDebug)
     ui.setHud({
       homeName: home.name,
       awayName: away.name,
@@ -109,10 +138,16 @@ export class GameSession {
       if (s.keyBindings !== p.keyBindings) this.input.setBindings(s.keyBindings)
       if (s.controls !== p.controls)
         this.pendingCommands.push({ type: 'SetControlOptions', options: s.controls })
+      if (s.aiDebug !== p.aiDebug) this.aiOverlay.setVisible(s.aiDebug)
+      if (s.lab && p.lab && s.matchKey === p.matchKey) this.labChanged(s.lab, p.lab)
     })
+    if (lab) window.addEventListener('keydown', this.onLabKey)
 
     this.debug = { getState: () => this.sim.state, eventCounts: {}, frameTimeMs: 0, drawCalls: 0 }
-    if (import.meta.env.DEV) this.debug.camera = this.renderer.cameraController.camera
+    if (import.meta.env.DEV) {
+      this.debug.camera = this.renderer.cameraController.camera
+      this.debug.scene = this.renderer.scene
+    }
     window.__FTW__ = this.debug
     document.addEventListener('visibilitychange', this.onVisibility)
     this.raf = requestAnimationFrame(this.frame)
@@ -122,10 +157,12 @@ export class GameSession {
     this.disposed = true
     cancelAnimationFrame(this.raf)
     document.removeEventListener('visibilitychange', this.onVisibility)
+    window.removeEventListener('keydown', this.onLabKey)
     this.unsubscribe()
     this.input.dispose()
     this.renderer.dispose()
     this.radar.dispose()
+    this.aiOverlay.dispose()
     if (window.__FTW__ === this.debug) delete window.__FTW__
   }
 
@@ -143,7 +180,8 @@ export class GameSession {
     this.handleUiPresses()
     const ui = useUi.getState()
     if (!ui.paused) {
-      this.accumulator += dt
+      // The Tactical Lab can run the simulation slower (or faster) than real time.
+      this.accumulator += dt * (ui.lab?.speed ?? 1)
       while (this.accumulator >= DT) {
         this.input.setThrowMode(this.humanKeeperHolding())
         this.input.setPassCharge(this.humanOnBall())
@@ -152,7 +190,9 @@ export class GameSession {
         copySnapshot(this.curr, this.prev)
         this.sim.step(commands)
         writeSnapshot(this.sim.state, this.curr)
-        this.handleEvents(this.sim.drainEvents())
+        const events = this.sim.drainEvents()
+        this.handleEvents(events)
+        if (ui.lab) this.labTick(events)
         this.accumulator -= DT
       }
     }
@@ -172,13 +212,14 @@ export class GameSession {
       orientation: cam.settings.orientation,
       visibleMinY: range.minY,
       visibleMaxY: range.maxY,
-      ...(this.aiDebug
+      ...(ui.aiDebug
         ? {
             pitchControl: { ...PITCH_GRID, team0: pitchControl(this.sim.state).team0 },
             phases: [this.sim.state.teamPhase[0], this.sim.state.teamPhase[1]] as [string, string],
           }
         : {}),
     })
+    this.aiOverlay.draw(this.sim.state, cam.camera, this.debugLabels)
 
     this.hudTimer += dt
     if (this.hudTimer >= 0.1) {
@@ -187,6 +228,109 @@ export class GameSession {
     }
     this.debug.frameTimeMs = performance.now() - t0
     this.debug.drawCalls = this.renderer.drawCalls
+  }
+
+  /** Overlay labels in the UI language (unknown codes are shown as they are). */
+  private readonly debugLabels: DebugLabels = {
+    label: (key) => {
+      const k = `debug.${key}`
+      return k in DICTIONARIES.en
+        ? translate(useUi.getState().lang, k as TranslationKey)
+        : key.split('.').pop()!
+    },
+  }
+
+  // ------------------------------------------------------------------------------ Tactical Lab
+
+  /** Place the scenario (again) and start counting a new attempt. */
+  private startLabAttempt(): void {
+    const lab = useUi.getState().lab
+    if (!lab) return
+    const s = this.sim.state
+    const sc = SCENARIOS[lab.scenario]
+    applyScenario(s, sc, this.labAttackTeam)
+    this.sim.drainEvents()
+    const stats = sc.rotation ? s.rotationStats[this.labAttackTeam][sc.rotation] : null
+    this.labAttempt = {
+      ticks: 0,
+      done: false,
+      doneTick: 0,
+      rotStarted: stats?.started ?? 0,
+      rotCompleted: stats?.completed ?? 0,
+    }
+    // No interpolation streak or camera sweep from where the last attempt ended.
+    if (this.renderer) {
+      writeSnapshot(s, this.curr)
+      copySnapshot(this.curr, this.prev)
+      this.renderer.snapCamera()
+    }
+  }
+
+  /** Per tick in the lab: detect the attempt's outcome, record it, start again after a pause. */
+  private labTick(events: MatchEvent[]): void {
+    const ui = useUi.getState()
+    const lab = ui.lab!
+    const a = this.labAttempt
+    a.ticks++
+    if (!a.done) {
+      const sc = SCENARIOS[lab.scenario]
+      const outcome = scenarioOutcome(events, this.labAttackTeam, a.ticks * DT, sc)
+      if (outcome) {
+        a.done = true
+        a.doneTick = a.ticks
+        const stats = sc.rotation ? this.sim.state.rotationStats[this.labAttackTeam][sc.rotation] : null
+        ui.recordLabAttempt(
+          outcome,
+          stats !== null && stats.started > a.rotStarted,
+          stats !== null && stats.completed > a.rotCompleted,
+        )
+        ui.showFlash({
+          key: 'tlab.outcome',
+          vars: { outcome: `outcome.${outcome}` },
+          until: performance.now() + 1400,
+          info: true,
+        })
+      }
+    } else if (lab.autoRepeat && a.ticks - a.doneTick > LAB_REPEAT_PAUSE_TICKS) this.startLabAttempt()
+  }
+
+  /** Lab settings changed in the panel: start again, or change the tactics of the running attempt. */
+  private labChanged(lab: LabState, prev: LabState): void {
+    const attack = this.labAttackTeam
+    const defend: TeamId = attack === 0 ? 1 : 0
+    if (lab.formation !== prev.formation || lab.rotations !== prev.rotations)
+      this.pendingCommands.push({
+        type: 'SetTactics',
+        team: attack,
+        tactics: { formation: lab.formation, rotations: lab.rotations },
+      })
+    if (lab.pressing !== prev.pressing || lab.rotations !== prev.rotations)
+      this.pendingCommands.push({
+        type: 'SetTactics',
+        team: defend,
+        tactics: { pressing: lab.pressing, rotations: lab.rotations },
+      })
+    if (lab.resetNonce !== prev.resetNonce) {
+      // A new scenario brings its own tactics: apply them before placing it.
+      this.sim.state.teams[attack].tactics = {
+        ...this.sim.state.teams[attack].tactics,
+        formation: lab.formation,
+        rotations: lab.rotations,
+      }
+      this.sim.state.teams[defend].tactics = {
+        ...this.sim.state.teams[defend].tactics,
+        pressing: lab.pressing,
+        rotations: lab.rotations,
+      }
+      this.startLabAttempt()
+    }
+  }
+
+  /** R starts the lab scenario again (not while typing in a panel field). */
+  private onLabKey = (e: KeyboardEvent): void => {
+    const tag = (e.target as HTMLElement | null)?.tagName
+    if (e.code !== 'KeyR' || e.repeat || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return
+    useUi.getState().resetLabScenario()
   }
 
   /** Camera preset, or the Camera Lab's custom settings. */
@@ -228,7 +372,7 @@ export class GameSession {
       if (a === 'pause') ui.setPaused(!ui.paused)
       else if (a === 'help') ui.toggleHelp()
       else if (a === 'cameraLab') ui.toggleCameraLab()
-      else if (a === 'aiDebug') this.aiDebug = !this.aiDebug
+      else if (a === 'aiDebug') ui.toggleAiDebug()
       else if (a === 'camera') {
         const i = CAMERA_PRESET_ORDER.indexOf(ui.cameraPreset)
         const next: CameraPresetId = CAMERA_PRESET_ORDER[(i + 1) % CAMERA_PRESET_ORDER.length]!

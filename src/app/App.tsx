@@ -3,6 +3,8 @@ import { GameSession } from './GameSession'
 import { GamepadMenu } from '../input/GamepadMenu'
 import { KeyBindingsPanel } from '../ui/menus/KeyBindingsPanel'
 import { CameraLab } from '../ui/menus/CameraLab'
+import { TacticalLab } from '../ui/menus/TacticalLab'
+import { PlayerScaleSelect } from '../ui/menus/PlayerScaleSelect'
 import { CAMERA_PRESET_ORDER, type CameraPresetId } from '../camera/CameraSettings'
 import { GRAPHICS_PRESET_ORDER, type GraphicsPreset } from '../rendering/ThreeRenderer'
 import { Hud, ControlsPanel } from '../ui/hud/Hud'
@@ -47,8 +49,6 @@ function SettingsPanel() {
   const controls = useUi((s) => s.controls)
   const setControls = useUi((s) => s.setControls)
   const keepUp = useUi((s) => s.keepAttackingUp)
-  const playerScale = useUi((s) => s.playerScale)
-  const setPlayerScale = useUi((s) => s.setPlayerScale)
   const setKeepUp = useUi((s) => s.setKeepAttackingUp)
   const camera = useUi((s) => s.cameraPreset)
   const setCamera = useUi((s) => s.setCameraPreset)
@@ -103,15 +103,7 @@ function SettingsPanel() {
       </label>
       <label className="setting-row">
         <span>{t('settings.playerScale')}</span>
-        <select
-          data-testid="setting-player-scale"
-          value={playerScale}
-          onChange={(e) => setPlayerScale(Number(e.target.value))}
-        >
-          <option value={1}>{t('settings.playerScale.real')}</option>
-          <option value={1.06}>106 %</option>
-          <option value={1.12}>{t('settings.playerScale.default')}</option>
-        </select>
+        <PlayerScaleSelect />
       </label>
       <label className="setting-row">
         <span>{t('settings.camera')}</span>
@@ -158,6 +150,7 @@ function SettingsPanel() {
 function TitleScreen() {
   const t = useT()
   const openSetup = useUi((s) => s.openSetup)
+  const openLab = useUi((s) => s.openLab)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code === 'Enter' && (e.target as HTMLElement | null)?.tagName !== 'BUTTON') openSetup()
@@ -172,6 +165,9 @@ function TitleScreen() {
         <p className="subtitle">{t('app.subtitle')}</p>
         <button className="primary" data-testid="quick-match" autoFocus onClick={openSetup}>
           {t('menu.quickMatch')}
+        </button>
+        <button data-testid="tactical-lab-open" onClick={openLab}>
+          {t('menu.tacticalLab')}
         </button>
         <p className="note">{t('menu.prototypeNote')}</p>
         <LanguageSwitch />
@@ -188,6 +184,7 @@ function MatchScreen() {
   const paused = useUi((s) => s.paused)
   const result = useUi((s) => s.result)
   const labOpen = useUi((s) => s.cameraLabOpen)
+  const tacticalLab = useUi((s) => s.lab !== null)
 
   useEffect(() => {
     const el = containerRef.current
@@ -197,10 +194,11 @@ function MatchScreen() {
   }, [matchKey])
 
   return (
-    <div className="match-screen">
+    <div className={tacticalLab ? 'match-screen in-lab' : 'match-screen'}>
       <div className="viewport" ref={containerRef} />
       <Hud />
-      {labOpen && !result && <CameraLab />}
+      {tacticalLab && !paused && <TacticalLab />}
+      {labOpen && !result && !tacticalLab && <CameraLab />}
       {result ? <MatchEnd /> : paused && <PauseMenu />}
     </div>
   )
@@ -213,6 +211,7 @@ function PauseMenu() {
   const quit = useUi((s) => s.quitToTitle)
   const labOpen = useUi((s) => s.cameraLabOpen)
   const toggleLab = useUi((s) => s.toggleCameraLab)
+  const inTacticalLab = useUi((s) => s.lab !== null)
   const openLab = () => {
     if (!labOpen) toggleLab()
   }
@@ -223,17 +222,21 @@ function PauseMenu() {
         <button className="primary" autoFocus onClick={() => setPaused(false)}>
           {t('menu.resume')}
         </button>
-        <button onClick={restartMatch}>{t('menu.restart')}</button>
-        <button
-          data-testid="open-camera-lab"
-          onClick={() => {
-            openLab()
-            setPaused(false)
-          }}
-        >
-          {t('menu.cameraLab')}
+        {!inTacticalLab && <button onClick={restartMatch}>{t('menu.restart')}</button>}
+        {!inTacticalLab && (
+          <button
+            data-testid="open-camera-lab"
+            onClick={() => {
+              openLab()
+              setPaused(false)
+            }}
+          >
+            {t('menu.cameraLab')}
+          </button>
+        )}
+        <button data-testid="quit" onClick={quit}>
+          {t(inTacticalLab ? 'menu.quitLab' : 'menu.quit')}
         </button>
-        <button onClick={quit}>{t('menu.quit')}</button>
         <LanguageSwitch />
         <SettingsPanel />
       </div>

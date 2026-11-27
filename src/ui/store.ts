@@ -1,5 +1,6 @@
 import { FORMATIONS, PRESSING_HEIGHTS, type Formation, type PressingHeight } from '../simulation/Tactics'
 import { TEAM_LIBRARY } from '../data/teams'
+import { SCENARIOS, type ScenarioId, type ScenarioOutcome } from '../lab/scenarios'
 import {
   defaultBindings,
   rebind,
@@ -87,6 +88,58 @@ export interface Flash {
   info?: boolean
 }
 
+/** Tactical Lab mode: watch the computer, attack (you have the ball) or defend against it. */
+export type LabMode = 'watch' | 'attack' | 'defend'
+
+export interface LabResults {
+  attempts: number
+  outcomes: Record<ScenarioOutcome, number>
+  /** Attempts in which the scenario's rotation was started / completed. */
+  rotationStarted: number
+  rotationCompleted: number
+}
+
+/** Tactical Lab (Milestone 6, stage 4): a scenario sandbox on the match screen. */
+export interface LabState {
+  scenario: ScenarioId
+  mode: LabMode
+  /** Simulation speed (1 = real time). */
+  speed: number
+  /** Start the scenario again automatically after each attempt. */
+  autoRepeat: boolean
+  /** The attacking team's formation and rotations, the defending team's pressing height. */
+  formation: Formation
+  rotations: boolean
+  pressing: PressingHeight
+  /** Bumped to start the scenario again. */
+  resetNonce: number
+  results: LabResults
+}
+
+export function emptyLabResults(): LabResults {
+  return {
+    attempts: 0,
+    outcomes: { goal: 0, conceded: 0, saved: 0, out: 0, lost: 0, timeout: 0 },
+    rotationStarted: 0,
+    rotationCompleted: 0,
+  }
+}
+
+function labFor(id: ScenarioId, prev?: LabState): LabState {
+  const sc = SCENARIOS[id]
+  return {
+    scenario: id,
+    mode: prev?.mode ?? 'watch',
+    speed: prev?.speed ?? 1,
+    autoRepeat: prev?.autoRepeat ?? true,
+    formation: sc.attackFormation,
+    rotations: prev?.rotations ?? true,
+    pressing: sc.defendPressing,
+    resetNonce: (prev?.resetNonce ?? 0) + 1,
+    results: emptyLabResults(),
+  }
+}
+
 export interface UiState {
   screen: 'title' | 'setup' | 'match'
   lang: Lang
@@ -112,6 +165,10 @@ export interface UiState {
   graphics: GraphicsPreset
   /** Result of the finished match (end screen), or null. */
   result: MatchResult | null
+  /** Tactical Lab state while the lab is open (the match screen runs scenarios), else null. */
+  lab: LabState | null
+  /** Key 7: AI debug overlay (intentions, marking, rotations; pitch control on the radar). */
+  aiDebug: boolean
   matchKey: number
   hud: HudState
   flash: Flash | null
@@ -136,6 +193,17 @@ export interface UiState {
   setResult(r: MatchResult | null): void
   setHud(h: Partial<HudState>): void
   showFlash(f: Flash | null): void
+  openLab(): void
+  /** Change Lab settings; a new scenario resets its tactics and results, a new mode rebuilds the match. */
+  setLab(
+    patch: Partial<
+      Pick<LabState, 'scenario' | 'mode' | 'speed' | 'autoRepeat' | 'formation' | 'rotations' | 'pressing'>
+    >,
+  ): void
+  resetLabScenario(): void
+  recordLabAttempt(outcome: ScenarioOutcome, rotationStarted: boolean, rotationCompleted: boolean): void
+  clearLabResults(): void
+  toggleAiDebug(): void
 }
 
 const LANG_KEY = 'ftw.lang'
@@ -304,6 +372,8 @@ export const useUi = create<UiState>((set) => ({
   showRadar: loadRadar(),
   graphics: loadGraphics(),
   result: null,
+  lab: null,
+  aiDebug: false,
   matchKey: 0,
   hud: {
     homeName: '',
@@ -337,9 +407,17 @@ export const useUi = create<UiState>((set) => ({
     set({ lang })
   },
   startMatch: () =>
-    set((s) => ({ screen: 'match', paused: false, matchKey: s.matchKey + 1, flash: null, result: null })),
+    set((s) => ({
+      screen: 'match',
+      paused: false,
+      matchKey: s.matchKey + 1,
+      flash: null,
+      result: null,
+      lab: null,
+    })),
   restartMatch: () => set((s) => ({ paused: false, matchKey: s.matchKey + 1, flash: null, result: null })),
-  quitToTitle: () => set({ screen: 'title', paused: false, flash: null, result: null, cameraLabOpen: false }),
+  quitToTitle: () =>
+    set({ screen: 'title', paused: false, flash: null, result: null, cameraLabOpen: false, lab: null }),
   setPaused: (paused) => set({ paused }),
   toggleHelp: () => set((s) => ({ showHelp: !s.showHelp })),
   setCameraPreset: (cameraPreset) => {
@@ -403,4 +481,54 @@ export const useUi = create<UiState>((set) => ({
   setResult: (result) => set({ result }),
   setHud: (h) => set((s) => ({ hud: { ...s.hud, ...h } })),
   showFlash: (flash) => set({ flash }),
+  openLab: () =>
+    set((s) => ({
+      screen: 'match',
+      paused: false,
+      matchKey: s.matchKey + 1,
+      flash: null,
+      result: null,
+      cameraLabOpen: false,
+      lab: labFor(s.lab?.scenario ?? 'twoOnKeeper', s.lab ?? undefined),
+    })),
+  setLab: (patch) =>
+    set((s) => {
+      if (!s.lab) return {}
+      if (patch.scenario && patch.scenario !== s.lab.scenario) {
+        // A new scenario: its own tactics, fresh results, started at once.
+        return {
+          lab: { ...labFor(patch.scenario, s.lab), ...omit(patch, 'scenario', 'formation', 'pressing') },
+        }
+      }
+      const lab = { ...s.lab, ...patch }
+      // A different mode changes who the human controls: the match is rebuilt with the new setup.
+      if (patch.mode && patch.mode !== s.lab.mode)
+        return { lab: { ...lab, results: emptyLabResults() }, matchKey: s.matchKey + 1 }
+      return { lab }
+    }),
+  resetLabScenario: () => set((s) => (s.lab ? { lab: { ...s.lab, resetNonce: s.lab.resetNonce + 1 } } : {})),
+  recordLabAttempt: (outcome, started, completed) =>
+    set((s) => {
+      if (!s.lab) return {}
+      const r = s.lab.results
+      return {
+        lab: {
+          ...s.lab,
+          results: {
+            attempts: r.attempts + 1,
+            outcomes: { ...r.outcomes, [outcome]: r.outcomes[outcome] + 1 },
+            rotationStarted: r.rotationStarted + (started ? 1 : 0),
+            rotationCompleted: r.rotationCompleted + (completed ? 1 : 0),
+          },
+        },
+      }
+    }),
+  clearLabResults: () => set((s) => (s.lab ? { lab: { ...s.lab, results: emptyLabResults() } } : {})),
+  toggleAiDebug: () => set((s) => ({ aiDebug: !s.aiDebug })),
 }))
+
+function omit<T extends object, K extends keyof T>(o: T, ...keys: K[]): Omit<T, K> {
+  const out = { ...o }
+  for (const k of keys) delete out[k]
+  return out
+}

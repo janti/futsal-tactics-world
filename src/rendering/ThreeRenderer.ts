@@ -148,6 +148,11 @@ export class ThreeRenderer {
     this.renderer.render(this.scene, this.cameraController.camera)
   }
 
+  /** Jump the camera straight to the play on the next frame (no sweep), e.g. a new lab attempt. */
+  snapCamera(): void {
+    this.snapped = false
+  }
+
   get drawCalls(): number {
     return this.renderer.info.render.calls
   }

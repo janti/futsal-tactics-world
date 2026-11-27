@@ -577,6 +577,69 @@ button.primary:focus-visible {
   width: 100%;
 }
 
+/* Tactical Lab panel: the Camera Lab look, from the top of the screen; no scoreboard in the lab. */
+.tactical-lab {
+  top: 14px;
+  max-height: calc(100% - 28px);
+  width: 310px;
+}
+.tactical-lab h4 {
+  margin: 14px 0 6px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text2);
+}
+.tactical-lab .segmented button {
+  padding: 3px 8px;
+}
+.lab-buttons {
+  margin: 10px 0;
+}
+.lab-results {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 8px;
+}
+.lab-results th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--text2);
+  padding: 2px 0;
+}
+.lab-results td {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.lab-pct {
+  display: inline-block;
+  min-width: 3.4em;
+  color: var(--text2);
+}
+.lab-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  color: var(--text2);
+  line-height: 1.6;
+}
+.lab-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+.in-lab .scoreboard,
+.in-lab .radar {
+  display: none;
+}
+.ai-debug-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 /* Four-second count (kick-ins, corners, free kicks, keeper in his own half): one dot per second. */
 .four-seconds {
   position: absolute;

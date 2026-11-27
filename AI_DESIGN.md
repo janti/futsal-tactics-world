@@ -8,6 +8,7 @@
 | Team    | `ai/team/phases.ts`                                                 | Team phase: attack, counter-attack window (2.5 s after winning the ball), defence, transition to defence, set piece, dead               |
 | Team    | `ai/team/defending.ts`                                              | Ball winner, cover defender, diamond marking, 2 v 1, transitions                                                                        |
 | Team    | `ai/team/attacking.ts`                                              | Support positions, runs in behind, back post, set-piece routine                                                                         |
+| Debug   | `rendering/AIDebugOverlay.ts`                                       | AI view (key 7) over the main view: intention lines, states/decisions, marking, rotations, pressing jump                                |
 | Team    | `ai/team/rotations.ts`                                              | Attacking rotations: wall pass, overlap, pivot rotation, 4-0 rotation, back-post rotation (see TACTICS_DESIGN.md)                       |
 | Team    | `ai/team/roles.ts`                                                  | Dynamic attacking roles: the four outfield roles go to whoever is nearest their place (all permutations, 0.5 s refresh, 3 m hysteresis) |
 | Player  | `ai/player/carrier.ts`                                              | Utility-scored options for the ball carrier, challenges, breakaways                                                                     |

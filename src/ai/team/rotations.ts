@@ -20,6 +20,7 @@
 import { clamp } from '../../core/math/scalar'
 import { closestOnSegment, dist, type Vec2 } from '../../core/math/vec2'
 import { laneOpenness, pressureOn } from '../../physics/PassingPhysics'
+import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { deepestOutfield } from '../common'
@@ -201,13 +202,33 @@ function free(state: MatchState, team: TeamId, pos: Vec2, r: number, ignoreId = 
   return true
 }
 
-/** No outfield opponent within `r` of the straight path from `a` to `b`. */
-function pathFree(state: MatchState, team: TeamId, a: Vec2, b: Vec2, r: number, ignoreId = -1): boolean {
+/** No outfield opponent (other than `ignore`) within `r` of the straight path from `a` to `b`. */
+function pathFree(
+  state: MatchState,
+  team: TeamId,
+  a: Vec2,
+  b: Vec2,
+  r: number,
+  ignore: number | readonly number[] = -1,
+): boolean {
+  const skip = typeof ignore === 'number' ? [ignore] : ignore
   for (const o of state.players) {
-    if (o.team === team || o.role === 'GK' || o.id === ignoreId) continue
+    if (o.team === team || o.role === 'GK' || skip.includes(o.id)) continue
     if (dist(closestOnSegment(a, b, o.pos).point, o.pos) < r) return false
   }
   return true
+}
+
+/** The opponent marking `q`: the nearest outfield opponent within 3.5 m (-1 if none). */
+function markerOf(state: MatchState, q: PlayerState): number {
+  let id = -1
+  let md = 3.5
+  for (const o of state.players)
+    if (o.team !== q.team && o.role !== 'GK' && dist(o.pos, q.pos) < md) {
+      md = dist(o.pos, q.pos)
+      id = o.id
+    }
+  return id
 }
 
 /** Opponent outfield player closest in front of `p` (towards the goal he attacks), within range. */
@@ -233,6 +254,11 @@ function balanced(state: MatchState, team: TeamId, ballY: number, busy: number[]
 }
 
 // ------------------------------------------------------------------------------- wall pass
+
+/** About how long the ball takes into the wall and back to the runner (seconds). */
+const WALL_PASS_BALL_TIME = 1.2
+/** The wall's marker reacts this late to the return (he is marking the man about to receive). */
+const WALL_MARKER_REACTION = 0.5
 
 /**
  * Wall pass (carrier-initiated): a defender close in front of the carrier, a free teammate 3.5-9 m
@@ -269,6 +295,20 @@ export function wallPassOption(
     if ((goalY - run.y) * dir < 3) continue
     // Space at the end of the run (the beaten defender aside) and a clear way back from the wall.
     if (!free(state, p.team, run, 2.4, defender.id)) continue
+    // He must not be beaten to it: the ball goes in and back (about a second) while he runs, and no
+    // covering man may get there clearly before him (arriving together, the runner on the move wins). The wall's own marker is busy with the wall, who
+    // is about to get the ball: he reacts to the return late.
+    const mine = estimateTimeToReach(p, run)
+    const wallMarker = markerOf(state, w)
+    const beaten = state.players.some(
+      (o) =>
+        o.team !== p.team &&
+        o.role !== 'GK' &&
+        o.id !== defender.id &&
+        estimateTimeToReach(o, run) + (o.id === wallMarker ? WALL_MARKER_REACTION : 0) <
+          Math.max(mine, WALL_PASS_BALL_TIME) - 0.15,
+    )
+    if (beaten) continue
     if (passInterceptable(state, p.team, w.pos, run, 0.25, (o) => o.id === defender.id)) continue
     // Balance: somebody other than the two stays behind the ball.
     if (!balanced(state, p.team, p.pos.y, [p.id, w.id])) continue
@@ -384,7 +424,10 @@ function tryPivot(state: MatchState, team: TeamId): boolean {
     x: clamp(pivot.pos.x - ballSide * 1.5, -5, 5),
     y: goalY - dir * Math.max(4.5, (goalY - pivot.pos.y) * dir),
   })
-  if (!pathFree(state, team, ala.pos, runTo, 1.5)) return false
+  // His own marker is the one he runs away from, and the pivot's marker goes with the pivot as he
+  // comes short: neither is in the way of the run.
+  if (!pathFree(state, team, ala.pos, runTo, 1.5, [markerOf(state, ala), markerOf(state, pivot)]))
+    return false
   if (!balanced(state, team, c.pos.y, [c.id, pivot.id, ala.id])) return false
   startRotation(state, team, 'pivot', c.id, [
     { id: pivot.id, job: 'drop', target: drop },
@@ -419,7 +462,8 @@ function tryFourZero(state: MatchState, team: TeamId): boolean {
   const side = Math.sign(receiver.pos.x)
   // The passer follows his pass on the inside of the receiver and goes past him.
   const target = inCourt({ x: side * 3.6, y: receiver.pos.y + dir * Math.min(7, depth - 4.5) })
-  if (!pathFree(state, team, passer.pos, target, 1.6)) return false
+  // (His own marker goes with him: not in the way.)
+  if (!pathFree(state, team, passer.pos, target, 1.6, markerOf(state, passer))) return false
   // The far ala tucks in behind into the passer's place (the back of the four).
   const others = outfield(state, team).filter((t) => t.id !== passer.id && t.id !== receiver.id)
   if (others.length === 0) return false

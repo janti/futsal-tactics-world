@@ -8,6 +8,7 @@ import {
 import type { TranslationKey } from '../../localization/i18n'
 import { useUi } from '../store'
 import { useT } from '../useT'
+import { PlayerScaleSelect } from './PlayerScaleSelect'
 
 const SLIDERS: (keyof typeof CAMERA_LAB_RANGES)[] = [
   'elevationDeg',
@@ -99,6 +100,10 @@ export function CameraLab() {
           </label>
         )
       })}
+      <label className="lab-row">
+        <span>{t('settings.playerScale')}</span>
+        <PlayerScaleSelect testId="lab-player-scale" />
+      </label>
       <button onClick={() => copyFrom('verticalSmart')}>{t('lab.reset')}</button>
     </aside>
   )

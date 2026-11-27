@@ -72,6 +72,12 @@ marks man-to-man and runs set-piece routines.
   corner, support players who move away from their markers to offer a pass.
 - **Set pieces:** kick-in and corner routines with a short man for a first-time shot, a pivot coming
   out from the back post and a deep man showing for a pass back.
+- **Rotations:** wall pass, overlap, pivot rotation (3-1), 4-0 rotation and back-post rotation, with
+  one man always kept behind the ball; formations 3-1 / 4-0 / 2-2, pressing height and pressing
+  triggers.
+- **Tactical Lab:** set situations (breakaway, 2 v 0, 3 v 2 counter, the rotations, build-up against a
+  high press) played again and again — watch, attack or defend, change the tactics and the speed, count
+  the outcomes. The AI view (key 7) shows what every computer player intends and who marks whom.
 
 ### Match and presentation
 
@@ -117,7 +123,8 @@ Production build: `npm run build`, then `npm run preview`. Add `?gfx=low`, `?gfx
 | Sole control · shield · jockey                       | Space             | LT                 |
 | Camera preset                                        | F5 or 5           | —                  |
 | Camera Lab                                           | 6                 | —                  |
-| AI overlay (radar)                                   | 7                 | —                  |
+| AI view (intentions, marking, rotations; radar)      | 7                 | —                  |
+| Tactical Lab: start the situation again              | R                 | —                  |
 | Pause                                                | Esc or P          | Start              |
 | Show controls                                        | H                 | —                  |
 

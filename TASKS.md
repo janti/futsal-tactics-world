@@ -98,10 +98,17 @@
       the pressing height
 - [x] Stage 3: rotations (4-0 rotation, pivot rotation, overlap, wall pass, back-post rotation) with
       triggers, balance, completion and cancellation; on/off in the team tactics
-- [ ] Stage 4: Tactical Lab (scenario sandbox) and an extended AI debug overlay (intentions, marking)
+- [x] Stage 4: Tactical Lab (scenario sandbox: nine situations, watch / attack / defend, tactics,
+      speed, outcomes counted) and the AI view over the main view (intentions, marking, rotations,
+      pressing jumps)
 - [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs
 
 ## Known bugs / issues
+
+- Tactical Lab: in built-up situations the AI attackers lose the ball in 55–75 % of attempts; a carrier
+  chased from behind (e.g. after a completed 1-2) passes back instead of driving on.
+- The browser smoke test "quick match: move, pass, shoot…" is timing-sensitive (the bot has to win the
+  ball) and fails now and then; it passes on a rerun.
 
 - AI vs AI produces many goals for real futsal (arcade-level scoring); tune with the M5 utility AI.
 - An idle human player near opponents loses the ball quickly (steal rate tuning pending playtests).
