@@ -471,4 +471,7 @@ export const en = {
   'scenario.diagonalRun.desc': 'The ala attacks the gap across towards goal.',
   'scenario.isolation': 'Isolation 1 v 1',
   'scenario.isolation.desc': 'The teammates clear the corridor for the dribbler.',
+  'tlab.drill': 'Drill defence',
+  'tlab.drill.desc':
+    'The computer defenders move and mark but do not win the ball, and the computer keeper is a practice keeper: the move is played to the finish. Off: match defending.',
 } as const

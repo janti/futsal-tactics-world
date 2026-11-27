@@ -185,7 +185,9 @@ describe('indirect free kick', () => {
     const { sim, s } = freeKick()
     const gk = sim.player(5)
     const walls = s.players.filter((p) => p.team === 1)
-    sim.step([{ type: 'Shoot', dir: { x: 1, y: 1 }, power: 0.3 }])
+    // (No corner picked: aimed away from the keeper, who is held out of the way — into the goal, not
+    // onto a post.)
+    sim.step([{ type: 'Shoot', dir: { x: 0, y: 1 }, power: 0.3 }])
     let goal = false
     let clearance = false
     for (let i = 0; i < 120 && !clearance; i++) {

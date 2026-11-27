@@ -205,6 +205,8 @@ utility against keeping the shape — full reference in **FUTSAL_ROTATIONS.md**.
 - Team settings (8 sliders, per-family priority, 6 presets) in Quick Match and the Lab; the Lab got
   13 new scenarios and a demonstration mode.
 - Measured before/after (AI vs AI, 36 min per formation): see FUTSAL_ROTATIONS.md §7.
+- Second round: keeper only as the last resort, carry before rotating, wait for the run, deeper
+  runs, shots aimed from the ball, Lab drill defence (FUTSAL_ROTATIONS.md §8b).
 
 ## Planned
 

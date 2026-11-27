@@ -30,6 +30,8 @@ export interface Metrics {
   passOptions: number
   /** Shots conceded within 8 s of losing the ball in open play. */
   counterShotsConceded: number
+  /** Passes from our outfield players to our own keeper. */
+  keeperPasses: number
   rotationsStarted: number
   rotationsCompleted: number
   aiMsPerMinute: number
@@ -57,6 +59,7 @@ export function measure(
   let counterShots = 0
   let started = 0
   let done = 0
+  let keeperPasses = 0
   let ms = 0
   for (const seed of seeds) {
     const sim = new MatchSimulation({
@@ -75,7 +78,10 @@ export function measure(
       const prevPhase = s.phase
       sim.step()
       for (const e of sim.drainEvents()) {
-        if (e.type === 'PassStarted' && e.receiverId !== null && sim.player(e.playerId).team === 0) passes++
+        if (e.type === 'PassStarted' && e.receiverId !== null && sim.player(e.playerId).team === 0) {
+          passes++
+          if (sim.player(e.receiverId).role === 'GK' && sim.player(e.playerId).role !== 'GK') keeperPasses++
+        }
         if (e.type === 'PassCompleted' && sim.player(e.playerId).team === 0) completed++
         if (e.type === 'ShotTaken') {
           if (e.team === 0) shots++
@@ -141,6 +147,7 @@ export function measure(
     congestion: +(congested / Math.max(1, possN)).toFixed(3),
     passOptions: +(options / Math.max(1, optionsN)).toFixed(2),
     counterShotsConceded: per36(counterShots),
+    keeperPasses: per36(keeperPasses),
     rotationsStarted: per36(started),
     rotationsCompleted: per36(done),
     aiMsPerMinute: +(ms / minutes).toFixed(0),

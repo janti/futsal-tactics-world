@@ -142,7 +142,9 @@ export function goalkeeperBehaviour(
   )
   // A screened shot is seen late.
   const screenDelay = ball.isShot ? ball.shotScreen * SCREEN.reactionDelay : 0
-  const reacted = state.time - ball.kickTime >= reaction + screenDelay
+  // Lab drill: the practice keeper reacts a little later and stays on his line (below).
+  const practice = state.drill && p.id !== state.controlledId
+  const reacted = state.time - ball.kickTime >= reaction + screenDelay + (practice ? 0.15 : 0)
   const threat =
     ball.mode === 'free' && ball.lastTouchTeam !== p.team && reacted
       ? predictGoalThreat(ball, goalLineY, p)
@@ -175,7 +177,12 @@ export function goalkeeperBehaviour(
   // 2 v 1 at the arc: our defender takes the second attacker, so the keeper comes out (up to the
   // edge of the area) on the line to the ball to block the shot.
   const twoV1 = twoVersusOne(state, p.team)
-  if (twoV1 && twoV1.carrierToGoal <= TWO_V_ONE.markDistance && ball.ownerId === twoV1.carrier.id) {
+  if (
+    !practice &&
+    twoV1 &&
+    twoV1.carrierToGoal <= TWO_V_ONE.markDistance &&
+    ball.ownerId === twoV1.carrier.id
+  ) {
     p.aiState = 'position'
     const n = normalize(sub(twoV1.carrier.pos, goal))
     const out = Math.min(COURT.penaltyAreaRadius - 0.3, twoV1.carrierToGoal - 1.6)
@@ -199,6 +206,7 @@ export function goalkeeperBehaviour(
     shooter.team !== p.team &&
     shooter.role !== 'GK' &&
     !ball.inHands &&
+    !practice &&
     freeShootingChance(state, shooter, goal)
   ) {
     const out = Math.min(

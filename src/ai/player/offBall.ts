@@ -47,7 +47,7 @@ export function offBallDecision(
     // goal; the next defender steps across to close him down.
     p.aiState = 'press'
     const ownGoal = { x: 0, y: -dir * COURT.halfLength }
-    p.aiTarget = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 0.9)
+    p.aiTarget = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), state.drill ? 2.2 : 0.9)
     const trig = state.pressTrigger[p.team]
     if (trig?.kind === 'touchline' && pressTriggerActive(state, p.team)) {
       // The trap by the touch line: the second man shuts the way (and the pass) along the line, the
@@ -89,14 +89,15 @@ export function offBallDecision(
           const shadow = addScaled(owner.pos, normalize(sub(pivot.pos, owner.pos)), standOff * 0.85)
           p.aiTarget = { x: (p.aiTarget.x + shadow.x * 4) / 5, y: (p.aiTarget.y + shadow.y * 4) / 5 }
         }
-      } else p.aiTarget = addScaled(owner.pos, toGoal, 0.7)
+      } else p.aiTarget = addScaled(owner.pos, toGoal, state.drill ? 2 : 0.7) // (drill: stands off)
     }
     return
   }
   const inPossession = state.possessionTeam === p.team
   // Read an opponent's pass: step into its path if he can get there before the ball reaches the
   // receiver.
-  const cut = passInterception(state, p)
+  // (Lab drill defence: passes are not cut out.)
+  const cut = state.drill ? null : passInterception(state, p)
   if (cut) {
     p.aiState = 'intercept'
     p.aiTarget = cut

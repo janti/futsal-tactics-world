@@ -89,6 +89,7 @@ export function updateAI(state: MatchState, actions: AIActions, rng: SeededRando
     if (decide || staleChase || p.aiState === '' || p.aiState === 'carry')
       offBallDecision(state, p, chasers[p.team], helpers[p.team])
     steer(state, p)
+    if (state.drill && state.possessionTeam !== null && p.team !== state.possessionTeam) drillDefender(p)
   }
 }
 
@@ -110,4 +111,13 @@ export function assistControlledPlayer(state: MatchState, p: PlayerState): void 
     walkTo(p, meet, dist(meet, p.pos) > 2.5)
     p.faceTarget = ball.pos
   }
+}
+
+/**
+ * Lab drill defence (state.drill): the computer defender keeps his position and marking but jogs
+ * (no sprint, three-quarter pace), so a practised pattern can be played through.
+ */
+function drillDefender(p: PlayerState): void {
+  p.sprint = false
+  p.moveIntent = { x: p.moveIntent.x * 0.75, y: p.moveIntent.y * 0.75 }
 }

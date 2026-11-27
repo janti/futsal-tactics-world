@@ -475,4 +475,7 @@ export const fi: Record<keyof typeof en, string> = {
   'scenario.diagonalRun.desc': 'Laituri hyökkää vinosti välitilaan kohti maalia.',
   'scenario.isolation': 'Tilan tyhjennys 1v1',
   'scenario.isolation.desc': 'Kaverit tyhjentävät käytävän harhauttajalle.',
+  'tlab.drill': 'Harjoituspuolustus',
+  'tlab.drill.desc':
+    'Tietokoneen puolustajat liikkuvat ja vartioivat mutta eivät voita palloa, ja tietokonemaalivahti on harjoitusmaalivahti: kuvio pelataan maaliin asti. Pois: otteluvastus.',
 }

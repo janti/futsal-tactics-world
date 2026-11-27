@@ -115,7 +115,8 @@ export function planBaseEight(state: MatchState, team: TeamId): Plan | null {
   const side = Math.sign(receiver.pos.x)
   // First up the middle, then out to the wing he passed to, ahead of the receiver.
   const via = inCourt({ x: passer.pos.x * 0.3 + side * 0.6, y: passer.pos.y + dir * 4 })
-  const ahead = Math.max(1.5, Math.min(4.5, (goalY - receiver.pos.y) * dir - 7))
+  // Deep: on past the receiver towards the area (the run must take a defender with it).
+  const ahead = clamp((goalY - receiver.pos.y) * dir - 6, 3, 8)
   const target = inCourt({ x: side * 7.8, y: receiver.pos.y + dir * ahead })
   // The receiver carries it inside into the middle the passer left.
   const carry = inCourt({ x: side * 0.8, y: receiver.pos.y + dir * 1.5 })
@@ -146,7 +147,7 @@ export function planBaseEightWing(state: MatchState, team: TeamId): Plan | null 
   )
   if (!far || !switchOn(state, team, receiver, far)) return null
   const dir = attackDir(state, team)
-  const up = Math.max(2, Math.min(6.5, depthToGoal(state, team, passer.pos) - 7))
+  const up = clamp(depthToGoal(state, team, passer.pos) - 6, 4, 10)
   const target = inCourt({ x: side * 1.2, y: passer.pos.y + dir * up })
   return {
     kind: 'baseEightWing',
@@ -182,7 +183,7 @@ export function planThreeCircle(state: MatchState, team: TeamId): Plan | null {
   // When the quick switch to the far wing is on, pohjakasi from the wing is the move; this one is
   // for a far wing who is marked (he comes across instead).
   if (!far || switchOn(state, team, receiver, far)) return null
-  const up = Math.max(2, Math.min(6, depthToGoal(state, team, passer.pos) - 8))
+  const up = clamp(depthToGoal(state, team, passer.pos) - 6, 4, 10)
   return {
     kind: 'threeCircle',
     carrierId: receiver.id,
@@ -210,9 +211,13 @@ export function planButterfly(state: MatchState, team: TeamId): Plan | null {
   // His own wing (or from the very middle either side).
   if (passer.pos.x * side < -1) return null
   const dir = attackDir(state, team)
-  const up = Math.max(2, Math.min(5, depthToGoal(state, team, passer.pos) - 8))
+  // Deep through the centre (towards the area), then out to the wing well ahead of the receiver.
+  const up = clamp(depthToGoal(state, team, passer.pos) - 6, 4, 10)
   const via = inCourt({ x: passer.pos.x * 0.2, y: passer.pos.y + dir * up })
-  const target = inCourt({ x: side * 7.6, y: receiver.pos.y + dir * 1.5 })
+  const target = inCourt({
+    x: side * 7.6,
+    y: receiver.pos.y + dir * clamp(depthToGoal(state, team, receiver.pos) - 7, 3, 7),
+  })
   const carry = inCourt({ x: side * 2.2, y: passer.pos.y + dir * 0.5 })
   const moves: RotationMove[] = [
     { id: passer.id, job: 'run', target, via },
@@ -246,7 +251,8 @@ export function planFourCircle(state: MatchState, team: TeamId): Plan | null {
   )
   if (!ala) return null
   const dir = attackDir(state, team)
-  const up = Math.max(2, Math.min(6.5, depthToGoal(state, team, receiver.pos) - 6))
+  // The ala goes deep between the lines (towards the area), not a step inside.
+  const up = clamp(depthToGoal(state, team, receiver.pos) - 5, 4, 10)
   return {
     kind: 'fourCircle',
     carrierId: receiver.id,
@@ -273,7 +279,7 @@ export function planDiagonalRotation(state: MatchState, team: TeamId): Plan | nu
   const dir = attackDir(state, team)
   const side = Math.sign(receiver.pos.x)
   const depth = depthToGoal(state, team, passer.pos)
-  const up = clamp(depth - 8, 3, 7)
+  const up = clamp(depth - 6, 5, 11)
   const target = inCourt({ x: -side * 1.8, y: passer.pos.y + dir * up })
   if (depthToGoal(state, team, target) < 6) return null
   // Preferred against player-oriented defending: the passer is marked (his man goes with him and
@@ -313,7 +319,7 @@ export function planParallelRotation(state: MatchState, team: TeamId): Plan | nu
   // The receiver is marked tight (he comes short off his man; the passer goes past).
   if (markerOf(state, receiver, 2.5) < 0) return null
   const side = Math.sign(receiver.pos.x)
-  const ahead = clamp(depthToGoal(state, team, receiver.pos) - 7, 1.5, 5)
+  const ahead = clamp(depthToGoal(state, team, receiver.pos) - 6, 3, 8)
   const moves: RotationMove[] = [
     { id: passer.id, job: 'run', target: inCourt({ x: side * 7.8, y: receiver.pos.y + dir * ahead }) },
     { id: receiver.id, job: 'carry', target: inCourt({ x: side * 3, y: receiver.pos.y - dir * 0.5 }) },

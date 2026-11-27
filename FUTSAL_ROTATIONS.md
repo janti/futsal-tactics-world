@@ -198,11 +198,15 @@ taking a player out of the count).
 | Formation, rotations | Pass completion | Turnovers | Shots | Goals | Conceded | Final-third entries | Pass options per carrier |
 | -------------------- | --------------- | --------- | ----- | ----- | -------- | ------------------- | ------------------------ |
 | 3-1 on — before      | 0.920           | 95        | 55    | 9     | 10       | 61                  | 0.57                     |
-| 3-1 on — after       | 0.897           | 109       | 58    | 14    | 9        | 62                  | 0.56                     |
+| 3-1 on — after       | 0.894           | 97        | 72    | 11    | 14       | 67                  | 0.44                     |
 | 4-0 on — before      | 0.928           | 101       | 29    | 7     | 16       | 31                  | 1.08                     |
-| 4-0 on — after       | 0.919           | 104       | 23    | 6     | 8        | 36                  | 0.95                     |
+| 4-0 on — after       | 0.920           | 94        | 26    | 6     | 9        | 52                  | 0.90                     |
 | 2-2 on — before      | 0.899           | 91        | 45    | 11    | 18       | 52                  | 0.73                     |
-| 2-2 on — after       | 0.895           | 99        | 33    | 9     | 5        | 46                  | 0.68                     |
+| 2-2 on — after       | 0.894           | 110       | 41    | 9     | 13       | 54                  | 0.64                     |
+
+"After" includes the second round (keeper as last resort, carry before rotating, deeper runs,
+waiting for the run, shots aimed from the ball). Passes from outfield players to their own keeper:
+about 46-52 per 36 min before, 3-7 after.
 
 Noise: the same runs with rotations off for team 0 moved by up to ±10-20 % between the two code
 versions (the opponent, which rotates, changed), so differences of that size are not significant.
@@ -215,18 +219,41 @@ take 0.1-2.6 µs each.
 - The defending AI is unchanged: it already tracks runners, keeps men marked and shuts the pivot
   lane, but it does not read the attack's rotations as such (no explicit zonal/hybrid switching, no
   dedicated back-post tracker); goalkeeper behaviour for far-post threats is the existing one.
-- Rotations on: the 3-1 loses the ball more often than before (turnovers +15 %, pass completion
-  −2.3 points) while shooting about as often; the 4-0 and 2-2 are close to before in passing. Goal
-  counts (5-16 per 36 min) are too small to compare. Tuning continues with the Lab.
-- In normal (context) selection four library scenarios usually pick another move than the one they
-  were built for (wing clearance → cross run, paralela → pivot exchange, isolation → back post,
-  3-player rotation 5/12); they show their own move in demonstration mode. Attackers in the built-up
-  Lab situations still lose the ball often (wing clearance 8/12 attempts).
+- Rotations on, 3-1: pass completion 0.920 → 0.894 with more shots and entries; the 2-2 loses the
+  ball a little more (91 → 110). Goal counts (5-16 per 36 min) are too small to compare.
+- In normal (context) selection some library scenarios pick another move than the one they were
+  built for; the Lab's default demonstration mode shows the scenario's own move.
+- Lab drill (default): 93 % goals over all rotation scenarios (40 attempts each: 777/840 of the
+  rotation scenarios); below 90 %: cross run 80 %, isolation 82.5 %, overlap / wall pass / wing
+  clearance 87.5 %. Against match defending (drill off) the attackers lose the ball often.
 - Tactical familiarity is a team setting only (no training or career progression yet).
 - No teammate-run command (no input for it yet), no 1-2-1 or flying-goalkeeper formations, no
   stamina drain, substitutions, fouls or dismissals (M7); Coach / Spectator / Career modes are later
   milestones.
 - The match-end screen does not show rotation statistics yet (they are in the state and the Lab).
+
+## 8b. Second round (user feedback)
+
+- **Keeper as the last resort**: the circulation pass never goes to the keeper; the best-available
+  pass gives him a large penalty; the escape pass from under a presser uses him only once the carrier
+  has shielded it for 2 s with nothing else on. Otherwise the carrier shields and carries.
+- **Not rotating for its own sake**: with space in front and no pressure the carrier carries
+  (the slow walk of the build-up was removed); the pass to a side comes when the carry stalls; a
+  carrier keeps the ball for a run of the move built round him until it has arrived (unless real
+  pressure), so the run moves the defence before the next pass. The pivot pass keeps its priority.
+- **Deeper runs**: rotation runs go 4-10 m up (towards the area) instead of 2-6.5 m; rotations last
+  5-5.5 s.
+- **Shots aimed from the ball**, not from the player's centre (the ball leaves from in front of his
+  foot; the old aim put close-range shots onto or past the post).
+- **Breakaway finish** aims at the bigger gap between the keeper and a post at the moment of the
+  shot and bends round a player standing in the way.
+- **Lab drill defence** (`state.drill`, on by default in the Lab, never in a match): computer
+  defenders move, mark and screen but do not cut out passes or shots, take the ball off the carrier,
+  sprint, double up or count as pressure; the computer keeper is a practice keeper (stays on his line,
+  reacts 0.15 s later, 60 % reach, 40 % save chance). The attack plays the move to its end: the runner
+  who has arrived gets the ball, and from 18 m in the finish is played like a breakaway. A human
+  defender or keeper is never affected. Test: `tacticalLab.test.ts` (≥ 90 % goals over the rotation
+  scenarios, ≥ 7/10 each).
 
 ## 9. Research references
 

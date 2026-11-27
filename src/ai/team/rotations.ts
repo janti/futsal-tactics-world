@@ -21,7 +21,8 @@
  */
 import { dist, type Vec2 } from '../../core/math/vec2'
 import { clamp } from '../../core/math/scalar'
-import { laneOpenness } from '../../physics/PassingPhysics'
+import { laneOpenness, predictPassTarget } from '../../physics/PassingPhysics'
+import { shotValueAt } from './rotationValue'
 import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchEvent } from '../../simulation/Events'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
@@ -56,6 +57,7 @@ import {
   markerOf,
   movable,
   outfield,
+  pathFree,
   pivotOf,
   spaceAt,
   styleOf,
@@ -76,13 +78,13 @@ export const ROTATION = {
   cooldown: 2,
   /** Time limit per kind (seconds). */
   duration: {
-    baseEight: 4.5,
-    baseEightWing: 4.5,
-    butterfly: 4.5,
-    fourCircle: 4,
-    threeCircle: 4.5,
-    diagonalRotation: 4.5,
-    parallelRotation: 4.5,
+    baseEight: 5.5,
+    baseEightWing: 5.5,
+    butterfly: 5.5,
+    fourCircle: 5,
+    threeCircle: 5.5,
+    diagonalRotation: 5.5,
+    parallelRotation: 5.5,
     wallPass: 2.2,
     overlap: 3,
     pivot: 2.8,
@@ -676,7 +678,8 @@ function advanceIsolation(state: MatchState, team: TeamId, r: Rotation, emit?: E
   }
   const dir = attackDir(state, team)
   const close = state.players.filter((o) => o.team !== team && o.role !== 'GK' && dist(o.pos, c.pos) < 3.5)
-  if (close.length >= 2) {
+  // (Lab drill: the computer defenders cannot take the ball, so they do not end the 1 v 1.)
+  if (close.length >= 2 && !state.drill) {
     r.branch = 'helpArrived'
     return endRotation(state, team, false, 'noSpace', emit)
   }
@@ -1003,4 +1006,52 @@ export function rotationPassTarget(state: MatchState, p: PlayerState): PlayerSta
 export type { RotationStats as RotationKindStats }
 export function statsOf(state: MatchState, team: TeamId): Record<string, RotationStats> {
   return state.rotationStats[team]
+}
+
+/**
+ * Lab drill: the pattern is played to its end — the runner of the move in a better scoring position
+ * than the carrier, with a pass into his path nobody can cut out, is found. (In a match the carrier's
+ * normal options decide.) Returns the runner, or null.
+ */
+export function drillRunner(state: MatchState, p: PlayerState): PlayerState | null {
+  const r = state.rotation[p.team]
+  if (!state.drill || !r) return null
+  const dir = state.teams[p.team].attackDir
+  let best: PlayerState | null = null
+  let bestV = -Infinity
+  for (const m of r.moves) {
+    if ((m.job !== 'run' && m.job !== 'post') || m.id === p.id || !moveStarted(state, m)) continue
+    const t = state.players[m.id]!
+    // He has arrived (within 3 m of his target, or past his first point and goal-side of the ball).
+    const arrived =
+      dist(t.pos, m.target) < 3 ||
+      (m.via !== undefined && m.viaDone === true && (t.pos.y - p.pos.y) * dir > 3)
+    if (!arrived) continue
+    // Into his stride, kept well inside the court (a ball down the line must not run out).
+    const raw = predictPassTarget(p, t, false, dir, true)
+    const lead = { x: clamp(raw.x, -8.2, 8.2), y: clamp(raw.y, -18.5, 18.5) }
+    // (Drill: the computer defenders let passes go by; only a human defender in the line blocks it.)
+    const others = state.players
+      .filter((o) => o.team !== p.team && o.id !== state.controlledId)
+      .map((o) => o.id)
+    if (!pathFree(state, p.team, p.pos, lead, 0.7, others) || dist(lead, p.pos) > 20) continue
+    const v = shotValueAt(state, p.team, lead)
+    if (v > bestV) {
+      bestV = v
+      best = t
+    }
+  }
+  return best
+}
+
+/**
+ * A move built round this carrier whose run is still on its way (not within 2.5 m of its target,
+ * time left): the carrier keeps the ball for it rather than cycling it on.
+ */
+export function rotationRunPending(state: MatchState, p: PlayerState): boolean {
+  const r = state.rotation[p.team]
+  if (!r || r.carrierId !== p.id || r.until - state.time < 0.8 || r.kind === 'wallPass') return false
+  return r.moves.some(
+    (m) => m.job === 'run' && m.id !== p.id && dist(state.players[m.id]!.pos, m.target) > 2.5,
+  )
 }

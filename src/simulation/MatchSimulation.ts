@@ -624,6 +624,8 @@ export class MatchSimulation implements AIActions {
     // Opponent challenges: tackles and close-contact steals.
     for (const o of s.players) {
       if (o.team === owner.team || o.touchCooldown > 0) continue
+      // Lab drill: computer defenders do not take the ball off the carrier (a human defender does).
+      if (s.drill && o.id !== s.controlledId) continue
       const d = dist(o.pos, b.pos)
       const tackling = o.action === 'tackle'
       const reach = tackling ? 0.8 : CONTROL.pickupRadius
@@ -946,6 +948,17 @@ export class MatchSimulation implements AIActions {
       }
       const rel = Math.hypot(b.vel.x - pv.x, b.vel.y - pv.y)
       const pickupR = p.role === 'GK' ? 0.62 : CONTROL.pickupRadius
+      // Lab drill: a computer defender lets the attackers' pass or shot go by (a human defender
+      // does not).
+      if (
+        s.drill &&
+        p.role !== 'GK' &&
+        p.id !== s.controlledId &&
+        bs > 2 &&
+        b.lastTouchTeam !== null &&
+        b.lastTouchTeam !== p.team
+      )
+        continue
       // An opponent's shot hitting an outfield defender is a block: it rebounds off him (leg or
       // body), it is not brought under control. Only a weak, slow shot can be stopped.
       if (
@@ -1056,7 +1069,9 @@ export class MatchSimulation implements AIActions {
   private goalkeeperSave(gk: PlayerState, b: BallState, d: number): boolean {
     const speed = len(b.vel)
     const diving = gk.aiState === 'save'
-    const reach = diving ? PLAYER.goalkeeperDiveReach : PLAYER.goalkeeperReach
+    // (Lab drill: the practice keeper covers less of the goal.)
+    const practice = this.state.drill && gk.id !== this.state.controlledId
+    const reach = (diving ? PLAYER.goalkeeperDiveReach : PLAYER.goalkeeperReach) * (practice ? 0.6 : 1)
     if (speed < 3 || d > reach || b.z > PLAYER.goalkeeperReachHeight) return false
     // A shot going clearly over the bar or wide of the posts is left alone.
     if (b.isShot && this.missesGoal(gk, b)) return false
@@ -1099,6 +1114,8 @@ export class MatchSimulation implements AIActions {
         0.995,
       )
     }
+    // Lab drill: the computer keeper is a practice keeper (the finish of the move is what is trained).
+    if (practice) p *= 0.4
     gk.touchCooldown = 0.35 // one attempt
     gk.action = 'save'
     gk.actionTime = 0
@@ -1876,6 +1893,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
     rotationReadyAt: [0, 0],
     rotationStats: [emptyRotationStats(), emptyRotationStats()],
     rotationTeam: [emptyRotationTeam(), emptyRotationTeam()],
+    drill: false,
     possessionSinceTick: 0,
     teamPhase: ['setPiece', 'setPiece'],
     aiPrevPossession: null,

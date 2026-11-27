@@ -118,7 +118,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 9,
+    timeLimit: 10,
     rotation: 'overlap',
   },
   wallPass: {
@@ -131,7 +131,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'wallPass',
   },
   pivotRotation: {
@@ -142,7 +142,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 9,
+    timeLimit: 10,
     rotation: 'pivot',
   },
   baseEight: {
@@ -201,7 +201,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 7,
+    timeLimit: 10,
     rotation: 'backPost',
   },
   buildUpPress: {
@@ -225,7 +225,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'wingClearance',
   },
   threeCircle: {
@@ -250,7 +250,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '2-2',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'crossRun',
   },
   paralela: {
@@ -262,7 +262,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'paralela',
   },
   thirdMan: {
@@ -274,7 +274,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'thirdMan',
   },
   underlap: {
@@ -286,7 +286,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'underlap',
   },
   pivotLayoff: {
@@ -298,7 +298,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 7,
+    timeLimit: 10,
     rotation: 'pivotLayoff',
   },
   switchPlay: {
@@ -310,7 +310,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '4-0',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'switchPlay',
   },
   wideOverload: {
@@ -322,7 +322,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '2-2',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'wideOverload',
   },
   doubleCut: {
@@ -334,7 +334,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '4-0',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 7,
+    timeLimit: 10,
     rotation: 'doubleCut',
   },
   oppositeMove: {
@@ -346,7 +346,7 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '2-2',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'oppositeMove',
   },
   diagonalRun: {
@@ -358,19 +358,19 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 8,
+    timeLimit: 10,
     rotation: 'diagonalRun',
   },
   isolation: {
     id: 'isolation',
-    // A wide 1 v 1 near goal; the teammates near him clear the corridor.
-    attackers: { ALA_R: s(6, 14), PIVOT: s(3, 10), ALA_L: s(-4, 14), FIXO: s(0, 22) },
-    defenders: { ALA_L: s(6, 12), PIVOT: s(-3, 9), FIXO: s(2.5, 8.5), ALA_R: s(-4, 18) },
+    // A 1 v 1 in the right half-space near goal; the teammates near him clear the corridor.
+    attackers: { ALA_R: s(4, 14), PIVOT: s(1.5, 10), ALA_L: s(-4.5, 14), FIXO: s(0, 22) },
+    defenders: { ALA_L: s(4, 12), PIVOT: s(-4, 9), FIXO: s(-0.5, 8), ALA_R: s(-4.5, 18) },
     carrier: 'ALA_R',
     attackFormation: '3-1',
     defendPressing: 'mid',
     counter: false,
-    timeLimit: 7,
+    timeLimit: 10,
     rotation: 'isolation',
   },
 }

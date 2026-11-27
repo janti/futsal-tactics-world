@@ -268,11 +268,15 @@ export const PIVOT_PASS_READ = 0.12
  */
 export const FORWARD_PASS_READ = 0.3
 
-/** Circulation pass: the most open nearby teammate (sideways or back), keeper only under real pressure. */
+/**
+ * Circulation pass: the most open nearby outfield teammate (sideways or back). Never the keeper: with
+ * no outfield option the carrier shields and carries; the keeper is the last resort (bestPassOption,
+ * pinnedPass), not part of the circulation.
+ */
 export function safePassOption(
   state: MatchState,
   p: PlayerState,
-  pressure: number,
+  _pressure: number,
   rng: SeededRandom,
 ): PlayerState | null {
   const dir = state.teams[p.team].attackDir
@@ -280,10 +284,7 @@ export function safePassOption(
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== p.team || t.id === p.id) continue
-    // The keeper: a back pass when it is allowed (he has not just released it in his half) and the
-    // carrier is in his own half under some pressure, or anywhere under heavy pressure.
-    const ownHalf = p.pos.y * dir < 0
-    if (t.role === 'GK' && (pressure < (ownHalf ? 0.4 : 0.7) || t.id === state.ball.keeperRetouchId)) continue
+    if (t.role === 'GK') continue
     const d = dist(t.pos, p.pos)
     if (d < 2.5 || d > 16) continue
     const lane = laneOpenness(state, p.team, p.pos, t.pos)
@@ -327,7 +328,8 @@ export function bestPassOption(
     let space = Infinity
     for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
     const progress = ((t.pos.y - p.pos.y) * dir) / 10
-    const keeper = t.role === 'GK' ? -1.2 + pressure : 0
+    // The keeper only when no outfield teammate is a real option (a big penalty, smaller when pinned).
+    const keeper = t.role === 'GK' ? -4 + pressure : 0
     // A tightly marked receiver is a bad option even with an open lane.
     const marked = space < 1.3 ? -1.5 : 0
     // A pass an opponent can cut out is a last resort; so is one to a man running out of the court.

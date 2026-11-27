@@ -5,11 +5,13 @@ import { addScaled, closestOnSegment, dist, normalize, sub, type Vec2 } from '..
 import { laneOpenness, pressureOn } from '../../physics/PassingPhysics'
 import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
-import { COURT } from '../../simulation/SimulationConfig'
+import { COURT, POST_X } from '../../simulation/SimulationConfig'
 import { screenFactor } from '../../simulation/MatchSimulation'
 import { type AIActions, spaceAhead, shootingLane, isLastMan, deepestOutfield } from '../common'
 import { runnerOption } from '../team/attacking'
 import {
+  rotationRunPending,
+  drillRunner,
   isolationDefender,
   pisadaOption,
   rotationMove,
@@ -48,7 +50,16 @@ export function carrierBehaviour(
   // goal from a scoring range — a first-time shot into a defender's legs is a wasted chance. Close in
   // it is placed low into the corner.
   const firstTimeDist = dist(p.pos, goal)
-  if (decide && p.aiSetPieceTimer > 0 && firstTimeDist < 12 && shootingLane(state, p, goal.y) > 0.5) {
+  // (Lab drill: a runner through on goal takes it in close first, like any breakaway.)
+  const drillThrough =
+    state.drill && ((firstTimeDist > 6.5 && isBreakaway(state, p, goal)) || Math.abs(p.pos.x) > 3.5)
+  if (
+    decide &&
+    !drillThrough &&
+    p.aiSetPieceTimer > 0 &&
+    firstTimeDist < 12 &&
+    shootingLane(state, p, goal.y) > 0.5
+  ) {
     const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
     if (angleOk) {
       p.aiSetPieceTimer = 0
@@ -137,7 +148,8 @@ export function carrierBehaviour(
   if (p.aiChallengeTimer > 0) {
     p.aiChallengeTimer -= dt
     if (challengeBehaviour(state, p, nearest)) {
-      if (decide && p.aiHoldTimer > 0.25) {
+      // (Lab drill: no snap shot from the angle — he goes on and finishes like a breakaway.)
+      if (decide && !state.drill && p.aiHoldTimer > 0.25) {
         const toGoalNow = dist(p.pos, goal)
         if (toGoalNow < 9 && shootingLane(state, p, goal.y) > 0.3) {
           p.aiDecision = 'challengeShot'
@@ -175,22 +187,9 @@ export function carrierBehaviour(
   }
   heading = keepInCourt(p.pos, heading)
   const open = !threat && spaceAhead(state, p, heading, 3.5)
-  // The middle man of a rotating team in the build-up waits for the lane to open instead of driving
-  // into the block: he moves up at walking pace, ball close, while the others rotate round him.
-  const tac = state.teams[p.team].tactics
-  const waiting =
-    tac.rotations &&
-    tac.formation !== '2-2' &&
-    Math.abs(p.pos.x) < 3 &&
-    dist(p.pos, goal) > 17 &&
-    myMove?.job !== 'carry' &&
-    p.aiChallengeTimer <= 0
-  if (open && waiting) {
-    p.moveIntent = { x: heading.x * 0.3, y: heading.y * 0.3 }
-    p.sprint = false
-    p.sole = nd < 3.5
-  } else if (open) {
-    // Space in front: carry the ball forward.
+  // Space in front: carry the ball forward (a rotation is no reason to stand still — the ball is
+  // carried while it can be, and moved on when the carry stalls).
+  if (open) {
     p.moveIntent = { x: heading.x * 0.85, y: heading.y * 0.85 }
     p.sprint = nd > 4
     p.sole = false
@@ -259,6 +258,13 @@ export function carrierBehaviour(
     incoming < 0.5 ? 0.6 : incoming < (last ? 1.0 : 0.8) ? 0.45 : 0,
   )
   if (doubled) pressure = Math.max(pressure, 0.85)
+  // Lab drill: computer defenders cannot take the ball, so they put no pressure on him (a human
+  // defender still does).
+  if (state.drill) {
+    const human = state.controlledId !== null ? state.players[state.controlledId]! : null
+    pressure =
+      human && human.team !== p.team ? pressureOn(state, p) * (dist(human.pos, p.pos) < 3 ? 1 : 0) : 0
+  }
 
   const minHold = doubled ? 0.1 : state.ball.lastTouchTeam === p.team && p.aiHoldTimer < 0.3 ? 0.25 : 0.3
 
@@ -409,6 +415,15 @@ export function carrierOptions(
     })
   }
 
+  // Lab drill: the move's runner, free in a better position, gets the ball into his path.
+  const drill = drillRunner(state, p)
+  if (drill)
+    out.push({
+      kind: 'through',
+      utility: 1.05,
+      act: (x) => x.pass(p, sub(drill.pos, p.pos), false, drill),
+    })
+
   // A teammate running in behind with an open lane: the through ball into his path.
   const runner = runnerOption(state, p)
   if (runner)
@@ -500,7 +515,7 @@ export function carrierOptions(
   const iso = isolationDefender(state, p)
   if (
     iso &&
-    p.aiChallengeTimer >= 0 &&
+    p.aiChallengeTimer <= 0 &&
     !out.some((o) => o.utility >= 0.78) &&
     startChallenge(state, p, iso, rng, true)
   )
@@ -548,9 +563,17 @@ export function carrierOptions(
   // The rotation keeps going: with nothing better on, the ball goes to a side (the 3-1 middle man to a
   // wing, a wing into the middle; in the 4-0 to his wing or the other central man) and the next run
   // starts. A receiver carrying the ball inside does so first.
+  // Not for its own sake: while he can carry it forward (space in front, no pressure) he carries; the
+  // pass to a side comes when the carry stalls, pressure comes, or he has had it a while.
   const mine = rotationMove(state, p)
   const carrying = mine?.job === 'carry' && dist(p.pos, mine.target) > 1.2 && p.aiHoldTimer < 1.4
-  if (!carrying && p.aiHoldTimer > 0.35) {
+  const canCarry = c.open && c.pressure < 0.3 && p.aiHoldTimer < 1.5
+  // The run of the rotation in progress has to get there first (that is what moves the defence and
+  // opens the lane): no new pass to a side before it has, unless pressure forces it.
+  // (Isolation: the corridor was cleared for him — he takes his man on, he does not cycle it.)
+  const isolating = isolationDefender(state, p) !== null && c.pressure < 0.6
+  const runPending = (rotationRunPending(state, p) || isolating) && c.pressure < 0.6
+  if (!carrying && !canCarry && !runPending && p.aiHoldTimer > 0.35) {
     const side = rotationPassTarget(state, p)
     if (side)
       out.push({
@@ -596,7 +619,12 @@ export function carrierOptions(
   // Keep the ball moving: carry it while there is space, then circulate (back / across).
   // (The ball moves on before the pressure arrives: an easy pass while it is still easy.)
   const circulateAfter = c.open ? attr(a.creativity, 1.1, 1.6) : attr(a.decisions, 0.9, 0.5)
-  if (c.pressure > 0.45 || p.aiHoldTimer > circulateAfter) {
+  // (A rotation run still on its way: he keeps the ball for it unless the pressure is real.)
+  const waitForRun =
+    (rotationRunPending(state, p) || isolationDefender(state, p) !== null) &&
+    c.pressure < 0.6 &&
+    p.aiHoldTimer < 2
+  if (!waitForRun && (c.pressure > 0.45 || p.aiHoldTimer > circulateAfter)) {
     const safe = safePassOption(state, p, c.pressure, rng)
     if (safe)
       out.push({ kind: 'circulate', utility: 0.4, act: (x) => x.pass(p, sub(safe.pos, p.pos), false, safe) })
@@ -625,9 +653,11 @@ export function carrierOptions(
       // Pinned (an opponent right on him for a while): shielding for ever only ends with the ball
       // over the line, so the best pass is played even if it is risky. Pressed tight, the pass away
       // from the presser (he cannot get to it) is the way out at once.
-      const pinned = pressureOn(state, p) > 0.85 && p.aiHoldTimer > 2
+      const pinned = (state.drill ? c.pressure : pressureOn(state, p)) > 0.85 && p.aiHoldTimer > 2
       const escape =
-        (pinned || (presser && c.pressure > 0.8)) && c.nearest ? pinnedPass(state, p, c.nearest) : null
+        (pinned || (presser && c.pressure > 0.8)) && c.nearest
+          ? pinnedPass(state, p, c.nearest, pinned)
+          : null
       if (fallback && !risky && (c.pressure > 0.7 || p.aiHoldTimer > attr(a.creativity, 2.6, 3.4)))
         out.push({
           kind: 'fallback',
@@ -661,14 +691,20 @@ export function carrierOptions(
  * from the presser cannot be cut out by him, so he is left out of the interception check for those;
  * the most open such teammate (the keeper only if nothing else) is played.
  */
-function pinnedPass(state: MatchState, p: PlayerState, presser: PlayerState): PlayerState | null {
+function pinnedPass(
+  state: MatchState,
+  p: PlayerState,
+  presser: PlayerState,
+  /** The keeper only once he has shielded it for a while with nothing else on (the last resort). */
+  allowKeeper: boolean,
+): PlayerState | null {
   const away = normalize(sub(p.pos, presser.pos))
   let best: PlayerState | null = null
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== p.team || t.id === p.id) continue
     // Not to a keeper who may not touch it again (he has just played it in his half): it rolls past him.
-    if (t.id === state.ball.keeperRetouchId) continue
+    if (t.id === state.ball.keeperRetouchId || (t.role === 'GK' && !allowKeeper)) continue
     const to = sub(t.pos, p.pos)
     const d = Math.hypot(to.x, to.y)
     if (d < 2 || d > 18) continue
@@ -681,7 +717,8 @@ function pinnedPass(state: MatchState, p: PlayerState, presser: PlayerState): Pl
     if (passInterceptable(state, p.team, p.pos, t.pos, 0)) continue
     const space = spaceAround(state, t)
     if (space < 1.6 && t.role !== 'GK') continue
-    const score = Math.min(space, 4) - (t.role === 'GK' ? 2 : 0) - d / 20
+    // The keeper: the very last resort (only if no outfield player is free of the presser).
+    const score = Math.min(space, 4) - (t.role === 'GK' ? 6 : 0) - d / 20
     if (score > bestScore) {
       bestScore = score
       best = t
@@ -920,8 +957,12 @@ export function isBreakaway(state: MatchState, p: PlayerState, goal: Vec2): bool
   const dir = state.teams[p.team].attackDir
   const toGoal = dist(p.pos, goal)
   if (toGoal > COURT.halfLength || toGoal < 2) return false
+  // Lab drill: once the practised move has done its job (the ball came out of it, close to goal),
+  // the computer defenders are cones — the finish is played against the keeper.
+  const drillFinish = state.drill && toGoal < 18 && drillMoveDone(state, p)
   for (const o of state.players) {
     if (o.team === p.team || o.role === 'GK') continue
+    if (drillFinish && o.id !== state.controlledId) continue
     const ahead = (o.pos.y - p.pos.y) * dir
     // Behind him, or level but out to the side: not in the way (a duel at his shoulder still is).
     if (ahead < -0.3 || (ahead < 0.6 && Math.abs(o.pos.x - p.pos.x) > 1.5)) continue
@@ -953,7 +994,17 @@ function breakawayBehaviour(
   }
   // Run towards a point in front of goal, slightly off-centre so the angle stays open.
   const target = { x: clamp(p.pos.x * 0.6, -3, 3), y: goal.y - dir * 5.5 }
-  const heading = normalize(sub(target, p.pos))
+  let heading = normalize(sub(target, p.pos))
+  // Round anybody standing in his way (bending past him rather than running into him).
+  for (const o of state.players) {
+    if (o.team === p.team || o.role === 'GK') continue
+    const rel = sub(o.pos, p.pos)
+    const ahead = rel.x * heading.x + rel.y * heading.y
+    const side = rel.x * -heading.y + rel.y * heading.x
+    if (ahead < 0 || ahead > 2.5 || Math.abs(side) > 1.2) continue
+    const s = side > 0 ? -1 : 1
+    heading = normalize({ x: heading.x + -heading.y * s * 0.9, y: heading.y + heading.x * s * 0.9 })
+  }
   p.moveIntent = { x: heading.x * 0.9, y: heading.y * 0.9 }
   let chaser = Infinity
   let keeperDist = Infinity
@@ -961,7 +1012,8 @@ function breakawayBehaviour(
     if (o.team === p.team) continue
     const d = dist(o.pos, p.pos)
     if (o.role === 'GK') keeperDist = d
-    else chaser = Math.min(chaser, d)
+    // (Lab drill: a computer defender jogging alongside is no chaser.)
+    else if (!state.drill || o.id === state.controlledId) chaser = Math.min(chaser, d)
   }
   const toGoal = dist(p.pos, goal)
   p.sprint = toGoal > 11 && chaser < 4
@@ -1000,6 +1052,13 @@ function breakawayBehaviour(
   const placed = rng.chance(attr(a.finishing, 0.55, 0.85)) || (chaser < 1.5 && toGoal < 10)
   const power =
     toGoal < 8 || (placed && toGoal < 10) ? (placed ? 0.3 : 0.45) : clamp(0.45 + (toGoal - 8) / 20, 0.45, 0.6)
+  // The corner he can see more of: the bigger gap between the keeper and a post (decided now, from
+  // where the keeper actually stands; the earlier choice only when the gaps are about equal).
+  if (keeper) {
+    const gapRight = POST_X - keeper.pos.x
+    const gapLeft = keeper.pos.x + POST_X
+    if (Math.abs(gapRight - gapLeft) > 0.35) p.aiBreakawayCorner = gapRight > gapLeft ? 1 : -1
+  }
   p.aiDecision = 'breakawayShot'
   actions.shoot(p, { x: p.aiBreakawayCorner, y: dir * 0.4 }, power)
   p.aiBreakawayCorner = 0
@@ -1029,7 +1088,7 @@ function startChallenge(
   for (const o of state.players)
     if (o.team !== p.team && o.id !== defender.id && o.role !== 'GK' && dist(o.pos, beyond) < 3) return false
   // One decision per possession (the first time a defender stands in front of him).
-  if (p.aiChallengeTimer < 0) return false
+  if (p.aiChallengeTimer < 0 && !force) return false
   const a = p.profile.attributes
   if (!force && !rng.chance(attr(a.dribbling, 0.22, 0.6))) {
     p.aiChallengeTimer = -1
@@ -1066,4 +1125,13 @@ function challengeBehaviour(state: MatchState, p: PlayerState, defender: PlayerS
   p.sole = false
   p.aiState = 'challenge'
   return true
+}
+
+/** Lab drill: the team's move was completed in the last 6 s, or he is a runner of the move in progress. */
+function drillMoveDone(state: MatchState, p: PlayerState): boolean {
+  const rt = state.rotationTeam[p.team]
+  if (rt.last?.completed && state.time - rt.last.time < 6) return true
+  return (
+    state.rotation[p.team]?.moves.some((m) => m.id === p.id && (m.job === 'run' || m.job === 'post')) ?? false
+  )
 }

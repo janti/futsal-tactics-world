@@ -104,6 +104,7 @@ export class GameSession {
         ? labTactics
         : [{ formation: setup.formation, pressing: setup.pressing, ...setup.rotation }],
     })
+    if (lab) this.sim.state.drill = lab.drill
     if (lab) this.startLabAttempt()
     this.renderer = new ThreeRenderer(
       container,
@@ -323,6 +324,7 @@ export class GameSession {
         team: defend,
         tactics: { pressing: lab.pressing, rotations: lab.rotations },
       })
+    if (lab.drill !== prev.drill) this.sim.state.drill = lab.drill
     if (lab.resetNonce !== prev.resetNonce) {
       // A new scenario brings its own tactics: apply them before placing it.
       this.sim.state.teams[attack].tactics = mergeTactics(this.sim.state.teams[attack].tactics, {

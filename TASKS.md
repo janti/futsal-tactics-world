@@ -109,7 +109,9 @@
       new Lab scenarios with a demonstration mode, AI view details, FI/EN texts, 30 acceptance tests,
       AI vs AI measurements (`npm run metrics`)
 - [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs
-- [ ] Rotation library follow-ups: 3-1 turnovers with rotations on (+15 % vs before); defensive AI
+- [x] Rotation library second round: keeper as last resort, carry before rotating, deeper runs, wait
+      for the run, shots aimed from the ball, Lab drill defence (93 % goals)
+- [ ] Rotation library follow-ups: Lab drill below 90 % for cross run and isolation; defensive AI
       reading rotations (zonal/hybrid switching, back-post tracking, keeper far-post balance); rotation
       statistics on the match-end screen; scenario layouts where context selection picks another
       move (wing clearance, paralela, isolation)
@@ -119,8 +121,8 @@
 
 ## Known bugs / issues
 
-- Rotation library, Lab: in demonstration mode the wing clearance attempt loses the ball in about two
-  attempts of three; the third-man ball and the 1-2 return are the riskiest passes of the library.
+- Rotation library: against match defending (Lab drill off) the attackers still lose the ball often;
+  the third-man ball and the 1-2 return are the riskiest passes of the library.
 
 - Tactical Lab: in built-up situations the AI attackers lose the ball in 55–75 % of attempts; a carrier
   chased from behind (e.g. after a completed 1-2) passes back instead of driving on.

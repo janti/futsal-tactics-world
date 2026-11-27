@@ -25,12 +25,13 @@ function labSim(seed: number, humanTeam: TeamId | null = null) {
 }
 
 /** One attempt of a scenario, computer against computer; the outcome and whether its rotation started. */
-function attempt(id: ScenarioId, seed: number, attackTeam: TeamId, demo = false) {
+function attempt(id: ScenarioId, seed: number, attackTeam: TeamId, demo = false, drill = false) {
   const sc = SCENARIOS[id]
   const sim = labSim(seed)
   const def: TeamId = attackTeam === 0 ? 1 : 0
   sim.state.teams[attackTeam].tactics.formation = sc.attackFormation
   if (demo && sc.rotation) sim.state.teams[attackTeam].tactics.priorities = demoPriorities(sc.rotation)
+  sim.state.drill = drill
   sim.state.teams[def].tactics.pressing = sc.defendPressing
   sim.step()
   applyScenario(sim.state, sc, attackTeam)
@@ -135,6 +136,23 @@ describe('Tactical Lab scenarios', () => {
       if (attempt('twoOnKeeper', 200 + k, (k % 2) as TeamId).outcome === 'goal') goals++
     expect(goals).toBeGreaterThanOrEqual(n * 0.7)
     // (25 scenarios x 12 attempts: about 8 s alone, more with the whole suite in parallel.)
+  }, 60000)
+
+  it('drill defence + demonstration: the moves are played to a goal about nine times in ten', () => {
+    // The Lab's default (drill defence, demonstration): the computer defenders move and mark but do
+    // not win the ball, the keeper is a practice keeper. Every rotation scenario, 10 attempts each.
+    let goals = 0
+    let total = 0
+    for (const id of SCENARIO_ORDER) {
+      if (!SCENARIOS[id].rotation) continue
+      let g = 0
+      for (let k = 0; k < 10; k++)
+        if (attempt(id, 300 + k, (k % 2) as TeamId, true, true).outcome === 'goal') g++
+      expect(g, id).toBeGreaterThanOrEqual(7)
+      goals += g
+      total += 10
+    }
+    expect(goals / total).toBeGreaterThanOrEqual(0.9)
   }, 60000)
 
   it('outcome detection: goal, save, out, ball lost, time up', () => {

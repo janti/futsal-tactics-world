@@ -51,7 +51,9 @@ export function planShot(
   const a = shooter.profile.attributes
   const p = clamp(power, 0, 1)
   const placed = p <= SHOT.placedMaxPower
-  const inner = COURT.goalHalfWidth - (placed ? SHOT.placedInsidePost : SHOT.aimInsidePost)
+  // (Lab drill: a computer finisher aims a little further inside the post — the practised finish.)
+  const drillMargin = state.drill && shooter.id !== state.controlledId ? 0.2 : 0
+  const inner = COURT.goalHalfWidth - (placed ? SHOT.placedInsidePost : SHOT.aimInsidePost) - drillMargin
 
   // Lateral (sim x) component of the input picks the corner on that side of the goal.
   const lateralInput = len(dir) > 0.2 ? normalize(dir).x : 0
@@ -68,7 +70,13 @@ export function planShot(
     ? attr((a.shotAccuracy + a.finishing) / 2, SHOT.placedSpeed[0], SHOT.placedSpeed[1])
     : lerp(SHOT.placedSpeed[0], maxSpeed, (p - SHOT.placedMaxPower) / (1 - SHOT.placedMaxPower))
   const d = dist(shooter.pos, { x: aimX, y: goalY })
-  const pressure = pressureOn(state, shooter)
+  // (Lab drill: the computer defenders are cones; only a human defender puts the shooter off.)
+  const human = state.controlledId !== null ? state.players[state.controlledId]! : null
+  const pressure = !state.drill
+    ? pressureOn(state, shooter)
+    : human && human.team !== shooter.team
+      ? Math.max(0, 1 - (Math.hypot(human.pos.x - shooter.pos.x, human.pos.y - shooter.pos.y) - 0.6) / 2.4)
+      : 0
 
   // Accuracy model (metres of aim error at the goal). Placed shots trade power for precision.
   const skill = attr((a.finishing + a.shotAccuracy) / 2, 1.0, 0.18)
@@ -83,7 +91,9 @@ export function planShot(
   const aim = { x: aimX + errX, y: goalY }
   const aimZ = clamp(shotHeightForPower(p) + errZ, 0, 3.2)
 
-  const dirV = normalize({ x: aim.x - shooter.pos.x, y: aim.y - shooter.pos.y })
+  // Aimed from where the ball is (it leaves from in front of his foot, not from his centre).
+  const from = state.ball.ownerId === shooter.id ? state.ball.pos : shooter.pos
+  const dirV = normalize({ x: aim.x - from.x, y: aim.y - from.y })
   const flight = d / (speed * 0.93)
   // vz so the ball's underside is at aimZ when it reaches the goal (ignoring drag, floor launch).
   const vz = clamp((aimZ + 0.5 * BALL.gravity * flight * flight) / flight, 0, 9)

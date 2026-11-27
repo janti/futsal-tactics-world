@@ -113,9 +113,10 @@ describe('passing quality', () => {
     expect(b.sideOn).toBeGreaterThan(0.45)
   }, 120000)
 
-  it('no forced pass: the middle man of the pohjakasi waits with the ball while every lane is shut', () => {
+  it('no forced pass: the middle man of the pohjakasi keeps the ball and carries it while every lane is shut', () => {
     // Both wings and the pivot marked tight (an opponent between them and the ball, held there), nobody
-    // pressing the middle man: he keeps it and walks it up instead of playing a ball that would be cut out.
+    // pressing the middle man: he keeps it and carries it up (space in front) instead of playing a ball
+    // that would be cut out.
     const closed: Scenario = {
       ...SCENARIOS.baseEight,
       defenders: {
@@ -162,8 +163,9 @@ describe('passing quality', () => {
       const p = sim.state.players[carrier]!
       expect(passed).toBe(false)
       expect(sim.state.ball.ownerId).toBe(carrier)
-      // Walking pace, not driving into the block.
-      expect(Math.hypot(p.pos.x - start.x, p.pos.y - start.y)).toBeLessThan(2.5)
+      // With space in front he carries it forward (the rotation is no reason to stand still).
+      const dir = sim.state.teams[0].attackDir
+      expect((p.pos.y - start.y) * dir).toBeGreaterThan(1)
     }
   })
 })

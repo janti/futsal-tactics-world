@@ -106,6 +106,15 @@ export function TacticalLab() {
         />
         <span>{t('tlab.rotations')}</span>
       </label>
+      <label className="setup-check" title={t('tlab.drill.desc')}>
+        <input
+          type="checkbox"
+          data-testid="tlab-drill"
+          checked={lab.drill}
+          onChange={(e) => setLab({ drill: e.target.checked })}
+        />
+        <span>{t('tlab.drill')}</span>
+      </label>
       {lab.rotations && SCENARIOS[lab.scenario].rotation && (
         <label className="setup-check" title={t('tlab.demo.desc')}>
           <input

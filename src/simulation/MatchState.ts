@@ -310,6 +310,12 @@ export interface MatchState {
   rotationReadyAt: [number, number]
   /** Rotations started / completed per team and kind (analysis, tests, the debug overlay). */
   rotationStats: [Record<MovementKind, RotationStats>, Record<MovementKind, RotationStats>]
+  /**
+   * Tactical Lab drill defence: computer-controlled defenders move, mark and screen but do not cut out
+   * passes, take the ball off the carrier or sprint — the attack's pattern can be practised. Never on
+   * in a match.
+   */
+  drill: boolean
   /** Rotation library bookkeeping per team: selection, reservations, observed defending, credits. */
   rotationTeam: [RotationTeamState, RotationTeamState]
   /** AI bookkeeping: possession seen on the previous AI update. */

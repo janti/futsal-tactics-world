@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Milestone 6 — rotation library, second round
+
+- The keeper is the last resort: no circulation passes back to him; with nothing on the carrier
+  shields and carries (passes to the own keeper about 50 → 3-7 per 36 min).
+- No rotation for its own sake: the carrier carries while he has space, keeps the ball until the run
+  of the move has arrived, and the pivot pass keeps its priority; rotation runs go deeper (4-10 m,
+  towards the area).
+- Shots are aimed from the ball (close-range shots no longer drift onto or past the post); the
+  breakaway finish picks the bigger gap beside the keeper.
+- Tactical Lab drill defence (default, with demonstration): the moves end in a goal in 93 % of
+  attempts (40 per scenario; lowest cross run 80 %, isolation 82.5 %).
+- Measured AI vs AI (36 min per formation, rotations on): 3-1 turnovers 109 → 97, shots 58 → 72;
+  4-0 turnovers 104 → 94, final-third entries 36 → 52; 2-2 shots 33 → 41, turnovers 99 → 110.
+
 ### Milestone 6 — rotation and off-ball movement library
 
 - 25 futsal movement families on one framework (FUTSAL_ROTATIONS.md): wing clearance, pohjakasi,

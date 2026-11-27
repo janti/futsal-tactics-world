@@ -122,6 +122,8 @@ export interface LabState {
   rotation: RotationSettings
   /** Demonstration: only the scenario's own move may be selected (teaching); off = normal selection. */
   demo: boolean
+  /** Drill defence: computer defenders move and mark but do not win the ball (practise the move). */
+  drill: boolean
   /** Bumped to start the scenario again. */
   resetNonce: number
   results: LabResults
@@ -147,7 +149,8 @@ function labFor(id: ScenarioId, prev?: LabState): LabState {
     rotations: prev?.rotations ?? true,
     pressing: sc.defendPressing,
     rotation: prev?.rotation ?? sanitizeRotationSettings(DEFAULT_ROTATION_SETTINGS),
-    demo: prev?.demo ?? false,
+    demo: prev?.demo ?? true,
+    drill: prev?.drill ?? true,
     resetNonce: (prev?.resetNonce ?? 0) + 1,
     results: emptyLabResults(),
   }
@@ -221,6 +224,7 @@ export interface UiState {
         | 'pressing'
         | 'rotation'
         | 'demo'
+        | 'drill'
       >
     >,
   ): void

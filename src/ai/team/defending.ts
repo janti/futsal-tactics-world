@@ -428,7 +428,8 @@ export function updateDefensiveTransitions(state: MatchState): void {
  * the fixo if nobody is near him.
  */
 export function pickHelper(state: MatchState, team: TeamId, winnerId: number | null): number | null {
-  if (state.phase !== 'play') return null
+  // (Lab drill defence: no second man to the ball.)
+  if (state.phase !== 'play' || state.drill) return null
   const ball = state.ball
   const owner = ball.ownerId !== null ? state.players[ball.ownerId]! : null
   if (!owner || owner.team === team || ball.inHands || owner.role === 'GK') return null
