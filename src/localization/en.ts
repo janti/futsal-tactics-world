@@ -9,6 +9,7 @@ export const en = {
   'menu.paused': 'Paused',
   'menu.prototypeNote': 'Prototype: complete arcade matches against a basic AI.',
   'hud.controlled': 'Controlling',
+  'hud.opponentBall': 'On the ball',
   'hud.goal': 'GOAL!',
   'hud.goalBy': 'GOAL! {name}',
   'hud.kickoff': 'Kick-off',

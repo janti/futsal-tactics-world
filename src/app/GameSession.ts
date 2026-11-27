@@ -11,6 +11,9 @@ import { DT, HANDS, MAX_FRAME_TIME, RESTART } from '../simulation/SimulationConf
 import type { Command } from '../simulation/Commands'
 import { useUi, type HudState } from '../ui/store'
 
+/** Ticks the opponent carrier's card stays up after he releases the ball (0.6 s). */
+const OPPONENT_CARD_HOLD_TICKS = Math.round(0.6 / DT)
+
 function hex(n: number): string {
   return `#${n.toString(16).padStart(6, '0')}`
 }
@@ -53,6 +56,9 @@ export class GameSession {
   private readonly radar: Radar
   /** Key 7: AI debug overlay on the radar (pitch control, team phases). */
   private aiDebug = false
+  /** The opponent player last on the ball (HUD card) and the tick he last had it. */
+  private lastOpponentCarrier: number | null = null
+  private lastOpponentCarrierTick = 0
 
   constructor(container: HTMLElement, seed: number) {
     const setup = useUi.getState().quickMatch
@@ -291,6 +297,7 @@ export class GameSession {
       controlledName: c ? [c.profile.firstName, c.profile.lastName].filter(Boolean).join(' ') : null,
       controlledNumber: c ? c.profile.shirtNumber : null,
       controlledRole: c ? c.role : null,
+      opponentCarrier: this.opponentCarrier(),
       shotCharge: this.input.shotCharge,
       keeperCountdown: this.humanKeeperOnBall()
         ? Math.max(0, HANDS.holdLimit - this.sim.state.ball.handsTimer)
@@ -303,6 +310,33 @@ export class GameSession {
           : null,
       fourSeconds: this.fourSecondCount(),
     })
+  }
+
+  /**
+   * The opponent player on the ball. Kept briefly after he releases it (a pass, a shot) so the card
+   * does not flicker between touches.
+   */
+  private opponentCarrier(): HudState['opponentCarrier'] {
+    const s = this.sim.state
+    const owner = s.ball.ownerId !== null ? this.sim.player(s.ball.ownerId) : null
+    if (owner && s.humanTeam !== null && owner.team !== s.humanTeam) {
+      this.lastOpponentCarrier = owner.id
+      this.lastOpponentCarrierTick = s.tick
+    } else if (
+      owner ||
+      s.phase !== 'play' ||
+      this.lastOpponentCarrier === null ||
+      s.tick - this.lastOpponentCarrierTick > OPPONENT_CARD_HOLD_TICKS
+    )
+      this.lastOpponentCarrier = null
+    if (this.lastOpponentCarrier === null) return null
+    const p = this.sim.player(this.lastOpponentCarrier)
+    return {
+      name: [p.profile.firstName, p.profile.lastName].filter(Boolean).join(' '),
+      number: p.profile.shirtNumber,
+      role: p.role,
+      team: p.team,
+    }
   }
 
   /** The four-second count in progress for either team (restart kick or keeper in his own half). */

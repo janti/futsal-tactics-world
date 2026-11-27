@@ -11,6 +11,7 @@ export const fi: Record<keyof typeof en, string> = {
   'menu.paused': 'Tauko',
   'menu.prototypeNote': 'Prototyyppi: täysimittaisia arcade-otteluita perustekoälyä vastaan.',
   'hud.controlled': 'Ohjattava',
+  'hud.opponentBall': 'Pallo',
   'hud.goal': 'MAALI!',
   'hud.goalBy': 'MAALI! {name}',
   'hud.kickoff': 'Aloitus',

@@ -45,6 +45,8 @@ export interface HudState {
   controlledName: string | null
   controlledNumber: number | null
   controlledRole: string | null
+  /** The opponent player on the ball (shown opposite the controlled player's card), else null. */
+  opponentCarrier: { name: string; number: number; role: string; team: 0 | 1 } | null
   shotCharge: number
   /** Seconds left to take a ready kick-in or corner (four-second rule), else null. */
   restartCountdown: number | null
@@ -318,6 +320,7 @@ export const useUi = create<UiState>((set) => ({
     controlledName: null,
     controlledNumber: null,
     controlledRole: null,
+    opponentCarrier: null,
     shotCharge: 0,
     restartCountdown: null,
     keeperCountdown: null,

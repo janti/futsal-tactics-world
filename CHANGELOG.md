@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- HUD: the opponent player on the ball is shown in the bottom right (shirt number, name, role), a
+  mirror of the controlled player's card edged in the opponent's colour; it stays up 0.6 s after he
+  releases the ball so it does not flicker between touches.
 - Camera keeps up with a fast ball: a quick ball up the court (or a long throw/lofted ball) no longer
   runs out of the top of the frame while the damped camera catches up; the view is pushed along with
   the ball and keeps part of its path ahead in view, even with the controlled player deep behind.

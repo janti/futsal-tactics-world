@@ -120,6 +120,21 @@ export function Hud() {
         </div>
       )}
 
+      {hud.opponentCarrier && (
+        <div
+          className="player-card opponent"
+          data-testid="opponent-carrier"
+          style={{ borderRightColor: hud.opponentCarrier.team === 0 ? hud.homeColor : hud.awayColor }}
+        >
+          <span className="pc-number">{hud.opponentCarrier.number}</span>
+          <div className="pc-text">
+            <span className="pc-label">{t('hud.opponentBall')}</span>
+            <span className="pc-name">{hud.opponentCarrier.name}</span>
+            <span className="pc-role">{t(`role.${hud.opponentCarrier.role}` as TranslationKey)}</span>
+          </div>
+        </div>
+      )}
+
       <div className="help-hint">{t('hud.helpHint')}</div>
       {showHelp && <ControlsPanel />}
     </div>
