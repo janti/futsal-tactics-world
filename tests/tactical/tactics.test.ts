@@ -62,7 +62,8 @@ describe('formations', () => {
     // (The 3-1 gap includes the moments a teammate runs on past the pivot when he has the ball.)
     expect(g31).toBeGreaterThan(3.8)
     expect(g40).toBeLessThan(2.8)
-    expect(g31).toBeGreaterThan(g40 * 2)
+    // (The rotation runners come up close to the pivot between cycles: the gap is smaller than it was.)
+    expect(g31).toBeGreaterThan(g40 * 1.7)
   }, 60000)
 
   it('2-2 defends in a box: two in front, two behind, one of each pair on either side', () => {

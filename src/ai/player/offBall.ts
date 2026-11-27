@@ -142,7 +142,8 @@ export function offBallDecision(
     const move = rotationMove(state, p)
     const rot = state.rotation[p.team]
     if (move && rot) {
-      p.aiTarget = move.target
+      // A runner goes via his first point (e.g. up the middle) before heading for the target.
+      p.aiTarget = move.via && !move.viaDone ? move.via : move.target
       if (move.job === 'run' || move.job === 'post') {
         p.aiState = 'run'
         // A runner the carrier can find (runnerOption); he finishes a ball in front of goal first time.

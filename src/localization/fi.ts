@@ -194,11 +194,8 @@ export const fi: Record<keyof typeof en, string> = {
   'scenario.overlap.desc': 'Laituri jumissa vartijaansa vasten; takana oleva juoksee ulkokautta ohi.',
   'scenario.wallPass': 'Seinäsyöttö (1-2)',
   'scenario.wallPass.desc': 'Puolustaja edessä, vapaa kaveri vieressä: syötä seinään ja juokse ohi.',
-  'scenario.pivotRotation': 'Pivot-rotaatio (3-1)',
   'scenario.pivotRotation.desc':
     'Tiukasti vartioitu pivot tulee vastaan, kauempi laituri ottaa hänen paikkansa.',
-  'scenario.fourZero': '4-0-rotaatio',
-  'scenario.fourZero.desc': 'Neljän linja: syöttö laitaan ja syöttäjä seuraa sisäkautta.',
   'scenario.backPost': 'Takatolppa',
   'scenario.backPost.desc': 'Pallo laidalla maalin lähellä: takatolppa ja alueen etuosa, sitten vaihto.',
   'scenario.buildUpPress': 'Avaus korkeaa prässiä vastaan',
@@ -253,8 +250,6 @@ export const fi: Record<keyof typeof en, string> = {
   'debug.job.post': 'tolppa',
   'debug.rotation.wallPass': 'seinäsyöttö',
   'debug.rotation.overlap': 'ylitys',
-  'debug.rotation.pivot': 'pivot-rotaatio',
-  'debug.rotation.fourZero': '4-0-rotaatio',
   'debug.rotation.backPost': 'takatolpparotaatio',
   'debug.phase.attack': 'hyökkäys',
   'debug.phase.transitionAttack': 'vastahyökkäys',
@@ -270,4 +265,26 @@ export const fi: Record<keyof typeof en, string> = {
   'debug.legend.marking': 'Yhtenäinen viiva: kuka vartioi ketä',
   'debug.legend.rotation': 'Keltainen nuoli: rotaation juoksu ja tehtävä',
   'debug.legend.target': 'Katkoviiva: minne pelaaja on menossa',
+  'scenario.pivotRotation': 'Pivotin vaihto (3-1)',
+  'debug.rotation.pivot': 'pivotin vaihto',
+  'scenario.baseEight': 'Pohjakasi (3-1-rotaatio)',
+  'scenario.baseEight.desc':
+    'Keskellä oleva syöttää laitaan, juoksee keskeltä samaan laitaan; laituri kuljettaa keskelle.',
+  'scenario.baseEightWing': 'Pohjakasi laidasta (3-1)',
+  'scenario.baseEightWing.desc':
+    'Laituri syöttää keskelle ja juoksee yläviistoon keskelle; pallo vaihdetaan toiseen laitaan.',
+  'scenario.butterfly': 'Perhonen (4-0-rotaatio)',
+  'scenario.butterfly.desc':
+    'Keskipelaaja syöttää laitaan, juoksee keskustan kautta ja palaa samaan laitaan.',
+  'scenario.fourCircle': 'Neljän kierto (4-0)',
+  'scenario.fourCircle.desc':
+    'Syöttö keskeltä keskelle: syöttäjä levittää laitaan, hänen puolensa laituri nousee linjojen väliin.',
+  'debug.rotation.baseEight': 'pohjakasi',
+  'debug.rotation.baseEightWing': 'pohjakasi laidasta',
+  'debug.rotation.butterfly': 'perhonen',
+  'debug.rotation.fourCircle': 'neljän kierto',
+  'debug.job.carry': 'kuljetus keskelle',
+  'debug.job.switch': 'vaihto',
+  'debug.decision.rotationPass': 'sivulle',
+  'debug.decision.rotationSwitch': 'vaihto',
 }

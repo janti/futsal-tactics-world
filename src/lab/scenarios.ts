@@ -18,10 +18,13 @@ export type ScenarioId =
   | 'breakaway'
   | 'twoOnKeeper'
   | 'counter3v2'
+  | 'baseEight'
+  | 'baseEightWing'
+  | 'butterfly'
+  | 'fourCircle'
   | 'overlap'
   | 'wallPass'
   | 'pivotRotation'
-  | 'fourZero'
   | 'backPost'
   | 'buildUpPress'
 
@@ -124,9 +127,33 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     timeLimit: 9,
     rotation: 'pivot',
   },
-  fourZero: {
-    id: 'fourZero',
-    // A mid-block sitting off: the middle is shut, the ball goes out to the free wing.
+  baseEight: {
+    id: 'baseEight',
+    // 3-1 build-up against a mid-block: the middle man with the ball, the wings free.
+    attackers: { FIXO: s(0, 27), ALA_L: s(-7, 25), ALA_R: s(7, 25), PIVOT: s(0, 12) },
+    defenders: { PIVOT: s(0, 21.5), ALA_L: s(4.5, 19), ALA_R: s(-4.5, 19), FIXO: s(0, 10.8) },
+    carrier: 'FIXO',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 10,
+    rotation: 'baseEight',
+  },
+  baseEightWing: {
+    id: 'baseEightWing',
+    // The right wing has it, the way up the wing shut off: the ball goes back into the middle.
+    attackers: { ALA_R: s(7, 24), FIXO: s(0, 27), ALA_L: s(-7, 25), PIVOT: s(0, 12) },
+    defenders: { ALA_L: s(6.8, 21.8), PIVOT: s(1.5, 19.5), ALA_R: s(-3.5, 18), FIXO: s(0, 10.8) },
+    carrier: 'ALA_R',
+    attackFormation: '3-1',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 10,
+    rotation: 'baseEightWing',
+  },
+  butterfly: {
+    id: 'butterfly',
+    // 4-0 against a mid-block sitting off: the middle is shut, the ball goes out to the free wing.
     attackers: { FIXO: s(1.5, 22), PIVOT: s(-2.5, 22), ALA_R: s(7.5, 21), ALA_L: s(-7.5, 21) },
     defenders: { PIVOT: s(0.5, 15.5), ALA_R: s(-3, 16), ALA_L: s(3.5, 12), FIXO: s(-3.5, 11) },
     carrier: 'FIXO',
@@ -134,7 +161,19 @@ export const SCENARIOS: Record<ScenarioId, Scenario> = {
     defendPressing: 'mid',
     counter: false,
     timeLimit: 10,
-    rotation: 'fourZero',
+    rotation: 'butterfly',
+  },
+  fourCircle: {
+    id: 'fourCircle',
+    // 4-0 with both wings marked tight: the ball goes across the middle instead.
+    attackers: { FIXO: s(1.5, 22), PIVOT: s(-2.5, 22), ALA_R: s(7.5, 21), ALA_L: s(-7.5, 21) },
+    defenders: { PIVOT: s(1, 16.5), ALA_L: s(7.2, 20), ALA_R: s(-7.2, 20), FIXO: s(0, 11) },
+    carrier: 'FIXO',
+    attackFormation: '4-0',
+    defendPressing: 'mid',
+    counter: false,
+    timeLimit: 10,
+    rotation: 'fourCircle',
   },
   backPost: {
     id: 'backPost',
@@ -164,10 +203,13 @@ export const SCENARIO_ORDER: readonly ScenarioId[] = [
   'breakaway',
   'twoOnKeeper',
   'counter3v2',
+  'baseEight',
+  'baseEightWing',
+  'butterfly',
+  'fourCircle',
+  'pivotRotation',
   'overlap',
   'wallPass',
-  'pivotRotation',
-  'fourZero',
   'backPost',
   'buildUpPress',
 ]

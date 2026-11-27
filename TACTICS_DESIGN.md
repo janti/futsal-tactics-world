@@ -43,45 +43,114 @@
   back pass 112 (27 %), touch line 23 (70 %); a high press reacts to more cues and wins more, a low
   block to fewer.
 
-## Milestone 6, stage 3: rotations
+## Milestone 6, stage 3: rotations and combinations
 
-- `ai/team/rotations.ts`: a rotation is a short team move with named participants, each with a job
-  (`run` into space, `wall` for a 1-2, `cover` behind, `drop` short, `post` in front of goal) and a
-  target (`state.rotation[team]`). Started by a trigger, it ends **completed** when the ball reaches
-  a runner (the wall pass: when the passer has it back from the wall), and is **cancelled** when the
-  time runs out (2.2–3.4 s), the ball goes to somebody outside the move, possession is lost or the
-  ball goes dead. Then a 2 s pause before the next one; the runners who did not get the ball go back
-  to the shape (the dynamic roles fill it from where everybody is).
-- **Balance**: one outfield player who is not running always stays behind the ball. The deepest
-  player is never a runner unless somebody is told to cover his place (overlap, 4-0 rotation).
-- The rotations:
-  - **Wall pass (1-2)**, chosen by the carrier (more often by a creative player): a defender close in
-    front, a free teammate 3.5–9 m away with a clear lane and space behind the defender. He plays it
-    in and runs past the defender on the wall's side; the wall returns it first time into his path.
+A **rotation** is the continuous off-ball movement of a formation: the ball is passed to a side, a
+player moves up into space following the pattern and the receiver looks for him (or the pivot); if
+nothing is on, the ball goes to a side again, the next cycle starts and the players end up back in
+the shape. A **combination** is a two- or three-man move where space opens. (The first version of
+stage 3 called the combinations "rotations" and had no continuous rotation; corrected after review.)
+
+- `ai/team/rotations.ts`: both use one slot per team (`state.rotation[team]`) with named
+  participants, each with a job (`run` into space — possibly via a first point, `carry` the ball
+  inside, `switch` it on at once, `cover` a space, `drop` short, `wall` for a 1-2, `post` in front of
+  goal) and a target. A move ends **completed** when the ball reaches a runner (a rotation also on a
+  pass into the pivot; the wall pass when the passer has it back), and is **cancelled** when the time
+  runs out, the ball goes to somebody outside the move, possession is lost or the ball goes dead. A
+  rotation cycle ends with the carrier's pass and that pass starts the next cycle at once; a
+  combination is followed by a 2 s pause. Runners who did not get the ball go back to the shape (the
+  dynamic roles fill it from where everybody is).
+- **Rotations** (between 12 and 36 m from the goal attacked; the carrier's "pass to a side" option is
+  above plain circulation and below a forward pass, and a 1 v 1 there gives way to it):
+  - **Pohjakasi** (`baseEight`, 3-1): the middle man of the back three passes to a wing and runs first
+    up the middle and then out to that wing, ahead of the receiver. The wing carries the ball inside
+    into the middle and looks for the pivot or the runner; if neither is on he passes to a side (the
+    other wing, or back to the runner) and — now the middle man — makes the run himself.
+  - **Pohjakasi from the wing** (`baseEightWing`, 3-1): a wing passes into the middle and runs
+    diagonally up into the middle; the middle man switches the ball at once to the other wing and
+    moves across into the wing the runner left. The far wing plays the runner (a 1-2), opens the play,
+    or carries inside / passes on, and everybody is back in place.
+  - **Perhonen** (`butterfly`, 4-0): a central player passes to his own wing, runs up through the
+    centre and comes back out to that wing; the receiver carries inside into the central lane he left
+    and passes to his neighbour or to a wing — next cycle, often on the other side (the two wings).
+  - **4-player rotation** (`fourCircle`, 4-0, as described by futsal.tech): a pass from one central
+    player to the other; the passer goes out to his wing to keep the width and the ala on his side
+    moves in between the lines.
+- **Combinations**:
+  - **Wall pass (1-2)**, chosen by the carrier (more often by a creative player), also out of a
+    rotation: a defender close in front, a free teammate 3.5–9 m away with a clear lane, space behind
+    the defender and nobody beating the runner to it. He plays it in and runs past the defender on the
+    wall's side; the wall returns it first time into his path.
   - **Overlap**: a wide carrier held up by his marker; the teammate 2–9 m behind on that side runs
-    round the outside down the wing (the carrier's own marker is ignored — he is the one being gone
-    round); the through ball finds him once he is past.
-  - **Pivot rotation** (3-1): the pivot marked tight comes short into the space in front of the ball
-    (he gets it to feet when free); the far ala runs into the space he left and becomes the pivot.
-  - **4-0 rotation**: a pass from the middle out to the wing — the passer follows it on the inside past
-    the receiver, the far man tucks in behind into his place.
-  - **Back-post rotation**: the ball on a wing within 14 m of goal — one man attacks the back post
-    (first-time finish), another the front of the area; after 1.5 s without the ball across they swap
-    (the back-post man comes out to the top, the other goes across to the back post).
-- `TeamTactics.rotations` switches them on or off (on by default; the stage 5 quick tactics will
-  expose it). Started/completed counts per team and kind: `state.rotationStats`.
-- Measured AI vs AI (8 × 3 min per formation, both teams, started / completed; after the stage 4
-  fixes below):
-  - 3-1: wall pass 35 / 15, overlap 192 / 72, pivot 105 / 47, back post 160 / 59; shots 219, goals
-    50 (without rotations 225 / 49 — about unchanged).
-  - 4-0: wall pass 28 / 7, overlap 185 / 88, 4-0 rotation 340 / 102, back post 80 / 25; shots 82,
-    goals 16 (without rotations 61 / 10) — the flat four needed the movement most.
-  - 2-2: wall pass 19 / 6, overlap 186 / 77, back post 203 / 75; shots 209, goals 41 (188 / 43).
-- Side effect fixed on the way: with players up the court after a rotation the keeper's arced throws
+    round the outside down the wing. In a 3-1 or 4-0 only from 22 m in (further back the rotation
+    runs); in the 2-2 from 27 m.
+  - **Pivot switch** (`pivot`, 3-1): the pivot marked tight comes short into the space in front of the
+    ball (he gets it to feet when free); the far ala runs into the space he left and becomes the pivot.
+  - **Back post**: the ball on a wing within 14 m of goal — one man attacks the back post (first-time
+    finish), another the front of the area; after 1.5 s without the ball across they swap. It takes
+    over from a rotation that reaches a wing near goal.
+- **Balance**: one outfield player who is not a runner stays level with the ball or behind it (in
+  the pohjakasi the far wing holds the base line; the pivot stays up).
+- `TeamTactics.rotations` switches both families on or off (on by default). Started/completed counts
+  per team and kind: `state.rotationStats`.
+- Measured AI vs AI (8 × 3 min per formation, both teams; cycles or moves started / completed):
+  - 3-1: pohjakasi 343 / 138, from the wing 158 / 54, wall pass 41 / 18, overlap 53 / 23, pivot
+    switch 60 / 28, back post 179 / 52. Shots 225 → 209, goals 49 → 44 (about unchanged), turnovers
+    578 → 648 (+12 %).
+  - 4-0: perhonen 548 / 157, 4-player rotation 239 / 38, wall pass 64 / 27, overlap 87 / 29, back
+    post 105 / 29. Shots 61 → 97, goals 10 → 21, turnovers 431 → 534 — the flat four needed the
+    movement most.
+  - 2-2 (combinations only): overlap 186 / 77, back post 203 / 75, wall pass 19 / 6; shots 188 → 209,
+    goals 43 → 41.
+- Side effect fixed on the way: with players up the court after a move the keeper's arced throws
   were cut out more often. The keeper now counts the throw's time in the air (a receiver already on
   the spot has to wait for it; the human player arriving as it drops takes it) and, with the ball in
-  his hands and every throw risky, waits up to 2.5 s for somebody to get free. AI passes taken by the
-  test bot (12 matches): without rotations 11.9 % → 10.2 %, with rotations 15.0 % → 12.7 %.
+  his hands and every throw risky, waits up to 2.5 s for somebody to get free.
+
+### Passing: patient build-up, easy balls to a side
+
+- The pass to a side keeps the rotation going and comes early (after 0.35 s on the ball, before the
+  pressure arrives): to a man free by 2.5 m with a clear lane, safe from interception, about 8 m
+  away. Plain circulation also comes sooner (after 1.1–1.6 s with space, not 1.6–2.4 s).
+- Not too quickly vertical: in the build-up (more than 17 m from goal) a rotating team plays a ball
+  forward only when it is clearly safe (receiver free by 2.6 m, lane 1.3 m, no extra risk allowed),
+  and below the pass to a side. The ball into the pivot's feet needs a 1.4 m lane, a marker right
+  behind him (one beside him steps in front) and no extra risk — until then the rotation goes on.
+  A through ball needs 3 m of space at its end.
+- Pressed tight (an opponent within 1.6 m), a pass past the presser counts as unsafe and the ball
+  goes away from him at once (the pass he cannot get to). The quick switch to the far wing only
+  when it is short (under 13 m) and the far wing free by 3 m with a clear lane.
+- Measured AI vs AI (6 × 3 min per formation, both teams; before → after this and the rotation
+  change): 3-1 pass completion 86.3 % → 90.1 %, turnovers 428 → 359, shots 163 → 171, goals
+  34 → 36; 4-0 90.4 % → 92.2 %, turnovers 345 → 331, shots 60 → 98, goals 12 → 26. Passes into the
+  pivot: fewer (3-1: 170 → 95) but 86 % arrive (was 62 % right after the rotation change).
+  Regression test: `tests/tactical/passCompletion.test.ts`.
+- Side support (`supportPosition`): in the build-up a wide player beside the ball gets free for the
+  easy pass — extra spots 1.5–4.5 m below his place (and a touch wider) and 2.5–3 m away from his
+  marker; an open lane counts most (×1.4), then being free (up to 5 m), and he stays level with the
+  ball or just below it (high up the wing he is marked and the lane goes through his marker).
+  Measured (support players beside a central carrier, 4 matches): 3-1 3.35 → 3.57 m from the nearest
+  opponent, free by 2.5 m 61 % → 66 %, lane 0.99 → 1.11 m; 4-0 3.71 → 4.04 m, 73 % → 78 %, the
+  easy pass to a side on 52 % → 59 % of the time. Pass completion 3-1 90.1 → 90.2 %, 4-0 92.2 →
+  93.9 %, turnovers 359 → 343 and 331 → 298. In the 3-1 the diamond's ala follows the wing down (the
+  easy pass is on about 23 % of the time either way).
+
+### No forced passes
+
+- The middle man of a rotating team (3-1 / 4-0) in the build-up waits for a lane instead of driving
+  into the block: with space in front he walks it up (30 % pace, ball on the sole with an opponent
+  near) while the others rotate and get free; the pass goes when it is on.
+- A pass is not forced: the "best pass" under pressure and the escape pass away from a tight presser
+  are played only if nobody can step into them even reacting at once (no read delay, the presser
+  included) and the receiver has 1.6 m of room. Otherwise he keeps it — shields, waits, and only when
+  pinned for long knocks it out for a kick-in. The escape pass no longer goes to a keeper who may not
+  touch the ball again (the futsal second-possession rule): those balls rolled past him.
+- Measured AI vs AI (6 × 3 min, both teams; before → after): 3-1 pass completion 90.2 → 93.7 %,
+  turnovers 343 → 286, escape passes 60 → 92 % completed; 4-0 93.9 → 94.5 %, turnovers 298 → 281.
+  Fewer turnovers also mean fewer counter-attacks: shots 3-1 161 → 121, 4-0 82 → 67 (shots per
+  possession about the same).
+- Test: the pohjakasi middle man with every lane shut (markers held tight) keeps the ball and walks
+  (`tests/tactical/passCompletion.test.ts`).
 
 ## Milestone 6, stage 4: Tactical Lab and the AI view
 
@@ -106,8 +175,10 @@
   they are being run away from; the wall pass was often played into a covering man who arrived at the
   end of the run with the ball — now the runner must not be beaten to the spot (the wall's own marker
   reacts 0.5 s late). Wall pass completion in play 30 % → 43 %.
-- Lab results (20 attempts each, computer vs computer): breakaway 14 goals, 2 v 0 18 goals; the
-  rotation scenarios start their rotation in 14–20 attempts out of 20.
+- Lab results (20 attempts each, computer vs computer): breakaway 14 goals, 2 v 0 18 goals. The
+  rotation scenarios start their rotation in every attempt and keep it going: pohjakasi 60 cycles
+  (29 completed), from the wing 30 (8), perhonen 61 (13), 4-player rotation 64 (17); the combination
+  scenarios start theirs in 14–20 attempts out of 20.
 - Open finding: in the built-up situations (counter 3 v 2, rotations, build-up) the attackers lose the
   ball in 55–75 % of the attempts. One cause seen in the wall pass: the runner who has the ball back
   past his man passes it back under pursuit from behind instead of driving on (the chaser counts as
@@ -119,7 +190,7 @@
   disadvantage shapes.
 - Separate templates for build-up, mid-court, final third, high press, mid-block, low block and
   transitions, blended by context.
-- More rotations on the same framework: position exchange, figure-eight, diagonal, third-player,
-  underlap, parallel run, overload-and-switch.
+- More on the same framework: 3-1 circular rotation (redondo), false pivot, the 3-player 4-0 rotation
+  with a fixed fixo, third-man runs, underlap, overload-and-switch.
 - Pressing styles (low, mid, high, aggressive) with triggers; man-to-man, zonal and hybrid defending.
 - Tactical editor (0–100 sliders), presets, individual instructions, quick commands, AI coach.

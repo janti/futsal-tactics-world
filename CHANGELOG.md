@@ -59,6 +59,37 @@
   player). Measured AI vs AI: about 60 shots and 9-12 goals per 36 min (6-8 m shots: about half go
   in). Against the pressing test bot the AI still scores little.
 
+### Passing: patient build-up
+
+- Better pass completion: easy passes to a side come early (before the pressure), to a free man with
+  a clear lane; balls forward in the build-up only when clearly safe; the pivot is found to feet only
+  when it is really on (the rotation goes on until then); pressed tight, the ball goes away from the
+  presser. AI vs AI: 3-1 pass completion 86 % → 90 %, turnovers −16 %; 4-0 90 % → 92 %, shots
+  60 → 98.
+- Side players get free in the build-up: they drop a little (level with the ball or just below),
+  step away from their marker and open the lane for the easy pass. 4-0: wings 3.7 → 4.0 m from the
+  nearest opponent, the pass to a side on 52 % → 59 % of the time, pass completion 94 %.
+- No forced passes: the middle man waits for a lane (walking the ball up) instead of driving into the
+  block, and a pass under pressure goes only if nobody can step into it and the receiver has room.
+  The escape pass no longer goes to a keeper who may not touch it again. 3-1 pass completion 94 %,
+  turnovers −17 %.
+
+### Milestone 6 — rotations corrected: continuous off-ball movement
+
+- Rotations are now the formations' continuous off-ball movement, as defined in futsal: the ball goes
+  to a side, a man moves up following the pattern, the receiver looks for him or the pivot, and if
+  nothing is on the ball goes to a side again and the next cycle starts. 3-1: pohjakasi (the middle
+  man passes to a wing and runs up the middle and out to that wing, the wing carries inside) and its
+  variation from the wing (a wing passes into the middle and runs up; the ball is switched to the
+  other wing). 4-0: perhonen (pass to the wing, run through the centre and back out to that wing, the
+  receiver carries inside) and the 4-player rotation.
+- Wall pass, overlap, back post and the pivot switch are now combinations (they can come out of a
+  rotation); the old pass-and-follow 4-0 move is replaced by perhonen. In the build-up a 3-1 / 4-0
+  team keeps rotating (no overlap or 1 v 1 there while the pass to a side is on).
+- Measured AI vs AI: a 4-0 team shoots 61 → 97 times in 8 matches (goals 10 → 21); the 3-1 about the
+  same (goals 49 → 44) with 12 % more turnovers. Tactical Lab: four rotation situations; the AI view
+  shows a runner's path via its first point. Player size is now also in the Camera Lab panel.
+
 ### Milestone 6 — stage 4: Tactical Lab and AI view
 
 - Tactical Lab (title screen): nine set situations — breakaway, 2 v 0, 3 v 2 counter, overlap, wall

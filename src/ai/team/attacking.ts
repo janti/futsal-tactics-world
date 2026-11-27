@@ -5,7 +5,7 @@ import { laneOpenness, predictPassTarget, pressureOn } from '../../physics/Passi
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { deepestOutfield } from '../common'
-import { passInterceptable, FORWARD_PASS_READ } from '../passing'
+import { passInterceptable } from '../passing'
 import { controlAt } from '../spatial/PitchControl'
 
 export type RoutineRole = 'short' | 'pivot' | 'deep'
@@ -103,6 +103,9 @@ export function runInBehind(state: MatchState, p: PlayerState): Vec2 | null {
   return target
 }
 
+/** Read delay assumed for the opponents when judging a through ball (between a circulation and a forward pass). */
+const THROUGH_PASS_READ = 0.2
+
 /** A teammate on a run in behind whose path the carrier can find with a through ball. */
 export function runnerOption(state: MatchState, carrier: PlayerState): PlayerState | null {
   const dir = state.teams[carrier.team].attackDir
@@ -112,14 +115,14 @@ export function runnerOption(state: MatchState, carrier: PlayerState): PlayerSta
     if ((t.pos.y - carrier.pos.y) * dir < -1) continue
     if ((t.pos.y - carrier.pos.y) * dir < 2) continue
     const lead = predictPassTarget(carrier, t, true, dir)
-    if (laneOpenness(state, carrier.team, carrier.pos, lead) < 1.1) continue
+    if (laneOpenness(state, carrier.team, carrier.pos, lead) < 1.3) continue
     if (dist(lead, carrier.pos) > 18) continue
     // Real space at the end of the run: no defender within 2.5 m of where the ball is played.
     let space = Infinity
     for (const o of state.players)
       if (o.team !== carrier.team && o.role !== 'GK') space = Math.min(space, dist(o.pos, lead))
-    if (space < 2.5) continue
-    if (passInterceptable(state, carrier.team, carrier.pos, lead, FORWARD_PASS_READ)) continue
+    if (space < 3) continue
+    if (passInterceptable(state, carrier.team, carrier.pos, lead, THROUGH_PASS_READ)) continue
     if (!best || t.aiRunTimer > best.aiRunTimer) best = t
   }
   return best
@@ -278,10 +281,26 @@ export function pivotAnchor(state: MatchState, p: PlayerState, anchor: Vec2): Ve
   return { x, y }
 }
 
-/** Move off the anchor towards a spot with an open passing lane to the ball. */
+/**
+ * Move off the anchor towards a spot with an open passing lane to the ball.
+ *
+ * Side support in the build-up: a wide player beside the ball (our carrier in the rotation zone) is
+ * the easy pass the rotation needs, so he gets free for it — he drops a little (level with the ball or
+ * just below it), steps away from his marker and opens the lane, rather than standing high and marked.
+ */
 export function supportPosition(state: MatchState, p: PlayerState, anchor: Vec2): Vec2 {
   const ballPos = state.ball.pos
   const dir = state.teams[p.team].attackDir
+  const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
+  const ballDepth = (dir * COURT.halfLength - ballPos.y) * dir
+  const side =
+    owner !== null &&
+    owner.team === p.team &&
+    owner.role !== 'GK' &&
+    ballDepth > 12 &&
+    ballDepth < 36 &&
+    Math.max(Math.abs(anchor.x), Math.abs(p.pos.x)) >= 3.5 &&
+    Math.abs(anchor.y - ballPos.y) < 9
   let best = anchor
   let bestScore = -Infinity
   // Candidates in rings round the shape position (up to 5 m) and a "show" spot towards the ball.
@@ -293,6 +312,26 @@ export function supportPosition(state: MatchState, p: PlayerState, anchor: Vec2)
     }
   const toBall = sub(ballPos, p.pos)
   if (len(toBall) > 6) cands.push(addScaled(p.pos, normalize(toBall), Math.min(4, len(toBall) - 5)))
+  let marker: PlayerState | null = null
+  if (side) {
+    // Dropping off: below his spot (and a touch wider), and away from his marker.
+    const out = Math.sign(anchor.x || p.pos.x) || 1
+    for (const back of [1.5, 3, 4.5])
+      for (const wide of [0, 0.8]) cands.push({ x: anchor.x + out * wide, y: anchor.y - dir * back })
+    for (const o of state.players)
+      if (
+        o.team !== p.team &&
+        o.role !== 'GK' &&
+        dist(o.pos, p.pos) < 4 &&
+        (!marker || dist(o.pos, p.pos) < dist(marker.pos, p.pos))
+      )
+        marker = o
+    if (marker) {
+      const away = normalize(sub(p.pos, marker.pos))
+      cands.push(addScaled(p.pos, away, 2.5))
+      cands.push(addScaled(p.pos, normalize({ x: away.x, y: away.y - dir * 0.8 }), 3))
+    }
+  }
   for (const raw of cands) {
     const c = { x: clamp(raw.x, -9.3, 9.3), y: clamp(raw.y, -18.8, 18.8) }
     const lane = clamp(laneOpenness(state, p.team, ballPos, c), 0, 3)
@@ -313,15 +352,33 @@ export function supportPosition(state: MatchState, p: PlayerState, anchor: Vec2)
     const keep = dist(c, p.aiTarget) < 1 ? 0.3 : 0
     // Space our team owns (pitch control): a spot we reach first is a safer option.
     const owned = controlAt(state, p.team, c)
-    const score =
-      lane * 0.9 +
-      Math.min(free, 4) * 0.8 +
-      range +
-      crowd +
-      forward * 1.2 +
-      keep +
-      owned * 0.8 -
-      dist(c, anchor) * 0.15
+    let score: number
+    if (side) {
+      // The easy ball to a side: an open lane and a free man count most; level with the ball or a
+      // little below it (high up the wing he is marked and the lane goes through his marker).
+      const ahead = (c.y - ballPos.y) * dir
+      const high = ahead > 1.5 ? (ahead - 1.5) * 0.25 : 0
+      const short = d > 12 ? (d - 12) * 0.2 : 0
+      score =
+        lane * 1.4 +
+        Math.min(free, 5) * 1.0 +
+        range +
+        crowd -
+        high -
+        short +
+        keep +
+        owned * 0.8 -
+        dist(c, anchor) * 0.1
+    } else
+      score =
+        lane * 0.9 +
+        Math.min(free, 4) * 0.8 +
+        range +
+        crowd +
+        forward * 1.2 +
+        keep +
+        owned * 0.8 -
+        dist(c, anchor) * 0.15
     if (score > bestScore) {
       bestScore = score
       best = c

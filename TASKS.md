@@ -96,9 +96,10 @@
       (low / mid / high), choice in Quick Match, team styles, SetTactics command
 - [x] Stage 2: pressing triggers (back pass, back to goal, poor touch, touch line trap), gated by
       the pressing height
-- [x] Stage 3: rotations (4-0 rotation, pivot rotation, overlap, wall pass, back-post rotation) with
-      triggers, balance, completion and cancellation; on/off in the team tactics
-- [x] Stage 4: Tactical Lab (scenario sandbox: nine situations, watch / attack / defend, tactics,
+- [x] Stage 3: rotations as continuous off-ball movement (3-1 pohjakasi and its variation from the
+      wing, 4-0 perhonen and the 4-player rotation) and combinations (wall pass, overlap, pivot switch,
+      back post), with triggers, balance, completion and cancellation; on/off in the team tactics
+- [x] Stage 4: Tactical Lab (scenario sandbox: twelve situations, watch / attack / defend, tactics,
       speed, outcomes counted) and the AI view over the main view (intentions, marking, rotations,
       pressing jumps)
 - [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs

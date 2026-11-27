@@ -2,14 +2,20 @@
 import { attr, clamp } from '../../core/math/scalar'
 import type { SeededRandom } from '../../core/random/SeededRandom'
 import { addScaled, closestOnSegment, dist, normalize, sub, type Vec2 } from '../../core/math/vec2'
-import { pressureOn } from '../../physics/PassingPhysics'
+import { laneOpenness, pressureOn } from '../../physics/PassingPhysics'
 import { estimateTimeToReach } from '../../physics/PlayerPhysics'
 import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { screenFactor } from '../../simulation/MatchSimulation'
 import { type AIActions, spaceAhead, shootingLane, isLastMan, deepestOutfield } from '../common'
 import { runnerOption } from '../team/attacking'
-import { startWallPass, wallPassOption, wallPassRunner } from '../team/rotations'
+import {
+  rotationMove,
+  rotationPassTarget,
+  startWallPass,
+  wallPassOption,
+  wallPassRunner,
+} from '../team/rotations'
 import {
   progressivePass,
   forwardChance,
@@ -56,11 +62,32 @@ export function carrierBehaviour(
       x: wall.runner.pos.x * 0.4 + wall.target.x * 0.6,
       y: wall.runner.pos.y * 0.4 + wall.target.y * 0.6,
     }
-    if (!passInterceptable(state, p.team, p.pos, lead, 0.2)) {
+    if (!passInterceptable(state, p.team, p.pos, lead)) {
       p.aiDecision = 'wallReturn'
       actions.pass(p, sub(lead, p.pos), true, wall.runner)
       return
     }
+  }
+
+  // Pohjakasi from the wing: the middle man switches the ball to the far wing at once. If that pass is
+  // not on he keeps it and carries on as the middle man.
+  const myMove = rotationMove(state, p)
+  if (myMove?.job === 'switch' && myMove.passTo !== undefined && p.aiHoldTimer > 0.1) {
+    const to = state.players[myMove.passTo]!
+    // Only a short, safe switch to a free man (a long ball across the court is easy to read).
+    const freeTo = state.players.every((o) => o.team === p.team || o.role === 'GK' || dist(o.pos, to.pos) > 3)
+    if (
+      dist(to.pos, p.pos) < 13 &&
+      freeTo &&
+      laneOpenness(state, p.team, p.pos, to.pos) > 1.2 &&
+      !passInterceptable(state, p.team, p.pos, to.pos)
+    ) {
+      p.aiDecision = 'rotationSwitch'
+      actions.pass(p, sub(to.pos, p.pos), false, to)
+      return
+    }
+    myMove.job = 'carry'
+    myMove.target = { ...p.pos }
   }
 
   // Dribble towards goal, veering away from the nearest opponent.
@@ -101,7 +128,11 @@ export function carrierBehaviour(
     p.aiChallengeTimer = -1
   }
 
-  let heading = normalize(sub(goal, p.pos))
+  // In a rotation the receiver carries the ball inside, into the middle the runner has left.
+  let heading =
+    myMove?.job === 'carry' && dist(p.pos, myMove.target) > 0.8
+      ? normalize(sub(myMove.target, p.pos))
+      : normalize(sub(goal, p.pos))
   // An opponent in front of him closing in (the human player above all, who closes down fast): do not
   // dribble into him. Further out the carry bends away round him; close in he shields the ball.
   const toNearest = nearest ? normalize(sub(nearest.pos, p.pos)) : { x: 0, y: 0 }
@@ -122,7 +153,21 @@ export function carrierBehaviour(
   }
   heading = keepInCourt(p.pos, heading)
   const open = !threat && spaceAhead(state, p, heading, 3.5)
-  if (open) {
+  // The middle man of a rotating team in the build-up waits for the lane to open instead of driving
+  // into the block: he moves up at walking pace, ball close, while the others rotate round him.
+  const tac = state.teams[p.team].tactics
+  const waiting =
+    tac.rotations &&
+    tac.formation !== '2-2' &&
+    Math.abs(p.pos.x) < 3 &&
+    dist(p.pos, goal) > 17 &&
+    myMove?.job !== 'carry' &&
+    p.aiChallengeTimer <= 0
+  if (open && waiting) {
+    p.moveIntent = { x: heading.x * 0.3, y: heading.y * 0.3 }
+    p.sprint = false
+    p.sole = nd < 3.5
+  } else if (open) {
     // Space in front: carry the ball forward.
     p.moveIntent = { x: heading.x * 0.85, y: heading.y * 0.85 }
     p.sprint = nd > 4
@@ -230,6 +275,8 @@ export type CarrierOptionKind =
   | 'backPost'
   | 'wallPass'
   | 'pivotDrop'
+  | 'rotationPass'
+  | 'escape'
 
 export interface CarrierOption {
   kind: CarrierOptionKind
@@ -402,18 +449,39 @@ export function carrierOptions(
       })
   }
 
-  // Take the defender on (wing or middle; never the last man). Decided once per possession.
-  if (!out.some((o) => o.utility >= 0.78) && startChallenge(state, p, c.nearest, rng))
+  // Take the defender on (wing or middle; never the last man). Decided once per possession. Not in the
+  // build-up while the rotation offers the ball to a side (the rotation is the way up the court).
+  const keepRotating = c.toGoal > 18 && p.aiHoldTimer > 0.3 && rotationPassTarget(state, p) !== null
+  if (!keepRotating && !out.some((o) => o.utility >= 0.78) && startChallenge(state, p, c.nearest, rng))
     out.push({ kind: 'challenge', utility: 0.7, act: () => undefined })
 
-  // Play forward once the carry stalls.
+  // Play forward once the carry stalls. In the build-up a rotating team is patient: only a clearly safe
+  // ball forward, and the pass to a side (the rotation) comes first — it goes on until the pivot can be
+  // found to feet.
+  const t = state.teams[p.team].tactics
+  const patient = t.rotations && t.formation !== '2-2' && c.toGoal > 17
   if (!c.open || c.pressure > 0.35 || p.aiHoldTimer > attr(a.vision, 0.9, 0.5)) {
-    const ahead = progressivePass(state, p)
+    const ahead = progressivePass(state, p, patient)
     if (ahead)
       out.push({
         kind: 'progressive',
-        utility: 0.6 + shotValue(state, p.team, ahead.pos, 1, 0) * 0.1,
+        utility: (patient ? 0.48 : 0.6) + shotValue(state, p.team, ahead.pos, 1, 0) * 0.1,
         act: (x) => x.pass(p, sub(ahead.pos, p.pos), false, ahead),
+      })
+  }
+
+  // The rotation keeps going: with nothing better on, the ball goes to a side (the 3-1 middle man to a
+  // wing, a wing into the middle; in the 4-0 to his wing or the other central man) and the next run
+  // starts. A receiver carrying the ball inside does so first.
+  const mine = rotationMove(state, p)
+  const carrying = mine?.job === 'carry' && dist(p.pos, mine.target) > 1.2 && p.aiHoldTimer < 1.4
+  if (!carrying && p.aiHoldTimer > 0.35) {
+    const side = rotationPassTarget(state, p)
+    if (side)
+      out.push({
+        kind: 'rotationPass',
+        utility: 0.5 + rng.range(0, 0.04),
+        act: (x) => x.pass(p, sub(side.pos, p.pos), false, side),
       })
   }
 
@@ -451,7 +519,8 @@ export function carrierOptions(
   }
 
   // Keep the ball moving: carry it while there is space, then circulate (back / across).
-  const circulateAfter = c.open ? attr(a.creativity, 1.6, 2.4) : attr(a.decisions, 1.0, 0.55)
+  // (The ball moves on before the pressure arrives: an easy pass while it is still easy.)
+  const circulateAfter = c.open ? attr(a.creativity, 1.1, 1.6) : attr(a.decisions, 0.9, 0.5)
   if (c.pressure > 0.45 || p.aiHoldTimer > circulateAfter) {
     const safe = safePassOption(state, p, c.pressure, rng)
     if (safe)
@@ -461,11 +530,29 @@ export function carrierOptions(
       const fallback = bestPassOption(state, p, rng)
       // A pass an opponent can cut out is not worth it: shield and carry instead (only under the very
       // heaviest pressure does he risk it).
-      const risky = fallback ? passInterceptable(state, p.team, p.pos, fallback.player.pos) : true
+      // With a presser right on him, a ball played past the presser is the one he blocks or steps
+      // into: under that pressure only a pass away from him counts as safe.
+      const presser =
+        c.nearest && c.nearest.role !== 'GK' && dist(c.nearest.pos, p.pos) < 1.6 ? c.nearest : null
+      const pastPresser = (to: PlayerState) => {
+        if (!presser) return false
+        const a1 = normalize(sub(to.pos, p.pos))
+        const a2 = normalize(sub(presser.pos, p.pos))
+        return a1.x * a2.x + a1.y * a2.y > 0.35
+      }
+      // Not forced: only a pass nobody can step into even reacting at once, to a man with room to take
+      // it. Otherwise he keeps it (shields, waits) or plays it away from the presser.
+      const risky = fallback
+        ? passInterceptable(state, p.team, p.pos, fallback.player.pos, 0) ||
+          pastPresser(fallback.player) ||
+          spaceAround(state, fallback.player) < 1.6
+        : true
       // Pinned (an opponent right on him for a while): shielding for ever only ends with the ball
-      // over the line, so the best pass is played even if it is risky.
+      // over the line, so the best pass is played even if it is risky. Pressed tight, the pass away
+      // from the presser (he cannot get to it) is the way out at once.
       const pinned = pressureOn(state, p) > 0.85 && p.aiHoldTimer > 2
-      const escape = pinned && c.nearest ? pinnedPass(state, p, c.nearest) : null
+      const escape =
+        (pinned || (presser && c.pressure > 0.8)) && c.nearest ? pinnedPass(state, p, c.nearest) : null
       if (fallback && !risky && (c.pressure > 0.7 || p.aiHoldTimer > attr(a.creativity, 2.6, 3.4)))
         out.push({
           kind: 'fallback',
@@ -474,7 +561,7 @@ export function carrierOptions(
         })
       else if (escape)
         out.push({
-          kind: 'fallback',
+          kind: 'escape',
           utility: 0.25,
           act: (x) => x.pass(p, sub(escape.pos, p.pos), false, escape),
         })
@@ -505,6 +592,8 @@ function pinnedPass(state: MatchState, p: PlayerState, presser: PlayerState): Pl
   let bestScore = -Infinity
   for (const t of state.players) {
     if (t.team !== p.team || t.id === p.id) continue
+    // Not to a keeper who may not touch it again (he has just played it in his half): it rolls past him.
+    if (t.id === state.ball.keeperRetouchId) continue
     const to = sub(t.pos, p.pos)
     const d = Math.hypot(to.x, to.y)
     if (d < 2 || d > 18) continue
@@ -512,9 +601,11 @@ function pinnedPass(state: MatchState, p: PlayerState, presser: PlayerState): Pl
     const minAway = presser.id === state.controlledId ? 0.75 : 0.3
     if ((to.x * away.x + to.y * away.y) / d < minAway || (presser.id === state.controlledId && d > 13))
       continue
-    if (passInterceptable(state, p.team, p.pos, t.pos, 0.12, (o) => o.id === presser.id)) continue
-    let space = Infinity
-    for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
+    // Not forced either: nobody may get to it even reacting at once (the presser included: a ball
+    // knocked just past him is the one he steps into), and the receiver has room to take it.
+    if (passInterceptable(state, p.team, p.pos, t.pos, 0)) continue
+    const space = spaceAround(state, t)
+    if (space < 1.6 && t.role !== 'GK') continue
     const score = Math.min(space, 4) - (t.role === 'GK' ? 2 : 0) - d / 20
     if (score > bestScore) {
       bestScore = score
@@ -522,6 +613,13 @@ function pinnedPass(state: MatchState, p: PlayerState, presser: PlayerState): Pl
     }
   }
   return best
+}
+
+/** Distance from `t` to the nearest opponent (outfield or keeper). */
+function spaceAround(state: MatchState, t: PlayerState): number {
+  let space = Infinity
+  for (const o of state.players) if (o.team !== t.team) space = Math.min(space, dist(o.pos, t.pos))
+  return space
 }
 
 /**

@@ -99,11 +99,20 @@ export class AIDebugOverlay {
       if (!r) continue
       for (const m of r.moves) {
         const p = state.players[m.id]!
-        const [ax, ay] = px(p.pos.x, p.pos.y)
+        let [ax, ay] = px(p.pos.x, p.pos.y)
         const [bx, by] = px(m.target.x, m.target.y)
         ctx.strokeStyle = '#e9bb48'
         ctx.lineWidth = 3
         ctx.setLineDash([])
+        // A run that goes via a point first (up the middle, then out to the wing): both legs.
+        if (m.via && !m.viaDone) {
+          const [vx, vy] = px(m.via.x, m.via.y)
+          ctx.beginPath()
+          ctx.moveTo(ax, ay)
+          ctx.lineTo(vx, vy)
+          ctx.stroke()
+          ;[ax, ay] = [vx, vy]
+        }
         arrow(ctx, ax, ay, bx, by)
         tag(ctx, bx, by + 12, labels.label(`job.${m.job}`), '#e9bb48')
       }

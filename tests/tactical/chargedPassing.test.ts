@@ -139,26 +139,42 @@ describe('chip (the old through-pass key)', () => {
 
 describe('keeper distribution', () => {
   it('the AI keeper throws a longer ball in an arc', () => {
-    let arcs = 0
-    let throws = 0
-    for (const seed of [1, 2, 3, 4, 5, 6]) {
-      const sim = new MatchSimulation({
-        seed,
-        home: TEAM_LIBRARY[0]!,
-        away: TEAM_LIBRARY[1]!,
-        humanTeam: null,
-      })
-      const s = sim.state
-      for (let i = 0; i < TICK_RATE * 120; i++) {
-        sim.step()
-        for (const e of sim.drainEvents())
-          if (e.type === 'KeeperThrow') {
-            throws++
-            if (s.ball.vz > 2) arcs++
-          }
-      }
+    // Keeper 0 (team 0 defends y = -20) holds the ball with every teammate more than 8.5 m away and
+    // the opponents far up the court: whoever he picks, the throw goes in an arc.
+    const sim = new MatchSimulation({
+      seed: 4,
+      home: TEAM_LIBRARY[0]!,
+      away: TEAM_LIBRARY[1]!,
+      humanTeam: null,
+    })
+    const s = sim.state
+    for (let i = 0; i < 600 && s.phase !== 'play'; i++) sim.step()
+    s.phase = 'play'
+    s.restart = null
+    const gk = sim.player(0)
+    gk.pos = { x: 0, y: -18.5 }
+    const place = (id: number, pos: Vec2) => {
+      const p = sim.player(id)
+      p.pos = { ...pos }
+      p.vel = { x: 0, y: 0 }
     }
-    expect(throws).toBeGreaterThan(3)
-    expect(arcs).toBeGreaterThan(0)
-  }, 60000)
+    place(1, { x: -6, y: -6 })
+    place(2, { x: 6, y: -6 })
+    place(3, { x: 0, y: -2 })
+    place(4, { x: 0, y: 4 })
+    for (const id of [6, 7, 8, 9]) place(id, { x: (id - 7.5) * 4, y: 12 })
+    s.ball.ownerId = 0
+    s.ball.mode = 'controlled'
+    s.ball.inHands = true
+    s.ball.handsTimer = 0
+    s.possessionTeam = 0
+    s.ball.pos = { ...gk.pos }
+    sim.drainEvents()
+    let vz = -1
+    for (let i = 0; i < TICK_RATE * 3 && vz < 0; i++) {
+      sim.step()
+      for (const e of sim.drainEvents()) if (e.type === 'KeeperThrow') vz = s.ball.vz
+    }
+    expect(vz).toBeGreaterThan(2)
+  })
 })

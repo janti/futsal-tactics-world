@@ -72,9 +72,10 @@ marks man-to-man and runs set-piece routines.
   corner, support players who move away from their markers to offer a pass.
 - **Set pieces:** kick-in and corner routines with a short man for a first-time shot, a pivot coming
   out from the back post and a deep man showing for a pass back.
-- **Rotations:** wall pass, overlap, pivot rotation (3-1), 4-0 rotation and back-post rotation, with
-  one man always kept behind the ball; formations 3-1 / 4-0 / 2-2, pressing height and pressing
-  triggers.
+- **Rotations** (continuous off-ball movement): pohjakasi and its variation from the wing in the
+  3-1, perhonen and the 4-player rotation in the 4-0 — the ball goes to a side, a man moves up, back
+  into shape if nothing is on and round again. **Combinations** where space opens: wall pass,
+  overlap, pivot switch, back post. Formations 3-1 / 4-0 / 2-2, pressing height and pressing triggers.
 - **Tactical Lab:** set situations (breakaway, 2 v 0, 3 v 2 counter, the rotations, build-up against a
   high press) played again and again — watch, attack or defend, change the tactics and the speed, count
   the outcomes. The AI view (key 7) shows what every computer player intends and who marks whom.

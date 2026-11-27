@@ -88,8 +88,12 @@ export function passInterception(state: MatchState, p: PlayerState): Vec2 | null
   return null
 }
 
-/** Progressive pass: an outfield teammate clearly ahead with an open lane and space (no keeper). */
-export function progressivePass(state: MatchState, p: PlayerState): PlayerState | null {
+/**
+ * Progressive pass: an outfield teammate clearly ahead with an open lane and space (no keeper).
+ * `careful` (the build-up while the team rotates): only a clearly safe one — more space round the
+ * receiver, a wider lane and no extra risk allowed for a forward ball.
+ */
+export function progressivePass(state: MatchState, p: PlayerState, careful = false): PlayerState | null {
   const dir = state.teams[p.team].attackDir
   let best: PlayerState | null = null
   let bestScore = 0
@@ -100,11 +104,11 @@ export function progressivePass(state: MatchState, p: PlayerState): PlayerState 
     const d = dist(t.pos, p.pos)
     if (d > 18) continue
     const lane = laneOpenness(state, p.team, p.pos, t.pos)
-    if (lane < 0.9) continue
+    if (lane < (careful ? 1.3 : 0.9)) continue
     let space = Infinity
     for (const o of state.players) if (o.team !== p.team) space = Math.min(space, dist(o.pos, t.pos))
-    if (space < 1.6) continue
-    if (passInterceptable(state, p.team, p.pos, t.pos, FORWARD_PASS_READ)) continue
+    if (space < (careful ? 2.6 : 1.6)) continue
+    if (passInterceptable(state, p.team, p.pos, t.pos, careful ? 0.15 : FORWARD_PASS_READ)) continue
     const score =
       progress * 0.12 +
       scoringValue(state, p.team, t.pos) * 1.5 +
@@ -142,7 +146,8 @@ export function pivotPass(state: MatchState, p: PlayerState): PlayerState | null
     const rel = sub(o.pos, pivot!.pos)
     const ahead = rel.x * along.x + rel.y * along.y
     const lat = Math.abs(rel.x * -along.y + rel.y * along.x)
-    return ahead > -0.2 && ahead < 2.2 && lat < 1.4
+    // (Right behind him only: a marker beside him steps in front of the ball.)
+    return ahead > 0.2 && ahead < 2.2 && lat < 1.0
   }
   let lane = Infinity
   for (const o of state.players) {
@@ -152,8 +157,9 @@ export function pivotPass(state: MatchState, p: PlayerState): PlayerState | null
     if (t < 0.5 || t > d) continue
     lane = Math.min(lane, Math.abs(rel.x * -along.y + rel.y * along.x))
   }
-  if (lane < 1.1) return null
-  if (passInterceptable(state, p.team, p.pos, pivot.pos, FORWARD_PASS_READ, behind)) return null
+  // Only into his feet when it is really on (else the rotation goes on until it is).
+  if (lane < PIVOT_PASS_LANE) return null
+  if (passInterceptable(state, p.team, p.pos, pivot.pos, PIVOT_PASS_READ, behind)) return null
   return pivot
 }
 
@@ -251,6 +257,10 @@ function runningOut(t: PlayerState): boolean {
 
 /** How the AI rates the human-controlled player when judging whether he can cut a pass out. */
 export const HUMAN_READ = { reach: 1.1, speedFactor: 0.72, read: 0 } as const
+
+/** The ball into the pivot's feet: lane needed (m clear of the line) and the opponents' read delay. */
+export const PIVOT_PASS_LANE = 1.4
+export const PIVOT_PASS_READ = 0.12
 
 /**
  * Forward passes into danger are allowed a little more risk than circulation passes: the opponent's
