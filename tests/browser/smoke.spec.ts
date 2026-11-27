@@ -168,7 +168,20 @@ test('AI opponents participate and the clock runs', async ({ page }) => {
   await page.getByTestId('quick-match').click()
   await page.getByTestId('start-match').click()
   await takeKickOff(page)
-  await page.waitForTimeout(8000)
+  // Eight seconds of play; restarts of our own (a ball kicked out) are taken so the effective clock
+  // does not stand still waiting for us.
+  for (let i = 0; i < 16; i++) {
+    await page.waitForTimeout(500)
+    const ours = await page.evaluate(() => {
+      const s = window.__FTW__!.getState()
+      return s.restart?.ready === true && s.restart.team === 0 && s.controlledId === s.restart.takerId
+    })
+    if (ours) {
+      await page.keyboard.down('KeyZ')
+      await page.waitForTimeout(60)
+      await page.keyboard.up('KeyZ')
+    }
+  }
   const info = await page.evaluate(() => ({
     playing: window.__FTW__!.getState().playingTime,
     events: { ...window.__FTW__!.eventCounts },

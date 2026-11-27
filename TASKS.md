@@ -94,7 +94,8 @@
 
 - [x] Stage 1: tactics model in the match state, formations 3-1 / 4-0 / 2-2, pressing height
       (low / mid / high), choice in Quick Match, team styles, SetTactics command
-- [ ] Stage 2: pressing triggers (back pass, poor touch, back to goal, ball on the wing / touchline)
+- [x] Stage 2: pressing triggers (back pass, back to goal, poor touch, touch line trap), gated by
+      the pressing height
 - [ ] Stage 3: rotations (4-0 rotation, pivot rotation, overlap, wall pass, back-post rotation)
 - [ ] Stage 4: Tactical Lab (scenario sandbox) and an extended AI debug overlay (intentions, marking)
 - [ ] Stage 5: quick tactics changes during the match, acceptance criteria, docs

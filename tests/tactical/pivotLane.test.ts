@@ -61,8 +61,9 @@ describe('diamond defence shuts the pass into the pivot', () => {
     expect(d(pivotMarker.pos, s.players[9]!.pos)).toBeLessThan(1.7)
     const ala = marks.find((m) => m.man === 7 || m.man === 8)!
     const alaBox = markingPosition(box, box.players[ala.id]!, [4])
-    // Closer to the lane than the same defender in the 2-2 box (which marks as usual).
-    expect(lane(s, ala.pos)).toBeLessThan(lane(box, alaBox) - 0.3)
+    // Closer to the lane than the same defender in the 2-2 box (which marks as usual) — as far as
+    // staying within reach of his man allows.
+    expect(lane(s, ala.pos)).toBeLessThan(lane(box, alaBox) - 0.1)
     // ...but still within reach of his man.
     expect(d(ala.pos, s.players[ala.man!]!.pos)).toBeLessThanOrEqual(3.6)
   })

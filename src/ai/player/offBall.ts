@@ -3,8 +3,9 @@ import { addScaled, dist, normalize, sub } from '../../core/math/vec2'
 import type { MatchState, PlayerState } from '../../simulation/MatchState'
 import { COURT } from '../../simulation/SimulationConfig'
 import { dynamicAnchor } from '../positioning/Formation'
-import { attackingRole } from '../team/roles'
+import { attackingRole, defensiveRole } from '../team/roles'
 import { KEEPER_BALL_ALA_DROP, pressEngageDistance } from '../common'
+import { pressTriggerActive } from '../team/pressing'
 import {
   carrierBackToGoal,
   markingPosition,
@@ -44,6 +45,13 @@ export function offBallDecision(
     p.aiState = 'press'
     const ownGoal = { x: 0, y: -dir * COURT.halfLength }
     p.aiTarget = addScaled(owner.pos, normalize(sub(ownGoal, owner.pos)), 0.9)
+    const trig = state.pressTrigger[p.team]
+    if (trig?.kind === 'touchline' && pressTriggerActive(state, p.team)) {
+      // The trap by the touch line: the second man shuts the way (and the pass) along the line, the
+      // first one the way inside — the line does the rest.
+      const oppDir = state.teams[owner.team].attackDir
+      p.aiTarget = { x: owner.pos.x - Math.sign(owner.pos.x) * 0.5, y: owner.pos.y + oppDir * 1.7 }
+    }
     return
   }
   if (winnerId === p.id) {
@@ -61,7 +69,7 @@ export function offBallDecision(
       p.aiState = 'press'
       const ownGoal = { x: 0, y: -dir * COURT.halfLength }
       const toGoal = normalize(sub(ownGoal, owner.pos))
-      if (p.role === 'PIVOT' && carrierBackToGoal(state, owner)) {
+      if (defensiveRole(state, p) === 'PIVOT' && carrierBackToGoal(state, owner)) {
         // Back-to-goal carrier: the pivot presses on the side he faces, closing the pass back.
         p.aiTarget = addScaled(owner.pos, { x: Math.cos(owner.facing), y: Math.sin(owner.facing) }, 1.1)
         return
@@ -92,7 +100,7 @@ export function offBallDecision(
     return
   }
   // In attack the role comes from the dynamic assignment (players fill the shape from where they are).
-  const role = inPossession ? attackingRole(state, p) : p.role
+  const role = inPossession ? attackingRole(state, p) : defensiveRole(state, p)
   const tactics = state.teams[p.team].tactics
   let anchor = dynamicAnchor(role, inPossession ? 'attack' : 'defend', dir, ball.pos, tactics.formation)
   // The roaming pivot belongs to the 3-1 (in the 4-0 the "pivot" is one of the flat four).

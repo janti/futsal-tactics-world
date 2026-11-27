@@ -40,4 +40,6 @@ export const PRESSING = {
   blockTop: { low: 0.42, mid: 0.68, high: 0.82 },
   /** Lowest point of the top of the block. */
   blockFloor: { low: 0.2, mid: 0.2, high: 0.3 },
+  /** How far behind the ball the top of the block sits (team-relative depth): a high press sits closer. */
+  blockGap: { low: 0.12, mid: 0.1, high: 0.04 },
 } as const satisfies Record<string, Record<PressingHeight, number>>

@@ -62,8 +62,11 @@ export function goalkeeperBehaviour(
       for (const t of state.players) {
         if (t.team !== p.team || t.id === p.id) continue
         const open = clamp(laneOpenness(state, p.team, p.pos, t.pos), 0, 3)
-        // Never throw or pass to a teammate an opponent can cut off.
-        const risky = passInterceptable(state, p.team, p.pos, t.pos) ? -3 : 0
+        // Never throw or pass to a teammate an opponent can cut off: along the floor the ball's path,
+        // for an arced throw the place where it comes down (he must get there first).
+        const groundCut = passInterceptable(state, p.team, p.pos, t.pos)
+        const arced = ball.inHands && (dist(t.pos, p.pos) > 8.5 || groundCut)
+        const risky = (arced ? lobContested(state, p, t) : groundCut) ? -3 : 0
         // A short ball to a teammate about to be pressed near our goal is a gift: prefer one with time.
         let pressed = 0
         if (dist(t.pos, goal) < 13)
@@ -92,6 +95,13 @@ export function goalkeeperBehaviour(
         const maxSpeed = attr(p.profile.attributes.throwing, THROW.maxSpeed[0], THROW.maxSpeed[1])
         const power = clamp((wanted - THROW.minSpeed) / (maxSpeed - THROW.minSpeed), 0.15, 1)
         actions.throwBall(p, sub(target, p.pos), power)
+      } else if (best && bestScore < -1) {
+        // At his feet with every short ball one an opponent can cut out: dink it over the presser
+        // towards the furthest teammate rather than give it away in front of goal.
+        let far = best
+        for (const t of state.players)
+          if (t.team === p.team && t.id !== p.id && dist(t.pos, p.pos) > dist(far.pos, p.pos)) far = t
+        actions.chip(p, sub(far.pos, p.pos), 1)
       } else if (best) {
         // Ball at the feet (back pass): played like an outfield player.
         actions.pass(p, sub(best.pos, p.pos), false, best)
@@ -240,4 +250,25 @@ function predictGoalThreat(ball: MatchState['ball'], goalLineY: number, gk: Play
     }
   }
   return null
+}
+
+/**
+ * An arced throw to `t` is contested when an opponent (the human player is quick to read it) can get
+ * to where it comes down before it lands or before `t` gets there.
+ */
+function lobContested(state: MatchState, keeper: PlayerState, t: PlayerState): boolean {
+  const d = dist(t.pos, keeper.pos)
+  const landing = {
+    x: keeper.pos.x + (t.pos.x - keeper.pos.x) * 0.85,
+    y: keeper.pos.y + (t.pos.y - keeper.pos.y) * 0.85,
+  }
+  void d
+  // Contested when an opponent gets to where it comes down clearly before the receiver does.
+  const mine = estimateTimeToReach(t, landing)
+  for (const o of state.players) {
+    if (o.team === keeper.team || o.role === 'GK') continue
+    const theirs = estimateTimeToReach(o, landing) * (o.id === state.controlledId ? 0.85 : 1)
+    if (theirs < mine - 0.1) return true
+  }
+  return false
 }

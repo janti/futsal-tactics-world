@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
+import { pressTriggerActive } from '../../src/ai/BasicAI'
 import { MatchSimulation } from '../../src/simulation/MatchSimulation'
 import type { MatchEvent } from '../../src/simulation/Events'
 import { COURT, TICK_RATE } from '../../src/simulation/SimulationConfig'
@@ -24,7 +25,12 @@ function runAiMatch(seed: number, seconds: number) {
       maxPressers = Math.max(maxPressers, n)
       const owner = sim.state.ball.ownerId !== null ? sim.state.players[sim.state.ball.ownerId]! : null
       const ownGoalY = -sim.state.teams[team]!.attackDir * COURT.halfLength
-      if (owner && Math.hypot(owner.pos.x, owner.pos.y - ownGoalY) > 29)
+      // (A pressing trigger sends a second man to trap him anywhere: not counted here.)
+      if (
+        owner &&
+        Math.hypot(owner.pos.x, owner.pos.y - ownGoalY) > 29 &&
+        !pressTriggerActive(sim.state, team as 0 | 1)
+      )
         maxPressersFar = Math.max(maxPressersFar, n)
     }
   }
@@ -46,7 +52,7 @@ describe('AI vs AI match flow (headless)', () => {
     expect(Number.isFinite(sim.state.ball.pos.x)).toBe(true)
   })
 
-  it('never sends more than one player per team to the ball (anti-ball-chasing); a cover defender helps only in the own half', () => {
+  it('never sends more than one player per team to the ball (anti-ball-chasing); a cover defender helps only in the own half (or on a pressing trigger)', () => {
     const { maxPressers, maxPressersFar } = runAiMatch(11, 120)
     expect(maxPressersFar).toBeLessThanOrEqual(1)
     expect(maxPressers).toBeLessThanOrEqual(2)

@@ -76,7 +76,7 @@ export function planShot(
     skill *
     (0.35 + d / 14) *
     (placed ? 0.55 : 0.7 + p * 0.6) *
-    (0.8 + pressure * 0.7) *
+    (0.8 + pressure * 0.5) *
     attr(a.composure, 1.2, 0.85)
   const errX = rng.gaussian() * sigma
   const errZ = rng.gaussian() * sigma * (placed ? 0.12 : 0.4)

@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+- Runs in behind are tracked: when a man makes a run at goal (fast towards it, or past his marker
+  and still going) his marker goes with him, goal-side and tight, sprinting — his zone, the lane
+  screen and keeping the middle no longer hold him back; a defender whose man is running never leaves
+  him to help press the ball. Measured AI vs AI: runners in our half with nobody within 2.5 m 59 % ->
+  44 % of the time (a quick runner still gets a step on his marker). The pressing height also sets
+  how close behind the ball the top of the block sits (a high press closer), so the heights stay
+  distinct now that everybody goes with runners.
+
+- Defence keeps its shape: roles in defence are handed out from where the players are (like in
+  attack) — after losing the ball the pivot caught on a wing and the ala in the middle swap roles
+  instead of running across each other; the deepest player is always the fixo; roles are re-dealt
+  at most once a second and only for a clearly better fit (a first version re-dealt them too often
+  and the test bot dribbled through: 18 goals in 18 min instead of 8). Our pivot keeps the middle:
+  he does not mark a man out wide (an ala or the fixo does), presses a carrier in the middle but not
+  out wide, never goes to set a trap on a pressing trigger, and in their build-up stands in the line
+  to their pivot as the screen. The fixo slides across to a man goal-side of the ball on the ball
+  side. Measured AI vs AI: alas on the wrong side 8 % -> about 4 % of the defending time, the pivot
+  pressing out wide 3.5 % -> 1 %.
+- The keeper with the ball at his feet and every short pass one the presser can cut out dinks it over
+  him; an arced throw goes only to a teammate who gets to where it comes down before an opponent.
+- Statistics: saves and shots on target count only shots (a keeper stopping a pass or a chip used
+  to count as a save).
+
+- Attack tuned after the defensive changes (AI vs AI goals had fallen to about 4 in 36 min from
+  some 75 shots): first-time strikes (lay-offs, back post, set pieces) only with a clear sight of
+  goal from 12 m in, placed low close in (22 of them scored none, half were blocked); the normal shot
+  needs a clear lane (a shot into a defender is wasted); a breakaway is taken in closer (7.5-6 m),
+  placed when a chaser is on his shoulder, and dinked over a keeper who rushes out; shots under
+  pressure scatter less (the pressure factor on the aim error 1.5 -> 1.3 at most, also for the human
+  player). Measured AI vs AI: about 60 shots and 9-12 goals per 36 min (6-8 m shots: about half go
+  in). Against the pressing test bot the AI still scores little.
+
+### Milestone 6 — stage 2: pressing triggers
+
+- The defending team waits for a cue and then jumps for about a second and a half: a back pass
+  towards their goal (the press goes to the receiver while the ball travels), a carrier who has just
+  received facing his own goal, a ball that got away from an opponent, or the carrier by the touch
+  line, where two men trap him against it. In the jump the presser goes in tight anywhere, a second
+  man comes to trap, the others mark tight. The pressing height decides how far up the court the
+  team reacts (a low block only near its own goal, a high press almost anywhere).
+
 - Diamond defence shuts the pass into the pivot while marking: the presser comes at the carrier from
   the side of their pivot (his body blocks the pass); their pivot's marker stays tight on him, a
   little on the ball side, and sprints to stay with him; the other defenders lean off their men into

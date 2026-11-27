@@ -5,6 +5,7 @@
  * 10 Hz (difficulty-dependent), staggered by player; steering runs every tick. Everything is
  * re-exported here so callers and tests can import from one place.
  */
+import { updatePressTriggers } from './team/pressing'
 import type { SeededRandom } from '../core/random/SeededRandom'
 import { dist, len } from '../core/math/vec2'
 import type { MatchState, PlayerState } from '../simulation/MatchState'
@@ -27,12 +28,14 @@ export * from './player/goalkeeper'
 export * from './player/offBall'
 export * from './restarts'
 export * from './team/phases'
+export * from './team/pressing'
 export * from './team/roles'
 export * from './spatial/PitchControl'
 
 export function updateAI(state: MatchState, actions: AIActions, rng: SeededRandom, dt: number): void {
   updateDefensiveTransitions(state)
   updateTeamPhases(state)
+  updatePressTriggers(state)
   const chasers: [number | null, number | null] = [pickBallWinner(state, 0), pickBallWinner(state, 1)]
   const helpers: [number | null, number | null] = [
     pickHelper(state, 0, chasers[0]),

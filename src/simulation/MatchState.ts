@@ -236,6 +236,16 @@ export interface TeamState {
   tactics: TeamTactics
 }
 
+export type PressTriggerKind = 'backPass' | 'backToGoal' | 'poorTouch' | 'touchline'
+
+export interface PressTrigger {
+  kind: PressTriggerKind
+  /** Simulation time when the jump ends. */
+  until: number
+  /** The opponent the press goes to (the receiver of a back pass, the carrier), if any. */
+  targetId: number | null
+}
+
 export interface MatchState {
   tick: number
   /** Simulation time in seconds since kick-off of the session. */
@@ -281,6 +291,12 @@ export interface MatchState {
    * ball goes dead or the team is back in shape.
    */
   defTransition: [boolean, boolean]
+  /**
+   * Pressing trigger per defending team (Milestone 6): a cue (back pass, back to goal, poor touch, ball
+   * by the touch line) on which the team jumps — tight press, a second man to trap, everybody marking
+   * tight — until `until` (state.time). Null when none is active.
+   */
+  pressTrigger: [PressTrigger | null, PressTrigger | null]
   /** AI bookkeeping: possession seen on the previous AI update. */
   aiPrevPossession: TeamId | null
   /** Strength of the computer opponent (affects only the non-human team). */

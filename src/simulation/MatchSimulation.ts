@@ -74,6 +74,8 @@ export class MatchSimulation implements AIActions {
   readonly state: MatchState
   private readonly rng: SeededRandom
   private events: MatchEvent[] = []
+  /** Team whose shot is in flight (for shots on target), else null. */
+  private shotInFlight: TeamId | null = null
 
   constructor(setup: MatchSetup) {
     this.rng = new SeededRandom(deriveSeed(setup.seed, 'match'))
@@ -266,6 +268,27 @@ export class MatchSimulation implements AIActions {
     } else if (s.humanTeam !== null && p.team !== s.humanTeam && s.control.defensiveSwitch === 'assisted') {
       this.assistDefensiveSwitch(plan.target)
     }
+  }
+
+  /** A lobbed shot over a keeper off his line: dinked up, coming down just before the goal line. */
+  lobShot(p: PlayerState, target: Vec2, apex: number): void {
+    const s = this.state
+    if (s.ball.ownerId !== p.id) return
+    const v = lobVelocity(s.ball.pos, target, apex, 0.95)
+    const err = this.rng.gaussian() * attr(p.profile.attributes.finishing, CHIP.error[0], CHIP.error[1])
+    const h = fromAngle(Math.atan2(v.y, v.x) + err, Math.hypot(v.x, v.y))
+    const keeper = s.players.find((q) => q.team !== p.team && q.role === 'GK')
+    s.ball.shotLongRange = false
+    s.ball.shotScreen = 0
+    if (keeper) {
+      keeper.shotStartX = keeper.pos.x
+      keeper.shotStartOut = Math.abs(keeper.pos.y + s.teams[keeper.team].attackDir * COURT.halfLength)
+    }
+    this.kick(p, h, v.vz, 0, 'shot')
+    s.ball.isShot = true
+    s.ball.shotPlaced = false
+    s.ball.intendedReceiverId = null
+    this.emit({ type: 'ShotTaken', tick: s.tick, playerId: p.id, team: p.team, speed: Math.hypot(h.x, h.y) })
   }
 
   /** Keeper's arced throw from the hands to a teammate, landing short of him (AI distribution). */
@@ -1671,18 +1694,29 @@ export class MatchSimulation implements AIActions {
     const st = this.state.stats
     const teamOf = (id: number) => this.player(id).team
     switch (e.type) {
+      case 'BallKicked':
+        // A new kick: whatever shot was in flight is over (ShotTaken follows a shot's own kick).
+        this.shotInFlight = null
+        break
       case 'ShotTaken':
         st[e.team].shots++
+        this.shotInFlight = e.team
         break
       case 'Save': {
         const keeperTeam = teamOf(e.playerId)
-        st[keeperTeam].saves++
-        st[keeperTeam === 0 ? 1 : 0].shotsOnTarget++
+        // A save (and a shot on target) only if it was a shot: a keeper also stops passes and chips.
+        const shooter: TeamId = keeperTeam === 0 ? 1 : 0
+        if (this.shotInFlight === shooter) {
+          st[keeperTeam].saves++
+          st[shooter].shotsOnTarget++
+        }
+        this.shotInFlight = null
         break
       }
       case 'GoalScored':
         st[e.team].goals++
-        if (this.state.ball.isShot) st[e.team].shotsOnTarget++
+        if (this.shotInFlight === e.team) st[e.team].shotsOnTarget++
+        this.shotInFlight = null
         break
       case 'PassStarted':
         st[teamOf(e.playerId)].passes++
@@ -1829,6 +1863,7 @@ export function createInitialState(setup: MatchSetup): MatchState {
     indirectKickBy: null,
     clearance: null,
     defTransition: [false, false],
+    pressTrigger: [null, null],
     possessionSinceTick: 0,
     teamPhase: ['setPiece', 'setPiece'],
     aiPrevPossession: null,

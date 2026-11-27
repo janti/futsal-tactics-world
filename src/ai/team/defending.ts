@@ -6,6 +6,9 @@ import type { MatchState, PlayerState, TeamId } from '../../simulation/MatchStat
 import { COURT } from '../../simulation/SimulationConfig'
 import { diamondAnchor } from '../positioning/Formation'
 import { RECOVER_TIME } from '../common'
+import { PRESSING } from '../../simulation/Tactics'
+import { pressTriggerActive } from './pressing'
+import { defensiveRole } from './roles'
 
 /**
  * Anti-ball-chasing: at most one player per team goes for the ball (loose ball or pressing the
@@ -42,10 +45,14 @@ export function pickBallWinner(state: MatchState, team: TeamId): number | null {
     // Near our goal the fixo does not leave a man he is marking in front of goal to press the ball
     // (unless he is the last man: then he must).
     if (outnumbered && p.id === outnumbered.defender.id) continue
-    if (p.role === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id)) t += 0.8
+    const drole = defensiveRole(state, p)
+    if (drole === 'FIXO' && owner && dist(target, ownGoal) < 16 && fixoHasMan(state, p, owner.id)) t += 0.8
     // The pivot holds the middle and his man; the alas press the carrier. Only a carrier with his
     // back to our goal (facing his own) is the pivot's to press: he closes the pass back.
-    if (p.role === 'PIVOT' && owner) t += carrierBackToGoal(state, owner) ? -0.3 : 1.4
+    // The pivot presses a carrier in the middle (he is the one there); out on a wing the ala on that
+    // side does — unless the carrier has his back to our goal.
+    if (drole === 'PIVOT' && owner)
+      t += carrierBackToGoal(state, owner) ? -0.3 : Math.abs(owner.pos.x) < 3.5 ? -0.2 : 1.4
     if (p.id === state.controlledId) {
       humanT = t
       continue
@@ -73,13 +80,24 @@ export function carrierBackToGoal(state: MatchState, owner: PlayerState): boolea
 export function markingPosition(state: MatchState, p: PlayerState, pressing: (number | null)[]): Vec2 {
   const dir = state.teams[p.team].attackDir
   const ball = state.ball.pos
-  const anchor = diamondAnchor(p.role, dir, ball, state.teams[p.team].tactics)
+  const role = defensiveRole(state, p)
+  const anchor = diamondAnchor(role, dir, ball, state.teams[p.team].tactics)
   const man = markingAssignment(state, p.team, pressing).get(p.id)
   p.aiMarkId = man ?? null
   if (man === undefined) return anchor
   const a = state.players[man]!
   const ownGoal = { x: 0, y: -dir * COURT.halfLength }
-  const height = state.teams[p.team].tactics.pressing
+  // A run in behind: his man is going for our goal (or has got goal-side of him) — he goes with him,
+  // goal-side and tight, whatever his zone (no lane screening, no staying in the middle).
+  if (isRunningAtGoal(state, p, a)) {
+    const toGoal = normalize(sub(ownGoal, a.pos))
+    const lead = { x: a.vel.x * 0.35, y: a.vel.y * 0.35 }
+    return { x: a.pos.x + toGoal.x * 0.9 + lead.x, y: a.pos.y + toGoal.y * 0.9 + lead.y }
+  }
+  // A pressing trigger: everybody marks tight for the jump (as in a high press).
+  // (The zone a defender follows his man in stays the team's own: a low block does not leave it.)
+  const tacticHeight = state.teams[p.team].tactics.pressing
+  const height = pressTriggerActive(state, p.team) ? 'high' : tacticHeight
   // Their pivot (their furthest man up) is marked tight wherever the ball is: the pass into him is the
   // one to stop (diamond; the box marks as usual).
   const owner = state.ball.ownerId !== null ? state.players[state.ball.ownerId]! : null
@@ -113,17 +131,18 @@ export function markingPosition(state: MatchState, p: PlayerState, pressing: (nu
   const ahead = dist(a.pos, ownGoal) < dist(ball, ownGoal)
   // A low block does not follow men up the court out of the block; a high press follows them further.
   const zone =
-    (p.role === 'FIXO' ? 4 : p.role === 'PIVOT' ? 6.5 : 5.5) +
-    (ahead ? 3 : 0) +
-    (height === 'low' ? -2 : height === 'high' ? 3 : 0)
+    (role === 'FIXO' ? 4 : role === 'PIVOT' ? 6.5 : 5.5) +
+    // (The fixo slides across to a man goal-side of the ball on the ball side, covering the ala.)
+    (ahead ? (role === 'FIXO' ? 4.5 : 3) : 0) +
+    (tacticHeight === 'low' ? -2 : tacticHeight === 'high' ? 3 : 0)
   const l = len(off)
   const pos = l > zone ? addScaled(anchor, off, zone / l) : mark
-  // The pivot keeps the middle closed: he does not follow the ball or his man out to the wings.
-  // (A man between the ball and our goal is dangerous: him he follows out wide.)
-  if (p.role === 'PIVOT' && !ahead) return { x: clamp(pos.x, -3.5, 3.5), y: pos.y }
+  // The pivot keeps the middle closed: he does not follow the ball or his man out to the wings (the
+  // ala on that side takes a man there).
+  if (role === 'PIVOT') return { x: clamp(pos.x, -3.5, 3.5), y: pos.y }
   // An ala keeps his side of the diamond: at most a couple of metres over the middle.
-  if (p.role === 'ALA_L' || p.role === 'ALA_R') {
-    const ownSide = p.role === 'ALA_L' ? dir : -dir
+  if (role === 'ALA_L' || role === 'ALA_R') {
+    const ownSide = role === 'ALA_L' ? dir : -dir
     if (-ownSide * pos.x > 2) return { x: -ownSide * 2, y: pos.y }
   }
   return pos
@@ -137,6 +156,21 @@ export function markingPosition(state: MatchState, p: PlayerState, pressing: (nu
  * is moved across the line has to be shut again, and in that moment the pass into the pivot (in the
  * middle or out on the wing) can open.
  */
+/**
+ * The man `p` marks is making a run at our goal: moving towards it fast, or already goal-side of his
+ * marker (beaten), in our half of the court.
+ */
+export function isRunningAtGoal(state: MatchState, p: PlayerState, man: PlayerState): boolean {
+  if (state.ball.ownerId === man.id) return false
+  const ownGoal = { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }
+  const toGoal = normalize(sub(ownGoal, man.pos))
+  const speedAtGoal = man.vel.x * toGoal.x + man.vel.y * toGoal.y
+  const dMan = dist(man.pos, ownGoal)
+  if (dMan > 20) return false
+  // A real run (fast at goal), or past his marker and still going for goal.
+  return speedAtGoal > 3 || (speedAtGoal > 1.2 && dMan < dist(p.pos, ownGoal) - 0.8)
+}
+
 /** Their pivot: the opponent (not the carrier) nearest our goal, clearly ahead of the ball; or null. */
 export function opponentPivot(state: MatchState, team: TeamId, owner: PlayerState): PlayerState | null {
   const ownGoal = { x: 0, y: -state.teams[team].attackDir * COURT.halfLength }
@@ -165,7 +199,23 @@ function denyPivotLane(state: MatchState, p: PlayerState, man: PlayerState, mark
   if (t < 0.15 || t > 0.85) return mark
   const gap = dist(point, mark)
   if (gap < 0.05 || gap > 7) return mark
-  const weight = p.role === 'PIVOT' ? 1 : 0.75
+  // Our pivot (top of the diamond) is the screen in front of their pivot: in their build-up (ball well
+  // away from our goal) he stands in the line itself, his own man may be up to 5 m away.
+  if (
+    defensiveRole(state, p) === 'PIVOT' &&
+    dist(owner.pos, { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }) > 13
+  ) {
+    let screen = { x: mark.x + (point.x - mark.x) * 0.8, y: mark.y + (point.y - mark.y) * 0.8 }
+    if (dist(screen, man.pos) > 5) screen = addScaled(man.pos, normalize(sub(screen, man.pos)), 5)
+    // Not above the top of the team's block (the pressing height decides how high that is).
+    const dir = state.teams[p.team].attackDir
+    const topY =
+      -dir * COURT.halfLength +
+      dir * PRESSING.blockTop[state.teams[p.team].tactics.pressing] * 2 * COURT.halfLength
+    if ((screen.y - topY) * dir > 0) screen = { x: screen.x, y: topY }
+    return screen
+  }
+  const weight = defensiveRole(state, p) === 'PIVOT' ? 1 : 0.75
   // A man of his ahead of the ball (between it and our goal) and close to it is a threat himself:
   // only a small lean off him then.
   const ownGoal = { x: 0, y: -state.teams[p.team].attackDir * COURT.halfLength }
@@ -279,7 +329,8 @@ export function markingAssignment(
   const attackers = state.players.filter(
     (o) => o.team !== team && o.role !== 'GK' && o.id !== state.ball.ownerId,
   )
-  const anchors = defenders.map((d) => diamondAnchor(d.role, dir, ball, state.teams[team].tactics))
+  const droles = defenders.map((d) => defensiveRole(state, d))
+  const anchors = defenders.map((_, i) => diamondAnchor(droles[i]!, dir, ball, state.teams[team].tactics))
   // Cost of a pairing: distance from the defender's diamond spot to the man. An ala keeps to his own
   // side (a man on the far side costs extra: he does not run across the court after him), and a
   // pairing that already exists is kept unless another is clearly better (no swapping men to and fro).
@@ -287,12 +338,15 @@ export function markingAssignment(
     const d = defenders[i]!
     const o = attackers[j]!
     let c = dist(anchors[i]!, o.pos)
-    if (d.role === 'ALA_L' || d.role === 'ALA_R') {
+    const dr = droles[i]!
+    if (dr === 'ALA_L' || dr === 'ALA_R') {
       // Team-relative side: ALA_L is on the negative lateral side, i.e. world x = +dir * |x|.
-      const ownSide = d.role === 'ALA_L' ? dir : -dir
+      const ownSide = dr === 'ALA_L' ? dir : -dir
       const across = -ownSide * o.pos.x
       if (across > 1.5) c += 2 + (across - 1.5) * 1.2
     }
+    // Our pivot keeps the middle: a man out wide is for an ala or the fixo, not for him.
+    if (dr === 'PIVOT' && Math.abs(o.pos.x) > 4.5) c += 2.5 + (Math.abs(o.pos.x) - 4.5) * 1.2
     if (d.aiMarkId === o.id) c -= 1.5
     return c
   }
@@ -383,8 +437,11 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   const transition = state.defTransition[team]
   // A second man goes to the ball only in our own half (also in a counter-attack against us: further
   // up the court the others stay with their men or recover into shape instead).
-  if (carrierToGoal > 20) return null
-  if (winnerId !== null) {
+  // A pressing trigger (back pass, back to goal, poor touch, touch line): a second man comes to trap
+  // him anywhere the team reacts.
+  const jump = pressTriggerActive(state, team) && state.pressTrigger[team]!.kind !== 'poorTouch'
+  if (carrierToGoal > 20 && !jump) return null
+  if (winnerId !== null && !jump) {
     const w = state.players[winnerId]!
     // Level with the carrier still counts (margin, so the help does not flicker on and off).
     const goalSide = dist(w.pos, ownGoal) < carrierToGoal + 0.4
@@ -395,9 +452,13 @@ export function pickHelper(state: MatchState, team: TeamId, winnerId: number | n
   let bestT = Infinity
   for (const d of state.players) {
     if (d.team !== team || d.role === 'GK' || d.id === winnerId || d.id === state.controlledId) continue
+    // The trap on a pressing trigger is the alas' job: the pivot stays the screen in the middle.
+    if (jump && defensiveRole(state, d) === 'PIVOT') continue
+    // Never leave a man who is making a run at our goal.
+    if (d.aiMarkId !== null && isRunningAtGoal(state, d, state.players[d.aiMarkId]!)) continue
     if (twoVersusOne(state, team)?.defender.id === d.id) continue
     // The fixo only steps out if no opponent is near him (he would leave a man free in front of goal).
-    if (d.role === 'FIXO' && !transition) {
+    if (defensiveRole(state, d) === 'FIXO' && !transition) {
       let near = false
       for (const o of state.players)
         if (o.team !== team && o.role !== 'GK' && o.id !== owner.id && dist(o.pos, d.pos) < 4) near = true

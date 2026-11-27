@@ -31,13 +31,16 @@ export function carrierBehaviour(
   p.aiHoldTimer += dt
   p.aiState = 'carry'
 
-  // Set-piece shooter: the routine's easy pass is struck first time.
-  if (decide && p.aiSetPieceTimer > 0 && dist(p.pos, goal) < 14.5) {
+  // First-time strike (set-piece routine, lay-off, ball at the back post): only with a clear sight of
+  // goal from a scoring range — a first-time shot into a defender's legs is a wasted chance. Close in
+  // it is placed low into the corner.
+  const firstTimeDist = dist(p.pos, goal)
+  if (decide && p.aiSetPieceTimer > 0 && firstTimeDist < 12 && shootingLane(state, p, goal.y) > 0.5) {
     const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
     if (angleOk) {
       p.aiSetPieceTimer = 0
       p.aiDecision = 'setPiece'
-      actions.shoot(p, sub(goal, p.pos), 0.55)
+      actions.shoot(p, sub(goal, p.pos), firstTimeDist < 8.5 ? 0.3 : 0.5)
       return
     }
   }
@@ -255,7 +258,8 @@ export function carrierOptions(
   const myValue = shotValue(state, p.team, p.pos, lane, c.pressure)
 
   // Shooting band (0.9+): in range with a lane, decided with the player's willingness to shoot.
-  if (angleOk && c.toGoal < shootRange && (lane > 0.3 || c.toGoal < 8)) {
+  // A clear sight of goal (a shot into a defender is blocked), or right in front of it.
+  if (angleOk && c.toGoal < shootRange && (lane > 0.55 || c.toGoal < 6.5)) {
     const chance = clamp(0.35 + (shootRange - c.toGoal) / shootRange + attr(a.decisions, 0, 0.2), 0, 0.95)
     if (rng.chance(chance)) {
       // Close in: a quick low placed shot into the corner; further out: a firmer, slightly higher shot.
@@ -578,9 +582,11 @@ function breakawayBehaviour(
   p.sprint = toGoal > 11 && chaser < 4
   p.sole = false
   if (!decide || p.aiHoldTimer < 0.2) return
-  const shootAt = attr(a.composure, 8.5, 7)
+  // Take it in close (a 1 v 1 from 8-10 m is a save for a keeper who has narrowed the angle).
+  const shootAt = attr(a.composure, 7.5, 6)
   const angleOk = Math.abs(p.pos.x) < Math.abs(p.pos.y - goal.y) * 1.6 + 1
-  const forced = (chaser < 1.2 && toGoal < 9.5) || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
+  // Forced to finish early only with the chaser right on him (he keeps going while he can).
+  const forced = (chaser < 0.9 && toGoal < 9) || keeperDist < 3.2 || (p.pos.y - target.y) * dir > 0
   if (!angleOk || (toGoal > shootAt && !forced)) return
   // Forced to finish from further out (keeper rushing out, a chaser on him): a teammate free closer
   // in gets the square ball instead of a shot the keeper will save.
@@ -593,10 +599,22 @@ function breakawayBehaviour(
       return
     }
   }
+  // The keeper has rushed out at him a few metres off his line: dink it over him.
+  const keeper = state.players.find((q) => q.team !== p.team && q.role === 'GK')
+  const keeperOut = keeper ? Math.abs(keeper.pos.y - goal.y) : 0
+  if (keeper && keeperDist < 4 && keeperOut > 2.3 && toGoal > 5.5 && toGoal < 14) {
+    p.aiDecision = 'lob'
+    const side = clamp(p.aiBreakawayCorner * 0.6, -0.9, 0.9)
+    actions.lobShot(p, { x: side, y: goal.y }, clamp(2.4 + keeperOut * 0.12, 2.6, 3.2))
+    p.aiBreakawayCorner = 0
+    return
+  }
   // Corner choice as lateral input (planShot aims at the corner on that side). Close in a placed
   // side-foot; further out it needs pace to beat the keeper.
-  const placed = rng.chance(attr(a.finishing, 0.55, 0.85))
-  const power = toGoal < 8 ? (placed ? 0.3 : 0.45) : clamp(0.45 + (toGoal - 8) / 20, 0.45, 0.6)
+  // With a chaser on his shoulder he places it (a firm shot under that pressure goes anywhere).
+  const placed = rng.chance(attr(a.finishing, 0.55, 0.85)) || (chaser < 1.5 && toGoal < 10)
+  const power =
+    toGoal < 8 || (placed && toGoal < 10) ? (placed ? 0.3 : 0.45) : clamp(0.45 + (toGoal - 8) / 20, 0.45, 0.6)
   p.aiDecision = 'breakawayShot'
   actions.shoot(p, { x: p.aiBreakawayCorner, y: dir * 0.4 }, power)
   p.aiBreakawayCorner = 0

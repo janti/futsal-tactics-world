@@ -91,7 +91,11 @@ export function diamondAnchor(
   const step = 0.11
   // The pivot sits a little off the ball and in the middle (closing the central lane) rather than
   // chasing high up the court. How high the block goes depends on the pressing height.
-  const top = clamp(b.depth - 0.1, PRESSING.blockFloor[tactics.pressing], PRESSING.blockTop[tactics.pressing])
+  const top = clamp(
+    b.depth - PRESSING.blockGap[tactics.pressing],
+    PRESSING.blockFloor[tactics.pressing],
+    PRESSING.blockTop[tactics.pressing],
+  )
   const lat = clamp(b.lateral * 0.55, -0.45, 0.45)
   let rel: TeamRelative
   if (tactics.formation === '2-2') {

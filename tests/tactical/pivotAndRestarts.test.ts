@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { TEAM_LIBRARY } from '../../src/data/teams'
 import { MatchSimulation } from '../../src/simulation/MatchSimulation'
 import { TICK_RATE } from '../../src/simulation/SimulationConfig'
+import { defensiveRole } from '../../src/ai/team/roles'
 import type { Vec2 } from '../../src/core/math/vec2'
 
 function openPlay(seed: number, humanTeam: 0 | null = null) {
@@ -19,7 +20,8 @@ describe('pivot in the defensive diamond', () => {
     s.phase = 'play'
     s.restart = null
     const dir1 = s.teams[1].attackDir
-    const spot: Vec2 = { x: 2, y: -dir1 * 9 }
+    // Out towards a wing (in the middle the pivot is the one to press).
+    const spot: Vec2 = { x: 5.5, y: -dir1 * 9 }
     const c = sim.player(6)
     const seen = new Set<string>()
     for (let i = 0; i < TICK_RATE * 3; i++) {
@@ -34,12 +36,12 @@ describe('pivot in the defensive diamond', () => {
       s.possessionTeam = 1
       sim.step()
       if (i > TICK_RATE)
-        for (const q of s.players) if (q.team === 0 && q.aiState === 'press') seen.add(q.role)
+        for (const q of s.players) if (q.team === 0 && q.aiState === 'press') seen.add(defensiveRole(s, q))
     }
     return seen
   }
 
-  it('the alas press a carrier facing forward; the pivot keeps the middle', () => {
+  it('the alas press a carrier facing forward out wide; the pivot keeps the middle', () => {
     const seen = pressers(false)
     expect(seen.size).toBeGreaterThan(0)
     expect(seen.has('PIVOT')).toBe(false)

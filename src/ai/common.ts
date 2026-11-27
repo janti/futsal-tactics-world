@@ -5,6 +5,7 @@ import type { MatchState, PlayerState, TeamId } from '../simulation/MatchState'
 import { COURT, POST_X } from '../simulation/SimulationConfig'
 import { baseAnchor } from './positioning/Formation'
 import { PRESSING } from '../simulation/Tactics'
+import { pressTriggerActive } from './team/pressing'
 import { DIFFICULTY, type DifficultyParams } from '../simulation/Difficulty'
 
 export interface AIActions {
@@ -20,6 +21,10 @@ export interface AIActions {
   shoot(p: PlayerState, dir: Vec2, power: number): void
   /** Goalkeeper throw from the hands (same throw a human keeper makes). */
   throwBall(p: PlayerState, dir: Vec2, power: number): void
+  /** A chip (dink) from the feet: `power` 0..1 sets height and length (the human's chip key). */
+  chip(p: PlayerState, dir: Vec2, power: number): void
+  /** A lobbed shot (dink) over a keeper who has come out, coming down in the goal at `target`. */
+  lobShot(p: PlayerState, target: Vec2, apex: number): void
   /** Goalkeeper throw in an arc from the hands to a teammate (over the opponents). */
   lobThrow(p: PlayerState, receiver: PlayerState, apex: number): void
 }
@@ -34,6 +39,8 @@ export const RECOVER_TIME = 1.6
 
 /** Distance from our goal within which the carrier is pressed tightly (from the team's pressing height). */
 export function pressEngageDistance(state: MatchState, team: TeamId): number {
+  // A pressing trigger: go in tight wherever the ball is.
+  if (pressTriggerActive(state, team)) return 60
   return PRESSING.engageDistance[state.teams[team].tactics.pressing]
 }
 

@@ -28,6 +28,21 @@
   2-2 2.9 m; defensive depth low 13.9 m, mid 16.4 m, high 20.8 m from the own goal; a high press
   produced 39 shots against 18.
 
+## Milestone 6, stage 2: pressing triggers
+
+- `ai/team/pressing.ts`: the defending team waits for a cue and then jumps for 1.6 s
+  (`state.pressTrigger[team]`): the presser goes in tight wherever the ball is, a second man comes to
+  trap the carrier (also beyond the own half), everybody else marks tight, the pressers sprint in.
+- Cues: a back pass towards their own goal (to the keeper or the deepest man — the press goes to the
+  receiver while the ball travels), a carrier who has just received facing his own goal, a ball that
+  got away from an opponent (poor touch), the carrier by the touch line (the trap: the second man
+  shuts the line and the pass along it, the first the way inside).
+- The pressing height gates the cues: within 21 m of the own goal for a low block, 30 m for the
+  mid-block, 45 m for a high press.
+- Measured AI vs AI (mid, 6 x 3 min, both teams): back to goal 210 cues (ball won within 3 s 45 %),
+  back pass 112 (27 %), touch line 23 (70 %); a high press reacts to more cues and wins more, a low
+  block to fewer.
+
 ## Planned
 
 - Formations: 4-0, 2-2, 1-2-1, 2-1-1, 5v4 flying-goalkeeper shapes (2-1-2, 3-2, 1-2-2), numerical

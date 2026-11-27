@@ -5,13 +5,20 @@ import { routeAroundGoals } from '../physics/PlayerPhysics'
 import type { MatchState, PlayerState } from '../simulation/MatchState'
 import { COURT } from '../simulation/SimulationConfig'
 import { outsideClearanceArea, pressEngageDistance } from './common'
-import { opponentPivot } from './team/defending'
+import { isRunningAtGoal, opponentPivot } from './team/defending'
+import { pressTriggerActive } from './team/pressing'
 
 export function keepDistance(target: Vec2, from: Vec2, minDist: number): Vec2 {
   const d = dist(target, from)
   if (d >= minDist) return target
   const away = d > 1e-3 ? normalize(sub(target, from)) : { x: 0, y: 1 }
   return addScaled(from, away, minDist)
+}
+
+/** This defender is going with a man making a run at our goal. */
+function tracksRunner(state: MatchState, p: PlayerState): boolean {
+  if (p.aiMarkId === null || state.possessionTeam === p.team) return false
+  return isRunningAtGoal(state, p, state.players[p.aiMarkId]!)
 }
 
 /** This defender marks their pivot (their furthest man up, ahead of the ball). */
@@ -93,8 +100,9 @@ export function steer(state: MatchState, p: PlayerState): void {
     (p.aiState === 'twoVone' && d > 1.2) ||
     // A marker left behind by his man (a run, a change of pace) sprints to get back to him; their
     // pivot's marker stays right with him (the pass into the pivot is the one to stop).
-    (p.aiState === 'cover' && d > (marksPivot(state, p) ? 0.8 : 2)) ||
-    (p.aiState === 'press' && d > 2.5) ||
+    (p.aiState === 'cover' && d > (marksPivot(state, p) || tracksRunner(state, p) ? 0.8 : 2)) ||
+    // On a pressing trigger the pressers sprint in.
+    (p.aiState === 'press' && (d > 2.5 || (d > 0.8 && pressTriggerActive(state, p.team)))) ||
     d > 5 ||
     recovering ||
     showing

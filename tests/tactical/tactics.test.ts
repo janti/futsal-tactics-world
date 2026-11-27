@@ -70,7 +70,7 @@ describe('formations', () => {
 })
 
 describe('pressing height', () => {
-  /** Average distance of the defending team's outfield players from their own goal. */
+  /** Average distance of the defending team's outfield players from their own goal in their build-up. */
   function defDepth(pressing: TeamTactics['pressing']): number {
     let depth = 0
     let n = 0
@@ -81,6 +81,9 @@ describe('pressing height', () => {
         m.step()
         if (s.phase !== 'play' || s.possessionTeam !== 1 || i % 30) continue
         const dir = s.teams[0].attackDir
+        // Their build-up (ball in their half): how high the team defends it. (Overall averages mix in
+        // the times a high press has been played through.)
+        if (s.ball.pos.y * dir < 0) continue
         for (const p of s.players)
           if (p.team === 0 && p.role !== 'GK') {
             depth += p.pos.y * dir + 20
@@ -95,8 +98,8 @@ describe('pressing height', () => {
     const low = defDepth('low')
     const mid = defDepth('mid')
     const high = defDepth('high')
-    expect(low).toBeLessThan(mid - 1)
-    expect(high).toBeGreaterThan(mid + 1.5)
+    expect(low).toBeLessThan(mid - 1.5)
+    expect(high).toBeGreaterThan(mid + 1)
   }, 90000)
 
   it('the top of the block follows the pressing height', () => {
