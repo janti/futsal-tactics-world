@@ -23,6 +23,7 @@ import {
   supportPosition,
 } from '../team/attacking'
 import { interceptPoint, passInterception, receivePoint } from '../passing'
+import { isBreakaway, twoOnKeeperMate, twoOnKeeperSpot } from './carrier'
 
 export function offBallDecision(
   state: MatchState,
@@ -119,6 +120,16 @@ export function offBallDecision(
   if (inPossession) {
     // Attacking movement first: follow up our shot at the back post, keep running a run in behind,
     // start a new one into empty space, or take the back post when the ball is on a wing near goal.
+    // Two on the keeper: the second man runs level, then to the back post for the tap-in.
+    if (owner && owner.team === p.team && isBreakaway(state, owner, { x: 0, y: dir * COURT.halfLength })) {
+      const mate = twoOnKeeperMate(state, owner)
+      if (mate?.id === p.id) {
+        p.aiState = 'run'
+        p.aiTarget = twoOnKeeperSpot(state, owner, p)
+        p.aiSetPieceTimer = Math.max(p.aiSetPieceTimer, 1.5)
+        return
+      }
+    }
     const follow = followUpTarget(state, p)
     if (follow) {
       p.aiState = 'run'

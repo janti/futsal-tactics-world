@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Camera keeps up with a fast ball: a quick ball up the court (or a long throw/lofted ball) no longer
+  runs out of the top of the frame while the damped camera catches up; the view is pushed along with
+  the ball and keeps part of its path ahead in view, even with the controlled player deep behind.
+- Two on the keeper (2 v 0): the computer's second man runs level and then to the back post; the
+  carrier draws the keeper and squares it for the tap-in into the empty net, or finishes himself
+  when the keeper covers the pass. About 90 % goals (one-on-one breakaways stay about 55–60 %).
+
 - Men are kept marked: a second man goes to the ball only to trap the carrier against the touch line,
   or near goal (14 m) when the carrier has got past the first defender — other pressing cues tighten
   the press but leave everybody on his man. Two players pressing the carrier: AI vs AI 59 % -> 13 % of

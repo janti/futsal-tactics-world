@@ -12,6 +12,9 @@
   on screen whenever possible without losing the ball.
 - 1 m dead zone, exponential damping (`1 − e^(−dt/τ)`, τ = 0.18 s position, 0.5 s zoom) — frame-rate
   independent (tested at 30 vs 120 fps).
+- Fast balls never leave the frame: the ball (drawn position, height included) is kept at least
+  2.5 m inside the frame in the target and 1.5 m after damping, plus up to 6 m of its path ahead — a
+  quick ball up the court pushes the view along with it, even ahead of a deep controlled player.
 - Target clamped so the view never drifts more than 6 m past a goal line (the advertising boards 4 m behind the line stay visible, so balls going wide can be followed to the boards).
 
 ## Presets (F5 / 5 cycles; persisted in localStorage)

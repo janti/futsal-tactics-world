@@ -99,6 +99,13 @@ the full system will be built on:
   7–8.5 m (earlier if a chaser or the rushing keeper gets close) with a low shot into the far corner
   (60 %) or near corner; mostly a placed shot, sometimes a firmer one the keeper can hold. Measured:
   about 55–60 % goals, the rest saved or caught (`tests/tactical/breakaway.test.ts`).
+- **Two on the keeper (2 v 0)** (`twoOnKeeperMate`, `twoOnKeeperSpot`): carrier through on goal with
+  a teammate up with him (at most 3 m behind) and every opponent outfield player behind both. The
+  second man runs level on the other side, then to the back post (strikes first time, into the side
+  the keeper is not covering). The carrier drives at goal on his side and, from about 6.5 m (or when
+  the keeper comes out at him), squares it across when the lane is clear of the keeper (90 % of the
+  time); if the keeper cheats across to cover the pass he finishes low into the side left open.
+  Measured: about 90 % goals (`tests/tactical/twoOnKeeper.test.ts`).
 - **1v1 challenge**: with one defender close in front and no cover behind him, the carrier (never
   the team's deepest outfield player, not deep in his own half) decides once per possession whether to
   take him on (chance by dribbling, 30–75 %). Wing: cut inside or down the line; middle: past the

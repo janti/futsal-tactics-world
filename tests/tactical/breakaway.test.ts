@@ -8,7 +8,7 @@ type Outcome = 'goal' | 'saved' | 'caught' | 'out' | 'other'
 
 /**
  * AI attacker (id 6, team 1, attacking -y) gets the ball at `from` with every team-0 outfield player
- * behind him: through on goal against keeper 0 (defending y = -20).
+ * behind him and his teammates further back: through on goal against keeper 0 (defending y = -20).
  */
 function breakaway(seed: number, from: Vec2): { outcome: Outcome; shotDist: number; passed: boolean } {
   const sim = new MatchSimulation({ seed, home: TEAM_LIBRARY[0]!, away: TEAM_LIBRARY[1]!, humanTeam: 0 })
@@ -22,7 +22,9 @@ function breakaway(seed: number, from: Vec2): { outcome: Outcome; shotDist: numb
     o.vel = { x: 0, y: 0 }
     if (o.role === 'GK') continue
     if (o.team === 0) o.pos = { x: (o.id - 2.5) * 3, y: from.y + 4 }
-    else if (o.id !== 6) o.pos = { x: (o.id - 7.5) * 3, y: from.y + 6 }
+    // Teammates far behind: a pure one on one (a teammate up with him makes it a 2 v 0, see
+    // twoOnKeeper.test.ts).
+    else if (o.id !== 6) o.pos = { x: (o.id - 7.5) * 3, y: from.y + 12 }
   }
   const att = sim.player(6)
   att.pos = { ...from }

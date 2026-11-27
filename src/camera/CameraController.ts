@@ -1,16 +1,23 @@
 import { OrthographicCamera } from 'three'
-import { damp } from '../core/math/scalar'
+import { clamp, damp } from '../core/math/scalar'
 import type { MatchSnapshot } from '../simulation/MatchSnapshot'
 import type { AttackDir } from '../simulation/MatchState'
 import { clampTargetY, computeFrustum } from './CameraFraming'
 import { CAMERA_PRESETS, type CameraPresetId, type CameraSettings } from './CameraSettings'
 import { basisFromCamera, type ScreenBasis } from './ScreenToWorld'
 
+/** Metres the ball is always kept inside the frame edge. */
+const BALL_EDGE_MARGIN = 1.5
+/** Furthest look-ahead (m) along the ball's path that the frame keeps in view. */
+const LEAD_MAX = 6
+
 export interface CameraFocus {
   ballX: number
   ballY: number
   ballVx: number
   ballVy: number
+  /** Ball height (m): a high ball is drawn further up the screen in the vertical views. */
+  ballZ?: number
   controlledY: number | null
   /** Attack direction of the team in possession, or 0 if contested. */
   possessionDir: number
@@ -80,7 +87,34 @@ export class CameraController {
     const diff = desired - this.goalY
     if (Math.abs(diff) > s.deadZone) this.goalY = desired - Math.sign(diff) * s.deadZone
     this.targetY = damp(this.targetY, this.goalY, s.positionSmoothing, dt)
+    // The damping lags a fast ball (a quick ball up the court, a long throw): never let it leave the
+    // frame. The view is pushed along with the ball once it gets close to an edge.
+    if (!s.fixed) this.targetY = this.keepBallInView(this.targetY, focus)
     this.applyPose()
+  }
+
+  /** Ball position along the length as drawn: in the vertical views height shows as screen-up. */
+  private ballScreenY(f: CameraFocus): number {
+    if (this.settings.orientation === 'horizontal' || !f.ballZ) return f.ballY
+    const e = (this.settings.elevationDeg * Math.PI) / 180
+    return f.ballY + (this.upSign * f.ballZ) / Math.tan(e)
+  }
+
+  /**
+   * Hard limit: the ball stays at least `BALL_EDGE_MARGIN` inside the frame (more on the side it is
+   * travelling towards, so the receiver and the space it is played into are seen too).
+   */
+  private keepBallInView(y: number, f: CameraFocus): number {
+    const half = this.frustum().visibleLength / 2
+    const by = this.ballScreenY(f)
+    const lead = clamp(f.ballVy * 0.35, -LEAD_MAX, LEAD_MAX)
+    const hi = Math.max(by, by + lead) // furthest point that must be visible towards +y
+    const lo = Math.min(by, by + lead)
+    const edge = half - BALL_EDGE_MARGIN
+    let out = y
+    if (hi > out + edge) out = hi - edge
+    if (lo < out - edge) out = lo + edge
+    return clampTargetY(out, this.frustum().visibleLength)
   }
 
   private desiredY(f: CameraFocus): number {
@@ -93,10 +127,13 @@ export class CameraController {
       const half = frustum.visibleLength / 2 - 3
       if (f.controlledY > y + half) y = f.controlledY - half
       if (f.controlledY < y - half) y = f.controlledY + half
-      // ...but never at the cost of losing the ball.
-      const ballHalf = frustum.visibleLength / 2 - 1.5
-      y = Math.min(Math.max(y, f.ballY - ballHalf), f.ballY + ballHalf)
     }
+    // ...but never at the cost of losing the ball: a fast ball is kept well inside the frame on the
+    // side it travels to (where the play goes), not at the edge behind a deep controlled player.
+    const by = this.ballScreenY(f)
+    const lead = clamp(f.ballVy * 0.6, -LEAD_MAX, LEAD_MAX)
+    const ballHalf = frustum.visibleLength / 2 - 2.5
+    y = Math.min(Math.max(y, Math.max(by, by + lead) - ballHalf), Math.min(by, by + lead) + ballHalf)
     return clampTargetY(y, frustum.visibleLength)
   }
 
@@ -168,6 +205,7 @@ export function focusFromSnapshot(s: MatchSnapshot, teamDirs: [AttackDir, Attack
     ballY: overEnd ? Math.sign(s.ball.y) * 24 : s.ball.y,
     ballVx: s.ball.vx,
     ballVy: overEnd ? 0 : s.ball.vy,
+    ballZ: overEnd ? 0 : s.ball.z,
     // While a ball that went out is still travelling, follow the ball alone (to the boards and back).
     controlledY: controlled && !s.ballOut ? controlled.y : null,
     possessionDir,

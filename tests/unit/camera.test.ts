@@ -92,6 +92,34 @@ describe('camera controller', () => {
   })
 })
 
+describe('fast balls', () => {
+  it('a quick ball up the court never leaves the frame, even behind a deep controlled player', () => {
+    for (const preset of [
+      'verticalSmart',
+      'verticalCloseAction',
+      'verticalClassic',
+      'horizontalTactical',
+    ] as const) {
+      const c = new CameraController(preset)
+      c.setAspect(16 / 9)
+      c.snap({ ...focus(-12), controlledY: -14 })
+      let y = -12
+      const dt = 1 / 60
+      for (let i = 0; i < 70; i++) {
+        y += 24 * dt // a firm 24 m/s ball up the court, lofted
+        const z = Math.max(0, 2.5 * Math.sin((i / 70) * Math.PI))
+        c.update(
+          { ballX: 0, ballY: y, ballVx: 0, ballVy: 24, ballZ: z, controlledY: -14, possessionDir: 0.4 },
+          dt,
+        )
+        const r = c.visibleRange()
+        expect(y).toBeLessThan(r.maxY - 1.4)
+        expect(y).toBeGreaterThan(r.minY + 1.4)
+      }
+    }
+  })
+})
+
 describe('horizontal cameras', () => {
   it('the side view shows the length across the screen and always fits the court width (foreshortened)', () => {
     for (const aspect of [21 / 9, 16 / 9, 4 / 3, 1]) {

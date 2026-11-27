@@ -40,7 +40,9 @@ export function carrierBehaviour(
     if (angleOk) {
       p.aiSetPieceTimer = 0
       p.aiDecision = 'setPiece'
-      actions.shoot(p, sub(goal, p.pos), firstTimeDist < 8.5 ? 0.3 : 0.5)
+      // A tap-in (back post, square ball) goes into the side the keeper is not covering.
+      const aim = firstTimeDist < 6 ? { x: 0, y: dir } : sub(goal, p.pos)
+      actions.shoot(p, aim, firstTimeDist < 8.5 ? 0.3 : 0.5)
       return
     }
   }
@@ -59,7 +61,9 @@ export function carrierBehaviour(
   // Through on goal: no outfield defender between the carrier and the goal. Take the ball in close
   // and finish past the keeper instead of shooting from distance or passing.
   if (isBreakaway(state, p, goal)) {
-    breakawayBehaviour(state, p, goal, actions, rng, decide)
+    const mate = twoOnKeeperMate(state, p)
+    if (mate) twoOnKeeperBehaviour(state, p, mate, goal, actions, rng, decide)
+    else breakawayBehaviour(state, p, goal, actions, rng, decide)
     return
   }
   p.aiBreakawayCorner = 0
@@ -585,6 +589,103 @@ function passAndMove(state: MatchState, p: PlayerState): void {
   p.aiRunTarget = target
   p.aiRunTimer = 1.8
   p.aiRunCooldown = 6
+}
+
+/**
+ * Two on the keeper (2 v 0): the carrier is through on goal and a teammate is up with him, every
+ * opponent outfield player behind both of them. Returns that teammate.
+ */
+export function twoOnKeeperMate(state: MatchState, p: PlayerState): PlayerState | null {
+  const dir = state.teams[p.team].attackDir
+  const goalY = dir * COURT.halfLength
+  const depth = (q: PlayerState) => (goalY - q.pos.y) * dir
+  const myDepth = depth(p)
+  if (myDepth > 18 || myDepth < 1) return null
+  let best: PlayerState | null = null
+  for (const t of state.players) {
+    if (t.team !== p.team || t.id === p.id || t.role === 'GK') continue
+    const d = depth(t)
+    // Up with him (at most 3 m behind), not off at a touch line or past the goal line.
+    if (d < 0.5 || d > myDepth + 3 || Math.abs(t.pos.x) > 8.5 || dist(t.pos, p.pos) > 12) continue
+    if (!best || d < depth(best)) best = t
+  }
+  if (!best) return null
+  const lastDepth = Math.max(myDepth, depth(best))
+  for (const o of state.players) {
+    if (o.team === p.team || o.role === 'GK') continue
+    if (depth(o) < lastDepth + 0.8) return null
+  }
+  return best
+}
+
+/** Where the second man runs in a 2 v 0: level with the carrier on the other side, then the back post. */
+export function twoOnKeeperSpot(state: MatchState, carrier: PlayerState, mate: PlayerState): Vec2 {
+  const dir = state.teams[carrier.team].attackDir
+  const goalY = dir * COURT.halfLength
+  const carrierDepth = (goalY - carrier.pos.y) * dir
+  const side =
+    Math.abs(carrier.pos.x) > 0.6 ? -Math.sign(carrier.pos.x) : Math.sign(mate.pos.x - carrier.pos.x) || 1
+  // Far out he stays wide (a pass across the keeper is then easy); close in he arrives at the post.
+  const wide = clamp(1.8 + (carrierDepth - 5) * 0.35, 1.8, 4.5)
+  const depth = clamp(carrierDepth - 2.5, 1.8, 12)
+  return { x: side * wide, y: goalY - dir * depth }
+}
+
+/**
+ * The 2 v 0 finish: the carrier drives at goal and draws the keeper; once close (or the keeper comes
+ * out at him) he squares it across to the free man for the tap-in into the empty net. If the keeper
+ * stays across to cut out the pass, or the lane is blocked, he finishes himself into the side the
+ * keeper has left. Mostly the safe choice (not every time: a 2 v 0 is not a certain goal).
+ */
+function twoOnKeeperBehaviour(
+  state: MatchState,
+  p: PlayerState,
+  mate: PlayerState,
+  goal: Vec2,
+  actions: AIActions,
+  rng: SeededRandom,
+  decide: boolean,
+): void {
+  const dir = state.teams[p.team].attackDir
+  // Drive at the goal on his own side of it (the keeper has to come across to him).
+  const target = { x: clamp(p.pos.x * 0.7, -2.5, 2.5), y: goal.y - dir * 4 }
+  const heading = normalize(sub(target, p.pos))
+  p.moveIntent = { x: heading.x * 0.9, y: heading.y * 0.9 }
+  p.sole = false
+  const toGoal = dist(p.pos, goal)
+  p.sprint = toGoal > 10
+  // The second man strikes whatever comes to him first time.
+  mate.aiSetPieceTimer = Math.max(mate.aiSetPieceTimer, 1.5)
+  if (!decide || p.aiHoldTimer < 0.2) return
+  const keeper = state.players.find((q) => q.team !== p.team && q.role === 'GK') ?? null
+  const keeperDist = keeper ? dist(keeper.pos, p.pos) : Infinity
+  const mateToGoal = dist(mate.pos, goal)
+  const close = toGoal < 6.5 || keeperDist < 3.5 || (p.pos.y - target.y) * dir > 0
+  if (!close) return
+  // Pass across: the second man is in front of goal and the keeper is not in the line of the ball.
+  const keeperAside = (o: PlayerState) =>
+    o.role === 'GK' && dist(closestOnSegment(p.pos, mate.pos, o.pos).point, o.pos) > 1.3
+  const laneOpen = !passInterceptable(state, p.team, p.pos, mate.pos, 0.12, keeperAside)
+  const mateReady = mateToGoal < 7.5 && Math.abs(mate.pos.x) < 4.5 && dist(mate.pos, p.pos) > 2.5
+  // Keeper cheating across to the second man's side (covering the pass): the carrier's side is open.
+  const side = Math.sign(mate.pos.x - p.pos.x) || 1
+  const keeperCoversPass = keeper !== null && keeper.pos.x * side > 0.8 && keeperDist > 2.5
+  if (laneOpen && mateReady && !keeperCoversPass && rng.chance(0.9)) {
+    p.aiDecision = 'twoOnKeeperPass'
+    // Firm and to his feet, a touch ahead of him towards the goal (he is arriving).
+    const to = { x: mate.pos.x + mate.vel.x * 0.15, y: mate.pos.y + mate.vel.y * 0.15 }
+    actions.pass(p, sub(to, p.pos), false, mate)
+    mate.aiSetPieceTimer = Math.max(mate.aiSetPieceTimer, 1.8)
+    return
+  }
+  // Waiting is fine while the second man is still arriving and nobody is on him.
+  if (!keeperCoversPass && !mateReady && keeperDist > 3 && toGoal > 4.5) return
+  // Finish himself: placed low into the corner the keeper is not covering.
+  const kx = keeper ? keeper.pos.x : 0
+  const corner = kx > p.pos.x * 0.3 ? -1 : 1
+  p.aiDecision = 'twoOnKeeperShot'
+  actions.shoot(p, { x: corner, y: dir * 0.4 }, 0.3)
+  p.aiBreakawayCorner = 0
 }
 
 /**
